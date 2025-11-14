@@ -1,0 +1,299 @@
+﻿<Window x:Class="UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:tb="http://www.hardcodet.net/taskbar"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:UI"
+        mc:Ignorable="d"
+        Title="Stream Drop Collector"
+        MinHeight="450" Height="450"
+        MinWidth="800" Width="800"
+        ResizeMode="CanResize"
+        WindowStyle="None"
+        Background="#333"
+        WindowStartupLocation="CenterScreen">
+
+    <!-- Window resrouces -->
+    <Window.Resources>
+        <SolidColorBrush x:Key="Button.Static.Background" Color="#FFDDDDDD"/>
+        <SolidColorBrush x:Key="Button.Static.Border" Color="#FF707070"/>
+        <SolidColorBrush x:Key="Button.MouseOver.Background" Color="#FF0000"/>
+        <SolidColorBrush x:Key="Button.MouseOver.Border" Color="Transparent"/>
+        <SolidColorBrush x:Key="Button.Pressed.Background" Color="#FFC4E5F6"/>
+        <SolidColorBrush x:Key="Button.Pressed.Border" Color="#FF2C628B"/>
+        <SolidColorBrush x:Key="Button.Disabled.Background" Color="#FFF4F4F4"/>
+        <SolidColorBrush x:Key="Button.Disabled.Border" Color="#FFADB2B5"/>
+        <SolidColorBrush x:Key="Button.Disabled.Foreground" Color="#FF838383"/>
+        <SolidColorBrush x:Key="Buttons.MouseOver.Background" Color="#2b2a2a"/>
+
+        <Style x:Key="RoundedButtonStyle" TargetType="Button">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="border" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" CornerRadius="6.9" Padding="4.20">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter Property="Background" TargetName="border" Value="{StaticResource Buttons.MouseOver.Background}"/>
+                                <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource Button.MouseOver.Border}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FocusVisual">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="2" SnapsToDevicePixels="true" Stroke="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" StrokeThickness="1" StrokeDashArray="1 2"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="NavButtons" TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="{StaticResource Buttons.MouseOver.Background}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="border" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Background="{TemplateBinding Background}" SnapsToDevicePixels="true">
+                            <ContentPresenter x:Name="contentPresenter" Focusable="False" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter Property="Background" TargetName="border" Value="{StaticResource Buttons.MouseOver.Background}"/>
+                                <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource Button.MouseOver.Border}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CloseBtn" TargetType="{x:Type Button}">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}"/>
+            <Setter Property="Background" Value="{StaticResource Button.Static.Background}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Button.Static.Border}"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="border" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Background="{TemplateBinding Background}" SnapsToDevicePixels="true">
+                            <ContentPresenter x:Name="contentPresenter" Focusable="False" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsDefaulted" Value="true">
+                                <Setter Property="BorderBrush" TargetName="border" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter Property="Background" TargetName="border" Value="{StaticResource Button.MouseOver.Background}"/>
+                                <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource Button.MouseOver.Border}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="true">
+                                <Setter Property="Background" TargetName="border" Value="{StaticResource Button.Pressed.Background}"/>
+                                <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource Button.Pressed.Border}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="false">
+                                <Setter Property="Background" TargetName="border" Value="{StaticResource Button.Disabled.Background}"/>
+                                <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource Button.Disabled.Border}"/>
+                                <Setter Property="TextElement.Foreground" TargetName="contentPresenter" Value="{StaticResource Button.Disabled.Foreground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="Button" x:Key="CustomButtonStyle">
+            <Setter Property="FontFamily" Value="Roboto"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border BorderThickness="1" 
+                            CornerRadius="4"
+                            Padding="4"
+                            x:Name="ButtonBorder"
+                            Background="AliceBlue">
+                                <Border.BorderBrush>
+                                    <SolidColorBrush x:Name="ButtonBorderBrush" Color="Black"/>
+                                </Border.BorderBrush>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#C0C0C0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome GlassFrameThickness="1" ResizeBorderThickness="5" CaptionHeight="0"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+
+        <!-- Grid Definition -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="10*" MaxHeight="69"/>
+            <RowDefinition Height="100*"/>
+            <RowDefinition Height="*"/>
+            <!-- Dummy row, to avoid overflowing -->
+        </Grid.RowDefinitions>
+
+        <!-- Custom Header -->
+        <StackPanel x:Name="customApplicationHeader" Background="#1c1b1b" MouseLeftButtonDown="OnWindowHeaderMouseDown" Grid.Row="0" Orientation="Horizontal">
+            <Image Margin="10,10,10,5" Height="Auto" MaxHeight="75" Source="/Assets/logo.png" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+
+            <Viewbox Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8" MaxHeight="40">
+                <StackPanel Orientation="Vertical">
+                    <TextBlock x:Name="MainAppHeader" Text="Stream Drop Collector" FontFamily="Roboto" Foreground="GhostWhite"/>
+                    <TextBlock Text="by tsgsOFFICIAL" FontStyle="Italic" FontFamily="Roboto" Foreground="GhostWhite"/>
+                </StackPanel>
+            </Viewbox>
+
+            <Viewbox Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8" MaxHeight="40">
+                <TextBlock x:Name="MainAppVersion" FontStyle="Italic" FontFamily="Roboto" Foreground="#7F849C" VerticalAlignment="Center"/>
+            </Viewbox>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Name="Min_Button" Background="Transparent" ToolTip="Minimize" Content="&#x1F5D5;" Click="OnMinimizeButtonClicked" Foreground="GhostWhite" BorderBrush="Transparent" Style="{DynamicResource NavButtons}" Height="Auto" Width="{Binding ActualHeight, RelativeSource={RelativeSource Self}}" FontSize="18"/>
+            <Button x:Name="Maximize_Button" Background="Transparent" ToolTip="Maximize" Content="&#x1F5D6;" Click="OnMaximizeButtonClicked" Foreground="GhostWhite" BorderBrush="Transparent" Style="{DynamicResource NavButtons}" Height="Auto" Width="{Binding ActualHeight, RelativeSource={RelativeSource Self}}" FontSize="18"/>
+            <Button Name="Close_Button" Background="Transparent" ToolTip="Close" Content="&#10006;" Click="OnCloseButtonClicked" Foreground="GhostWhite" BorderBrush="Transparent" Style="{DynamicResource CloseBtn}" Height="Auto" Width="{Binding ActualHeight, RelativeSource={RelativeSource Self}}"/>
+        </StackPanel>
+
+        <!-- Content -->
+        <Frame x:Name="MainFrame" NavigationUIVisibility="Hidden" Navigated="OnMainFrameNavigated" Grid.Row="1" Grid.Column="0" Margin="12, 6"/>
+
+        <!-- NotifyIcon, that minimizes to system tray -->
+        <tb:TaskbarIcon x:Name="MyNotifyIcon" IconSource="/Assets/logo.png" ToolTipText="Stream Drop Collector by tsgsOFFICIAL" DataContext="{Binding RelativeSource={RelativeSource AncestorType=Window}}" Visibility="Collapsed">
+            <tb:TaskbarIcon.ContextMenu>
+                <ContextMenu>
+                    <!--MenuItem with centered icon and text-->
+                    <MenuItem Header="Stream Drop Collector" IsEnabled="False" Foreground="LightGray">
+                        <MenuItem.Icon>
+                            <Canvas Width="24" Height="24" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Image Source="/Assets/logo.png" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6, 0"/>
+                            </Canvas>
+                        </MenuItem.Icon>
+                    </MenuItem>
+
+                    <Separator Margin="0"/>
+
+                    <MenuItem x:Name="JoinDiscord" Header="Join Discord" Command="{Binding JoinDiscordCommand}">
+                        <MenuItem.Icon>
+                            <Canvas Width="24" Height="24" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Image Source="/Assets/discord.png" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6, 0"/>
+                            </Canvas>
+                        </MenuItem.Icon>
+                    </MenuItem>
+
+                    <MenuItem x:Name="OpenGithub" Header="Open Github" Command="{Binding OpenGithubCommand}">
+                        <MenuItem.Icon>
+                            <Canvas Width="24" Height="24" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Image Source="/Assets/github.png" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6, 0"/>
+                            </Canvas>
+                        </MenuItem.Icon>
+                    </MenuItem>
+
+                    <MenuItem x:Name="MinimizeAndRestore" Header="Minimize" Command="{Binding ToggleWindowCommand}" />
+                    <MenuItem Header="Exit" Command="{Binding CloseCommand}" />
+
+                    <!--Define a style for the ContextMenu-->
+                    <ContextMenu.Resources>
+                        <!--Set background and foreground colors for MenuItems-->
+                        <Style TargetType="MenuItem">
+                            <Setter Property="Background" Value="#353535"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="FontFamily" Value="Roboto"/>
+                            <Setter Property="FontSize" Value="14"/>
+                            <Setter Property="Padding" Value="10, 6"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Margin" Value="0,1,0,1"/>
+
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type MenuItem}">
+                                        <Border x:Name="templateRoot" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="true">
+                                            <Grid VerticalAlignment="Center">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter x:Name="Icon" ContentSource="Icon" HorizontalAlignment="Center" Height="16" Width="16" Margin="2,5,5,5" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" VerticalAlignment="Center"/>
+                                                <ContentPresenter ContentSource="Header" Grid.Column="1" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="Icon" Value="{x:Null}">
+                                                <Setter Property="Visibility" TargetName="Icon" Value="Collapsed"/>
+                                            </Trigger>
+                                            <Trigger Property="IsHighlighted" Value="True">
+                                                <Setter Property="Background" TargetName="templateRoot" Value="#999999"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="TextElement.Foreground" TargetName="templateRoot" Value="LightGray"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+
+                        <!--Style for the ContextMenu itself-->
+                        <Style TargetType="ContextMenu">
+                            <Setter Property="Background" Value="#353535"/>
+                            <Setter Property="BorderBrush" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ContextMenu">
+                                        <Border 
+                                    Background="{TemplateBinding Background}" 
+                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                    BorderThickness="{TemplateBinding BorderThickness}" 
+                                    CornerRadius="6" 
+                                    SnapsToDevicePixels="True" 
+                                    Padding="10">
+
+                                            <Grid>
+                                                <ItemsPresenter/>
+                                            </Grid>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+
+                        <!--Style for separators-->
+                        <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+                            <Setter Property="OverridesDefaultStyle" Value="true" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type Separator}">
+                                        <Border Height="1" Margin="4,4,4,0" Background="LightGray" HorizontalAlignment="Stretch"/>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ContextMenu.Resources>
+                </ContextMenu>
+            </tb:TaskbarIcon.ContextMenu>
+        </tb:TaskbarIcon>
+    </Grid>
+</Window>

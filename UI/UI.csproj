@@ -1,0 +1,53 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+		<ApplicationIcon>Assets\logo.ico</ApplicationIcon>
+		<AssemblyTitle>Stream Drop Collector</AssemblyTitle>
+		<AssemblyName>Stream Drop Collector</AssemblyName>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="Assets\discord.png" />
+		<None Remove="Assets\github.png" />
+		<None Remove="Assets\logo.ico" />
+		<None Remove="Assets\logo.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="Assets\logo.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Resource Include="Assets\discord.png">
+		  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\github.png">
+		  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\logo.ico">
+		  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\logo.png">
+		  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Folder Include="Windows\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Core\Core.csproj" />
+	</ItemGroup>
+
+</Project>
