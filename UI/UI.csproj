@@ -43,6 +43,18 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Core.pdb" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\D3DCompiler_47_cor3.dll" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Models.pdb" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\PenImc_cor3.dll" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\PresentationNative_cor3.dll" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.pdb" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\vcruntime140_cor3.dll" />
+	  <None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\wpfgfx_cor3.dll" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
 	</ItemGroup>
 
