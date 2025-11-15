@@ -1,4 +1,6 @@
-﻿namespace UI.Views
+﻿using System.Windows.Navigation;
+
+namespace UI.Views
 {
     /// <summary>
     /// Interaction logic for HelpView.xaml
@@ -8,6 +10,11 @@
         public HelpView()
         {
             InitializeComponent();
+        }
+
+        private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+        {
+            Core.Utility.LaunchWeb(e.Uri.AbsoluteUri);
         }
     }
 }

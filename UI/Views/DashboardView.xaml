@@ -8,8 +8,99 @@
              d:DesignHeight="450" d:DesignWidth="800"
              Background="#1E1E1E">
 
-    <TextBlock Text="Dashboard"
-               Foreground="White"
-               FontSize="28"
-               Margin="20"/>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ==========================================================
+             HEADER
+        ========================================================== -->
+        <TextBlock Text="Dashboard"
+                   FontSize="30"
+                   Foreground="White"
+                   FontWeight="Bold"/>
+
+        <!-- ==========================================================
+             MAIN CONTENT
+        ========================================================== -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="3*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- ======================================================
+                 MINER STATUS CARD
+            ====================================================== -->
+            <Border Grid.Row="0" Grid.Column="0" Margin="0,0,20,20" Background="#252526" Padding="20" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock Text="Miner Status" Foreground="#CCCCCC" FontSize="16"/>
+                    <TextBlock x:Name="MinerStatusText" Text="Idle" Foreground="Orange" FontSize="28" Margin="0,10,0,0" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="MinerStatusDetails" Text="Waiting for next drop window..." Foreground="#AAAAAA" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ======================================================
+                 CAMPAIGN PROGRESS CARD
+            ====================================================== -->
+            <Border Grid.Row="0" Grid.Column="1" Margin="0,0,0,20" Background="#252526" Padding="20" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock Text="Campaign Progress" Foreground="#CCCCCC" FontSize="16"/>
+                    <ProgressBar x:Name="CampaignProgressBar" Height="20" Margin="0,10,0,5" Minimum="0" Maximum="100" Value="45"/>
+                    <TextBlock x:Name="CampaignProgressText" Text="45% Completed" Foreground="#AAAAAA" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ======================================================
+                 LOGIN STATUS CARD
+            ====================================================== -->
+            <Border Grid.Row="1" Grid.Column="0" Margin="0,0,20,0" Background="#252526" Padding="20" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock Text="Login Status" Foreground="#CCCCCC" FontSize="16"/>
+
+                    <!-- Each status line uses Margin for spacing -->
+                    <StackPanel Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse Width="10" Height="10" Fill="Lime"/>
+                            <TextBlock Text="Twitch: Logged In" Foreground="White" Margin="10,0,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse Width="10" Height="10" Fill="Red"/>
+                            <TextBlock Text="Kick: Not Connected" Foreground="White" Margin="10,0,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ======================================================
+                 STREAMERS LIST
+            ====================================================== -->
+            <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" Background="#252526" Padding="20" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock Text="Available Streamers" Foreground="#CCCCCC" FontSize="16" Margin="0,0,0,10"/>
+
+                    <ListView x:Name="StreamerList" Background="#1E1E1E" BorderThickness="0" Foreground="White" Height="260">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="4,4,4,4">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding StatusColor}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Name}" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding DropInfo}" Foreground="#AAAAAA" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
 </UserControl>

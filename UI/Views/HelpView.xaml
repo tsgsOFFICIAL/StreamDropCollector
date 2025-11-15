@@ -4,12 +4,107 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:UI.Views"
-             mc:Ignorable="d" 
-                          d:DesignHeight="450" d:DesignWidth="800"
+             mc:Ignorable="d"
+             d:DesignHeight="450" d:DesignWidth="800"
              Background="#1E1E1E">
 
-    <TextBlock Text="Help"
-               Foreground="White"
-               FontSize="28"
-               Margin="20"/>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Text="Help &amp; Support"
+                   FontFamily="Roboto"
+                   FontSize="26"
+                   FontWeight="Bold"
+                   Foreground="White"
+                   Margin="0,0,0,20"/>
+
+        <!-- Help Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- Section 1 -->
+                <StackPanel Margin="0 0 0 20">
+                    <TextBlock Text="Getting Started"
+                               FontFamily="Roboto"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="#CCCCCC"
+                               Margin="0 0 0 5"/>
+                    <TextBlock Text="1. Log in to your accounts to enable drops tracking. &#10;2. Navigate to the Dashboard to view your miner status and campaign progress. &#10;3. Use the sidebar to switch between Inventory, Settings, and Help pages."
+                               FontFamily="Roboto"
+                               FontSize="14"
+                               Foreground="#AAAAAA"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- Section 2 -->
+                <StackPanel Margin="0 0 0 20">
+                    <TextBlock Text="Inventory Tracking"
+                               FontFamily="Roboto"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="#CCCCCC"
+                               Margin="0 0 0 5"/>
+                    <TextBlock Text="Your inventory displays all active campaigns, collected drops, and progress per streamer. Make sure your account is linked to update in real time."
+                               FontFamily="Roboto"
+                               FontSize="14"
+                               Foreground="#AAAAAA"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- Section 3 -->
+                <StackPanel Margin="0 0 0 20">
+                    <TextBlock Text="Settings"
+                               FontFamily="Roboto"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="#CCCCCC"
+                               Margin="0 0 0 5"/>
+                    <TextBlock Text="Configure preferences, notifications, and account connections. All changes are saved automatically."
+                               FontFamily="Roboto"
+                               FontSize="14"
+                               Foreground="#AAAAAA"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- Section 4 -->
+                <StackPanel Margin="0 0 0 20">
+                    <TextBlock Text="Support"
+               FontSize="18"
+               FontWeight="SemiBold"
+               Foreground="#CCCCCC"
+               Margin="0 0 0 5"/>
+
+                    <!-- Paragraph -->
+                    <TextBlock FontSize="14"
+                               Foreground="#AAAAAA"
+                               TextWrapping="Wrap"
+                               Margin="0 5 0 8" Text="If you encounter issues, you can join our community or check for updates and bug reports here:"/>
+
+                    <!-- Links -->
+                    <StackPanel>
+                        <TextBlock FontSize="14" Foreground="#7FAAFF">
+                        <Hyperlink NavigateUri="https://discord.gg/Cddu5aJ"
+                                   RequestNavigate="Hyperlink_RequestNavigate">
+                            Discord Community
+                        </Hyperlink>
+                        </TextBlock>
+
+                        <TextBlock FontSize="14" Foreground="#C7D0FF" Margin="0 3 0 0">
+                        <Hyperlink NavigateUri="https://github.com/tsgsOFFICIAL/StreamDropCollector"
+                                   RequestNavigate="Hyperlink_RequestNavigate">
+                            GitHub Repository
+                        </Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </UserControl>
