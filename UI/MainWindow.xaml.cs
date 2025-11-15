@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Diagnostics;
 using System.Windows;
 using System.IO;
+using UI.Views;
 
 namespace UI
 {
@@ -46,6 +47,39 @@ namespace UI
 
             // Event handler for double-click on TaskbarIcon
             MyNotifyIcon.TrayMouseDoubleClick += OnTrayIconDoubleClick;
+
+            // Default page
+            Navigate(new DashboardView());
+        }
+
+        private void Navigate(System.Windows.Controls.UserControl view)
+        {
+            MainContent.Content = view;
+        }
+
+        private void SidebarButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn)
+            {
+                switch (btn.Tag)
+                {
+                    case "Dashboard":
+                        Navigate(new DashboardView());
+                        break;
+
+                    case "Inventory":
+                        Navigate(new InventoryView());
+                        break;
+
+                    case "Settings":
+                        Navigate(new SettingsView());
+                        break;
+
+                    case "Help":
+                        Navigate(new HelpView());
+                        break;
+                }
+            }
         }
 
         /// <summary>
@@ -229,21 +263,6 @@ namespace UI
         {
             CloseApplication();
         }
-        /// <summary>
-        /// Event handler for when the main frame has navigated
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void OnMainFrameNavigated(object sender, System.Windows.Navigation.NavigationEventArgs e)
-        {
-            //// Subscribe to events from the currentToolKitVersion page inside the MainFrame
-            //if (MainFrame.Content is Main mainPage)
-            //{
-            //    mainPage.NavigationButtonClicked += OnNavigationButtonClicked;
-            //    MainAppHeader.Text = "Marine ToolKit";
-            //    ModuleVersion.Text = string.Empty;
-            //}
-        }
         private void OnTrayIconDoubleClick(object sender, RoutedEventArgs e)
         {
             // Show the window and restore it to normal state
@@ -257,6 +276,11 @@ namespace UI
             // Find context menu items and update texts based on WindowState
             System.Windows.Controls.ContextMenu menu = MyNotifyIcon.ContextMenu;
             System.Windows.Controls.MenuItem toggleMenuItem = MinimizeAndRestore;
+
+            if (WindowState == WindowState.Maximized)
+                RootBorder.Padding = new Thickness(7); // Add safe padding (7px is deafult Windows border size)
+            else
+                RootBorder.Padding = new Thickness(0);
 
             if (WindowState == WindowState.Minimized)
             {
@@ -273,6 +297,7 @@ namespace UI
                 MyNotifyIcon.ToolTipText = "Stream Drop Collector by tsgsOFFICIAL";
             }
         }
+
         #endregion
     }
 }

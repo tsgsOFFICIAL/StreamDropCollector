@@ -39,11 +39,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="Windows\" />
+		<None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\**" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\**" />
+	  <Compile Remove="Windows\**" />
+	  <EmbeddedResource Remove="Windows\**" />
+	  <None Remove="Windows\**" />
+	  <Page Remove="Windows\**" />
 	</ItemGroup>
 
 	<ItemGroup>
