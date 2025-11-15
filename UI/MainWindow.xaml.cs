@@ -1,4 +1,7 @@
-﻿using System.Runtime.InteropServices;
+﻿using UserControl = System.Windows.Controls.UserControl;
+using Button = System.Windows.Controls.Button;
+using System.Windows.Media.Animation;
+using System.Runtime.InteropServices;
 using System.IO.MemoryMappedFiles;
 using System.Windows.Input;
 using System.Diagnostics;
@@ -28,6 +31,8 @@ namespace UI
                 UpdateTrayIconVisibility();
             }
         }
+        private string _currentPage = string.Empty;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -42,41 +47,96 @@ namespace UI
             // Initialize commands
             ToggleWindowCommand = new RelayCommand(o => ToggleWindowState());
             CloseCommand = new RelayCommand(o => CloseApplication());
-            OpenGithubCommand = new RelayCommand(o => LaunchWeb("https://github.com/tsgsOFFICIAL/CS2-AutoAccept"));
-            JoinDiscordCommand = new RelayCommand(o => LaunchWeb("https://discord.gg/Cddu5aJ"));
+            OpenGithubCommand = new RelayCommand(o => Core.Utility.LaunchWeb("https://github.com/tsgsOFFICIAL/CS2-AutoAccept"));
+            JoinDiscordCommand = new RelayCommand(o => Core.Utility.LaunchWeb("https://discord.gg/Cddu5aJ"));
 
             // Event handler for double-click on TaskbarIcon
             MyNotifyIcon.TrayMouseDoubleClick += OnTrayIconDoubleClick;
 
             // Default page
-            Navigate(new DashboardView());
+            SwitchPage(new DashboardView());
         }
 
-        private void Navigate(System.Windows.Controls.UserControl view)
+        /// <summary>
+        /// Switches the current content with a fade-in animation.
+        /// </summary>
+        /// <param name="newPage">The UserControl page to display</param>
+        private void SwitchPage(UserControl newPage)
         {
-            MainContent.Content = view;
+            bool addAnimation = _currentPage != newPage.GetType().Name;
+
+            // If animations are disabled for this switch, do a direct swap (or no-op if same page instance/type)
+            if (!addAnimation)
+            {
+                // If the currently displayed content is already the same page type, do nothing.
+                if (MainContent.Content?.GetType() == newPage.GetType())
+                {
+                    return;
+                }
+
+                // Replace without animations
+                newPage.Opacity = 1;
+                MainContent.Content = newPage;
+                _currentPage = newPage.GetType().Name;
+                return;
+            }
+
+            if (MainContent.Content != null)
+            {
+                // Fade out current page
+                DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(100));
+                fadeOut.Completed += (s, e) =>
+                {
+                    MainContent.Content = newPage;
+
+                    // Fade in new page
+                    DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150));
+                    newPage.BeginAnimation(OpacityProperty, fadeIn);
+                };
+
+                if (MainContent.Content is UserControl current)
+                {
+                    current.BeginAnimation(OpacityProperty, fadeOut);
+                }
+            }
+            else
+            {
+                // No current content, just fade in new page
+                newPage.Opacity = 0;
+                MainContent.Content = newPage;
+                DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150));
+                newPage.BeginAnimation(OpacityProperty, fadeIn);
+            }
+
+            _currentPage = newPage.GetType().Name;
         }
 
+        /// <summary>
+        /// Handles the Click event for sidebar navigation buttons, switching the main view to the corresponding page
+        /// based on the button's tag.
+        /// </summary>
+        /// <remarks>The method expects the sender to be a Button with its Tag property set to a
+        /// recognized page identifier such as "Dashboard", "Inventory", "Settings", or "Help". If the Tag does not
+        /// match a known value, no action is taken.</remarks>
+        /// <param name="sender">The source of the event, expected to be a Button representing a sidebar navigation option.</param>
+        /// <param name="e">The event data associated with the button click.</param>
         private void SidebarButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.Button btn)
+            if (sender is Button btn)
             {
-                switch (btn.Tag)
+                switch (btn.Tag?.ToString())
                 {
                     case "Dashboard":
-                        Navigate(new DashboardView());
+                        SwitchPage(new DashboardView());
                         break;
-
                     case "Inventory":
-                        Navigate(new InventoryView());
+                        SwitchPage(new InventoryView());
                         break;
-
                     case "Settings":
-                        Navigate(new SettingsView());
+                        SwitchPage(new SettingsView());
                         break;
-
                     case "Help":
-                        Navigate(new HelpView());
+                        SwitchPage(new HelpView());
                         break;
                 }
             }
@@ -110,39 +170,6 @@ namespace UI
             {
                 WindowState = WindowState.Minimized;
                 Hide();
-            }
-        }
-
-        /// <summary>
-        /// Launch a web URL on Windows, Linux and OSX
-        /// </summary>
-        /// <param Name="url">The URL to open in the standard browser</param>
-        private static void LaunchWeb(string url)
-        {
-            try
-            {
-                Process.Start(url);
-            }
-            catch
-            {
-                // Hack for running the above line in DOTNET Core...
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    url = url.Replace("&", "^&");
-                    Process.Start(new ProcessStartInfo("cmd", $"/c start {url}") { CreateNoWindow = true });
-                }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                {
-                    Process.Start("xdg-open", url);
-                }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                {
-                    Process.Start("open", url);
-                }
-                else
-                {
-                    throw new Exception("Could not open the browser on this machine");
-                }
             }
         }
 
