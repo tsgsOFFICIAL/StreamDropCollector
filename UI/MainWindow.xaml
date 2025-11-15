@@ -168,6 +168,7 @@
     <WindowChrome.WindowChrome>
         <WindowChrome GlassFrameThickness="1" ResizeBorderThickness="5" CaptionHeight="0"/>
     </WindowChrome.WindowChrome>
+    
     <Border x:Name="RootBorder" Padding="0">
         <Grid>
             <Grid.ColumnDefinitions>
