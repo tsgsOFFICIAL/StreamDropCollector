@@ -54,8 +54,8 @@
             <Border Grid.Row="0" Grid.Column="1" Margin="0,0,0,20" Background="#252526" Padding="20" CornerRadius="8">
                 <StackPanel>
                     <TextBlock Text="Campaign Progress" Foreground="#CCCCCC" FontSize="16"/>
-                    <ProgressBar x:Name="CampaignProgressBar" Height="20" Margin="0,10,0,5" Minimum="0" Maximum="100" Value="45"/>
-                    <TextBlock x:Name="CampaignProgressText" Text="45% Completed" Foreground="#AAAAAA" FontSize="12"/>
+                    <ProgressBar x:Name="CampaignProgressBar" Height="20" Margin="0,10,0,5" Minimum="0" Maximum="100" Value="0"/>
+                    <TextBlock x:Name="CampaignProgressText" Text="0% Completed" Foreground="#AAAAAA" FontSize="12"/>
                 </StackPanel>
             </Border>
 
@@ -69,13 +69,92 @@
                     <!-- Each status line uses Margin for spacing -->
                     <StackPanel Margin="0,10,0,0">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="10" Height="10" Fill="Lime"/>
-                            <TextBlock Text="Twitch: Logged In" Foreground="White" Margin="10,0,0,0"/>
+                            <Ellipse Width="10" Height="10" Fill="Red"/>
+                            <TextBlock Text="Twitch: Not Connected" Foreground="White" Margin="10,0,0,0"/>
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="10" Height="10" Fill="Red"/>
-                            <TextBlock Text="Kick: Not Connected" Foreground="White" Margin="10,0,0,0"/>
+                            <Ellipse Width="10" Height="10" Fill="{Binding KickConnectionColor}"/>
+                            <TextBlock Text="{Binding KickConnectionStatus}" Foreground="White" Margin="10,0,0,0"/>
+                        </StackPanel>
+
+                        <!-- ===========================
+                             LOGIN BUTTONS
+                        ============================ -->
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
+
+                            <!-- Kick Login Button -->
+                            <Button x:Name="KickLoginButton"
+            Content="Login Kick"
+            Width="120" Height="30"
+            Margin="0,0,10,0"
+            FontWeight="SemiBold"
+            Click="LoginKick_Click">
+
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <!-- Default -->
+                                        <Setter Property="Background" Value="#3C3C3C"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="BorderBrush" Value="#555"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+
+                                        <Style.Triggers>
+                                            <!-- MouseOver -->
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#505050"/>
+                                            </Trigger>
+
+                                            <!-- Pressed -->
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter Property="Background" Value="#606060"/>
+                                            </Trigger>
+
+                                            <!-- Disabled -->
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="Background" Value="#2A2A2A"/>
+                                                <Setter Property="Foreground" Value="#888"/>
+                                                <Setter Property="BorderBrush" Value="#444"/>
+                                                <Setter Property="Cursor" Value="Arrow"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Twitch Login Button (copy same style) -->
+                            <Button x:Name="TwitchLoginButton"
+            Content="Login Twitch"
+            Width="120" Height="30"
+            FontWeight="SemiBold"
+            Click="LoginTwitch_Click">
+
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="#3C3C3C"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="BorderBrush" Value="#555"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#505050"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter Property="Background" Value="#606060"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="Background" Value="#2A2A2A"/>
+                                                <Setter Property="Foreground" Value="#888"/>
+                                                <Setter Property="BorderBrush" Value="#444"/>
+                                                <Setter Property="Cursor" Value="Arrow"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>

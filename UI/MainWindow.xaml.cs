@@ -1,10 +1,8 @@
 ﻿using UserControl = System.Windows.Controls.UserControl;
 using Button = System.Windows.Controls.Button;
 using System.Windows.Media.Animation;
-using System.Runtime.InteropServices;
 using System.IO.MemoryMappedFiles;
 using System.Windows.Input;
-using System.Diagnostics;
 using System.Windows;
 using System.IO;
 using UI.Views;
