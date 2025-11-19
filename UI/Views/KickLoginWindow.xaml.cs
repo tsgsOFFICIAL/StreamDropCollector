@@ -49,6 +49,5 @@ namespace UI.Views
                 await Task.Delay(500);
             }
         }
-
     }
 }

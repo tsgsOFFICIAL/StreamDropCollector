@@ -64,13 +64,13 @@
             ====================================================== -->
             <Border Grid.Row="1" Grid.Column="0" Margin="0,0,20,0" Background="#252526" Padding="20" CornerRadius="8">
                 <StackPanel>
-                    <TextBlock Text="Login Status" Foreground="#CCCCCC" FontSize="16"/>
+                    <TextBlock Text="Connection Status" Foreground="#CCCCCC" FontSize="16"/>
 
                     <!-- Each status line uses Margin for spacing -->
                     <StackPanel Margin="0,10,0,0">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="10" Height="10" Fill="Red"/>
-                            <TextBlock Text="Twitch: Not Connected" Foreground="White" Margin="10,0,0,0"/>
+                            <Ellipse Width="10" Height="10" Fill="{Binding TwitchConnectionColor}"/>
+                            <TextBlock Text="{Binding TwitchConnectionStatus}" Foreground="White" Margin="10,0,0,0"/>
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
@@ -79,77 +79,97 @@
                         </StackPanel>
 
                         <!-- ===========================
-                             LOGIN BUTTONS
-                        ============================ -->
+                             LOGIN BUTTONS (Fixed & Actually Sexy Now)
+                        =========================== -->
                         <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
 
                             <!-- Kick Login Button -->
                             <Button x:Name="KickLoginButton"
-            Content="Login Kick"
-            Width="120" Height="30"
-            Margin="0,0,10,0"
-            FontWeight="SemiBold"
-            Click="LoginKick_Click">
-
+                                Content="Login Kick"
+                                Width="120" Height="36"
+                                Margin="0,0,10,0"
+                                FontWeight="SemiBold"
+                                Cursor="Hand"
+                                Click="LoginKick_Click"
+                                IsEnabled="False">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" 
+                                            Background="#2D9D78" 
+                                            CornerRadius="6">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#34B48F"/>
+                                                <Setter TargetName="border" Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect Color="#34B48F" Opacity="0.5" BlurRadius="10" ShadowDepth="0"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#257A63"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="border" Property="Background" Value="#2A2A2A"/>
+                                                <Setter Property="Foreground" Value="#888"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
                                 <Button.Style>
                                     <Style TargetType="Button">
-                                        <!-- Default -->
-                                        <Setter Property="Background" Value="#3C3C3C"/>
                                         <Setter Property="Foreground" Value="White"/>
-                                        <Setter Property="BorderBrush" Value="#555"/>
-                                        <Setter Property="BorderThickness" Value="1"/>
-                                        <Setter Property="Cursor" Value="Hand"/>
-
                                         <Style.Triggers>
-                                            <!-- MouseOver -->
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#505050"/>
-                                            </Trigger>
-
-                                            <!-- Pressed -->
-                                            <Trigger Property="IsPressed" Value="True">
-                                                <Setter Property="Background" Value="#606060"/>
-                                            </Trigger>
-
-                                            <!-- Disabled -->
                                             <Trigger Property="IsEnabled" Value="False">
-                                                <Setter Property="Background" Value="#2A2A2A"/>
                                                 <Setter Property="Foreground" Value="#888"/>
-                                                <Setter Property="BorderBrush" Value="#444"/>
-                                                <Setter Property="Cursor" Value="Arrow"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
                             </Button>
 
-                            <!-- Twitch Login Button (copy same style) -->
+                            <!-- Twitch Login Button -->
                             <Button x:Name="TwitchLoginButton"
-            Content="Login Twitch"
-            Width="120" Height="30"
-            FontWeight="SemiBold"
-            Click="LoginTwitch_Click">
-
-                                <Button.Style>
-                                    <Style TargetType="Button">
-                                        <Setter Property="Background" Value="#3C3C3C"/>
-                                        <Setter Property="Foreground" Value="White"/>
-                                        <Setter Property="BorderBrush" Value="#555"/>
-                                        <Setter Property="BorderThickness" Value="1"/>
-                                        <Setter Property="Cursor" Value="Hand"/>
-
-                                        <Style.Triggers>
+                                Content="Login Twitch"
+                                Width="120" Height="36"
+                                FontWeight="SemiBold"
+                                Cursor="Hand"
+                                Click="LoginTwitch_Click"
+                                IsEnabled="False">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" 
+                                            Background="#9146FF" 
+                                            CornerRadius="6">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#505050"/>
+                                                <Setter TargetName="border" Property="Background" Value="#A970FF"/>
+                                                <Setter TargetName="border" Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect Color="#A970FF" Opacity="0.5" BlurRadius="12" ShadowDepth="0"/>
+                                                    </Setter.Value>
+                                                </Setter>
                                             </Trigger>
                                             <Trigger Property="IsPressed" Value="True">
-                                                <Setter Property="Background" Value="#606060"/>
+                                                <Setter TargetName="border" Property="Background" Value="#772CE8"/>
                                             </Trigger>
                                             <Trigger Property="IsEnabled" Value="False">
-                                                <Setter Property="Background" Value="#2A2A2A"/>
+                                                <Setter TargetName="border" Property="Background" Value="#2A2A2A"/>
                                                 <Setter Property="Foreground" Value="#888"/>
-                                                <Setter Property="BorderBrush" Value="#444"/>
-                                                <Setter Property="Cursor" Value="Arrow"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="Foreground" Value="#888"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
