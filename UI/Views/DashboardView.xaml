@@ -68,18 +68,28 @@
 
                     <!-- Each status line uses Margin for spacing -->
                     <StackPanel Margin="0,10,0,0">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="10" Height="10" Fill="{Binding TwitchConnectionColor}"/>
-                            <TextBlock Text="{Binding TwitchConnectionStatus}" Foreground="White" Margin="10,0,0,0"/>
+                        <!-- Twitch Status -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Ellipse Width="10" Height="10" Fill="{Binding TwitchConnectionColor}" VerticalAlignment="Center"/>
+                            <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
+                                <Run Text="Twitch" FontWeight="Bold" Foreground="#A666FF"/>
+                                <Run Text=" : " Foreground="White"/>
+                                <Run Text="{Binding TwitchConnectionStatus}" FontWeight="SemiBold" Foreground="White"/>
+                            </TextBlock>
                         </StackPanel>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="10" Height="10" Fill="{Binding KickConnectionColor}"/>
-                            <TextBlock Text="{Binding KickConnectionStatus}" Foreground="White" Margin="10,0,0,0"/>
+                        <!-- Kick Status -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Ellipse Width="10" Height="10" Fill="{Binding KickConnectionColor}" VerticalAlignment="Center"/>
+                            <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
+                                <Run Text="Kick" FontWeight="Bold" Foreground="#5FF41C"/>
+                                <Run Text=" : " Foreground="White"/>
+                                <Run Text="{Binding KickConnectionStatus}" FontWeight="SemiBold" Foreground="White"/>
+                            </TextBlock>
                         </StackPanel>
 
                         <!-- ===========================
-                             LOGIN BUTTONS (Fixed & Actually Sexy Now)
+                             LOGIN BUTTONS
                         =========================== -->
                         <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
 

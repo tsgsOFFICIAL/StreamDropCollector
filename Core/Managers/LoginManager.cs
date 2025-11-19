@@ -39,14 +39,12 @@ namespace Core.Managers
             }
 
             await host.EnsureInitializedAsync();
-            await host.AddOrUpdateCookieAsync("auth-token", tokens[0], "twitch.tv", "/");
-            await host.AddOrUpdateCookieAsync("unique_id", tokens[1], "twitch.tv", "/");
             await host.NavigateAsync("https://twitch.tv/");
             await host.WaitForNavigationAsync();
             
             string htmlRaw = await host.ExecuteScriptAsync("document.documentElement.outerHTML;");
             string html = JsonSerializer.Deserialize<string>(htmlRaw) ?? "";
-            bool loggedIn = IsLoggedInFromHtml(html);
+            bool loggedIn = IsTwitchLoggedInFromHtml(html);
             
             UpdateTwitchStatus(loggedIn ? ConnectionStatus.Connected : ConnectionStatus.NotConnected);
         }
@@ -77,12 +75,17 @@ namespace Core.Managers
             string htmlRaw = await host.ExecuteScriptAsync("document.documentElement.outerHTML;");
             string html = JsonSerializer.Deserialize<string>(htmlRaw) ?? "";
 
-            bool loggedIn = IsLoggedInFromHtml(html);
+            bool loggedIn = IsKickLoggedInFromHtml(html);
 
             UpdateKickStatus(loggedIn ? ConnectionStatus.Connected : ConnectionStatus.NotConnected);
         }
 
-        private static bool IsLoggedInFromHtml(string html)
+        private static bool IsTwitchLoggedInFromHtml(string html)
+        {
+            return !html.Contains("data-a-target=\"login-button\"");
+        }
+
+        private static bool IsKickLoggedInFromHtml(string html)
         {
             return html.Contains("data-test=\"user-menu\"")
                 || html.Contains("alt=\"profile-avatar\"")

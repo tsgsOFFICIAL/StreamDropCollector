@@ -11,6 +11,8 @@ namespace UI.Views
     /// </summary>
     public partial class DashboardView : UserControl, INotifyPropertyChanged
     {
+        private static HiddenWebViewHost? _kickHost;
+        private static HiddenWebViewHost? _twitchHost;
         /// <summary>
         /// Initializes a new instance of the DashboardView class and sets up event handlers for login status changes.
         /// </summary>
@@ -21,20 +23,28 @@ namespace UI.Views
         {
             InitializeComponent();
             DataContext = this;
+
             LoginManager.KickStatusChanged += OnKickStatusChanged;
             LoginManager.TwitchStatusChanged += OnTwitchStatusChanged;
+
             Loaded += DashboardView_Loaded;
             Unloaded += (s, e) =>
             {
                 LoginManager.KickStatusChanged -= OnKickStatusChanged;
                 LoginManager.TwitchStatusChanged -= OnTwitchStatusChanged;
+                
+                // Force close hidden web views to free resources
+                _kickHost?.Close();
+                _twitchHost?.Close();
+                _kickHost = null;
+                _twitchHost = null;
             };
         }
 
         private string _twitchConnectionStatus = "Not Connected";
         public string TwitchConnectionStatus
         {
-            get => $"Twitch: {_twitchConnectionStatus}";
+            get => _twitchConnectionStatus;
             set
             {
                 _twitchConnectionStatus = value;
@@ -55,7 +65,7 @@ namespace UI.Views
         private string _kickConnectionStatus = "Not Connected";
         public string KickConnectionStatus
         {
-            get => $"Kick: {_kickConnectionStatus}";
+            get => _kickConnectionStatus;
             set
             {
                 _kickConnectionStatus = value;
@@ -201,10 +211,11 @@ namespace UI.Views
         /// is an async void method.</remarks>
         private static async void VerifyKickAccountIsConnected()
         {
-            HiddenWebViewHost host = new HiddenWebViewHost();
-            await host.EnsureInitializedAsync();
+            _kickHost?.Close();
+            _kickHost = new HiddenWebViewHost();
+            await _kickHost.EnsureInitializedAsync();
 
-            await LoginManager.ValidateKickTokenAsync(host);
+            await LoginManager.ValidateKickTokenAsync(_kickHost);
         }
         /// <summary>
         /// Verifies that a Twitch account is connected and that authentication tokens are valid.
@@ -214,9 +225,10 @@ namespace UI.Views
         /// code.</remarks>
         private static async void VerifyTwitchAccountIsConnected()
         {
-            HiddenWebViewHost host = new HiddenWebViewHost();
-            await host.EnsureInitializedAsync();
-            await LoginManager.ValidateTwitchTokensAsync(host);
+            _twitchHost?.Close();
+            _twitchHost = new HiddenWebViewHost();
+            await _twitchHost.EnsureInitializedAsync();
+            await LoginManager.ValidateTwitchTokensAsync(_twitchHost);
         }
     }
 }
