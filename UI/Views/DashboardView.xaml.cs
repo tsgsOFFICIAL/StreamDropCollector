@@ -2,7 +2,8 @@
 using System.Runtime.CompilerServices;
 using System.ComponentModel;
 using System.Windows;
-using Core.Managers;
+using Core.Services;
+using Core.Enums;
 
 namespace UI.Views
 {
@@ -11,8 +12,13 @@ namespace UI.Views
     /// </summary>
     public partial class DashboardView : UserControl, INotifyPropertyChanged
     {
-        private static HiddenWebViewHost? _kickHost;
-        private static HiddenWebViewHost? _twitchHost;
+        private readonly HiddenWebViewHost _twitchWebView = new();
+        private readonly HiddenWebViewHost _kickWebView = new();
+
+        // Services
+        private readonly TwitchLoginService _twitchService = new();
+        private readonly KickLoginService _kickService = new();
+
         /// <summary>
         /// Initializes a new instance of the DashboardView class and sets up event handlers for login status changes.
         /// </summary>
@@ -24,21 +30,14 @@ namespace UI.Views
             InitializeComponent();
             DataContext = this;
 
-            LoginManager.KickStatusChanged += OnKickStatusChanged;
-            LoginManager.TwitchStatusChanged += OnTwitchStatusChanged;
+            _twitchService = new TwitchLoginService();
+            _kickService = new KickLoginService();
 
-            Loaded += DashboardView_Loaded;
-            Unloaded += (s, e) =>
-            {
-                LoginManager.KickStatusChanged -= OnKickStatusChanged;
-                LoginManager.TwitchStatusChanged -= OnTwitchStatusChanged;
-                
-                // Force close hidden web views to free resources
-                _kickHost?.Close();
-                _twitchHost?.Close();
-                _kickHost = null;
-                _twitchHost = null;
-            };
+            _twitchService.StatusChanged += OnTwitchStatusChanged;
+            _kickService.StatusChanged += OnKickStatusChanged;
+
+            Loaded += async (s, e) => await OnLoadedAsync();
+            Unloaded += OnUnloaded;
         }
 
         private string _twitchConnectionStatus = "Not Connected";
@@ -72,7 +71,6 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
-
         private string _kickConnectionColor = "Red";
         public string KickConnectionColor
         {
@@ -83,6 +81,7 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
+
         /// <summary>
         /// Occurs when a property value changes.
         /// </summary>
@@ -101,29 +100,56 @@ namespace UI.Views
         /// a property setter.</param>
         private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         /// <summary>
+        /// Performs asynchronous validation of Twitch and Kick services when the component is loaded.
+        /// </summary>
+        /// <returns>A task that represents the asynchronous operation.</returns>
+        private async Task OnLoadedAsync()
+        {
+            await Task.WhenAll(
+                ValidateTwitchAsync(),
+                ValidateKickAsync()
+            );
+        }
+        /// <summary>
+        /// Handles the Unloaded event to perform necessary cleanup of resources and event handlers.
+        /// </summary>
+        /// <remarks>This method should be attached to the Unloaded event of the control to ensure that
+        /// all associated resources are properly released when the control is removed from the visual tree.</remarks>
+        /// <param name="sender">The source of the Unloaded event.</param>
+        /// <param name="e">The event data associated with the Unloaded event.</param>
+        private void OnUnloaded(object? sender, RoutedEventArgs e)
+        {
+            // Properly clean up everything
+            _twitchService.StatusChanged -= OnTwitchStatusChanged;
+            _kickService.StatusChanged -= OnKickStatusChanged;
+
+            _twitchWebView.Close();
+            _kickWebView.Close();
+        }
+        /// <summary>
         /// Handles changes to the Kick connection status and updates related UI elements accordingly.
         /// </summary>
         /// <remarks>This method updates the Kick connection status message, color indicator, and the
         /// enabled state of the Kick login button based on the provided status. It should be called whenever the
         /// connection status changes to ensure the UI reflects the current state.</remarks>
         /// <param name="status">The new connection status value indicating the current state of the Kick login process.</param>
-        private void OnKickStatusChanged(LoginManager.ConnectionStatus status)
+        private void OnKickStatusChanged(ConnectionStatus status)
         {
             switch (status)
             {
-                case LoginManager.ConnectionStatus.NotConnected:
+                case ConnectionStatus.NotConnected:
                     KickConnectionStatus = "Not Connected";
                     KickConnectionColor = "Red";
                     KickLoginButton.IsEnabled = true;
                     break;
 
-                case LoginManager.ConnectionStatus.Validating:
+                case ConnectionStatus.Validating:
                     KickConnectionStatus = "Validating...";
                     KickConnectionColor = "Orange";
                     KickLoginButton.IsEnabled = false;
                     break;
 
-                case LoginManager.ConnectionStatus.Connected:
+                case ConnectionStatus.Connected:
                     KickConnectionStatus = "Connected";
                     KickConnectionColor = "Lime";
                     KickLoginButton.IsEnabled = false; // disable when already logged in
@@ -136,38 +162,28 @@ namespace UI.Views
         /// </summary>
         /// <param name="status">The current connection status of the Twitch login process. Determines how the UI reflects the connection
         /// state.</param>
-        private void OnTwitchStatusChanged(LoginManager.ConnectionStatus status)
+        private void OnTwitchStatusChanged(ConnectionStatus status)
         {
             switch (status)
             {
-                case LoginManager.ConnectionStatus.NotConnected:
+                case ConnectionStatus.NotConnected:
                     TwitchConnectionStatus = "Not Connected";
                     TwitchConnectionColor = "Red";
                     TwitchLoginButton.IsEnabled = true;
                     break;
 
-                case LoginManager.ConnectionStatus.Validating:
+                case ConnectionStatus.Validating:
                     TwitchConnectionStatus = "Validating...";
                     TwitchConnectionColor = "Orange";
                     TwitchLoginButton.IsEnabled = false;
                     break;
 
-                case LoginManager.ConnectionStatus.Connected:
+                case ConnectionStatus.Connected:
                     TwitchConnectionStatus = "Connected";
                     TwitchConnectionColor = "Lime";
                     TwitchLoginButton.IsEnabled = false; // disable when already logged in
                     break;
             }
-        }
-        /// <summary>
-        /// Handles the Loaded event of the DashboardView control.
-        /// </summary>
-        /// <param name="sender">The source of the event, typically the DashboardView control.</param>
-        /// <param name="e">The event data associated with the Loaded event.</param>
-        private async void DashboardView_Loaded(object sender, RoutedEventArgs e)
-        {
-            VerifyKickAccountIsConnected();
-            VerifyTwitchAccountIsConnected();
         }
         /// <summary>
         /// Handles the Click event for the Kick login button, displaying the login dialog and saving the session token
@@ -177,58 +193,37 @@ namespace UI.Views
         /// <param name="e">The event data associated with the Click event.</param>
         private void LoginKick_Click(object sender, RoutedEventArgs e)
         {
-            KickLoginWindow login = new KickLoginWindow();
-            bool? result = login.ShowDialog();
-
-            if (result == true && login.SessionToken != null)
-                LoginManager.SaveKickToken(login.SessionToken);
-
-            VerifyKickAccountIsConnected();
+            new KickLoginWindow().ShowDialog();
+            _ = ValidateKickAsync();
         }
         /// <summary>
-        /// Handles the Click event for the Twitch login button, prompting the user to log in and saving the session
-        /// token if authentication is successful.
+        /// Handles the Click event for the Twitch login button, displaying the Twitch login window and initiating
+        /// Twitch account validation.
         /// </summary>
-        /// <param name="sender">The source of the event, typically the Twitch login button.</param>
-        /// <param name="e">The event data associated with the Click event.</param>
+        /// <param name="sender">The source of the event, typically the button that was clicked.</param>
+        /// <param name="e">The event data associated with the click event.</param>
         private void LoginTwitch_Click(object sender, RoutedEventArgs e)
         {
-            TwitchLoginWindow login = new TwitchLoginWindow();
-            bool? result = login.ShowDialog();
-
-            if (result == true && login.AuthToken != null && login.UniqueId != null)
-                LoginManager.SaveTwitchTokens([login.AuthToken, login.UniqueId]);
-
-            VerifyTwitchAccountIsConnected();
+            new TwitchLoginWindow().ShowDialog();
+            _ = ValidateTwitchAsync();
         }
         /// <summary>
-        /// Verifies that the Kick account is currently connected and authenticated.
+        /// Asynchronously validates the current Twitch credentials using the associated web view and service.
         /// </summary>
-        /// <remarks>This method performs an asynchronous check to ensure the Kick account's
-        /// authentication token is valid and the account is connected. If the account is not connected, the method may
-        /// trigger re-authentication or other corrective actions as defined by the underlying login manager. This
-        /// method is intended for internal use and should not be awaited or called from user interface threads, as it
-        /// is an async void method.</remarks>
-        private static async void VerifyKickAccountIsConnected()
+        /// <returns>A task that represents the asynchronous validation operation.</returns>
+        private async Task ValidateTwitchAsync()
         {
-            _kickHost?.Close();
-            _kickHost = new HiddenWebViewHost();
-            await _kickHost.EnsureInitializedAsync();
-
-            await LoginManager.ValidateKickTokenAsync(_kickHost);
+            await _twitchWebView.EnsureInitializedAsync();
+            await _twitchService.ValidateCredentialsAsync(_twitchWebView);
         }
         /// <summary>
-        /// Verifies that a Twitch account is connected and that authentication tokens are valid.
+        /// Validates the current Kick service credentials asynchronously.
         /// </summary>
-        /// <remarks>This method initializes a hidden web view host and validates the current Twitch
-        /// authentication tokens. It is intended for internal use and should not be called directly from user
-        /// code.</remarks>
-        private static async void VerifyTwitchAccountIsConnected()
+        /// <returns>A task that represents the asynchronous validation operation.</returns>
+        private async Task ValidateKickAsync()
         {
-            _twitchHost?.Close();
-            _twitchHost = new HiddenWebViewHost();
-            await _twitchHost.EnsureInitializedAsync();
-            await LoginManager.ValidateTwitchTokensAsync(_twitchHost);
+            await _kickWebView.EnsureInitializedAsync();
+            await _kickService.ValidateCredentialsAsync(_kickWebView);
         }
     }
 }

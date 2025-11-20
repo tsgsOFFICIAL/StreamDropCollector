@@ -22,10 +22,10 @@ namespace UI.Views
             InitializeComponent();
 
             // Keep window off-screen / hidden — but must be shown to host Hwnd
-            Width = 0; Height = 0;
-            ShowInTaskbar = false;
-            WindowStyle = WindowStyle.None;
-            Visibility = Visibility.Hidden;
+            //Width = 0; Height = 0;
+            //ShowInTaskbar = false;
+            //WindowStyle = WindowStyle.None;
+            //Visibility = Visibility.Hidden;
         }
 
         public async Task EnsureInitializedAsync()
