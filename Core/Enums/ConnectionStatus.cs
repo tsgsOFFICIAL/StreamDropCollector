@@ -4,6 +4,7 @@
     {
         NotConnected,
         Validating,
-        Connected
+        Connected,
+        Connecting
     }
 }
