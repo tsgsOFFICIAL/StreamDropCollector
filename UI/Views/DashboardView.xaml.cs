@@ -154,6 +154,11 @@ namespace UI.Views
                     KickConnectionColor = "Lime";
                     KickLoginButton.IsEnabled = false; // disable when already logged in
                     break;
+                case ConnectionStatus.Connecting:
+                    KickConnectionStatus = "Connecting...";
+                    KickConnectionColor = "Yellow";
+                    KickLoginButton.IsEnabled = false;
+                    break;
             }
         }
         /// <summary>
@@ -182,6 +187,11 @@ namespace UI.Views
                     TwitchConnectionStatus = "Connected";
                     TwitchConnectionColor = "Lime";
                     TwitchLoginButton.IsEnabled = false; // disable when already logged in
+                    break;
+                case ConnectionStatus.Connecting:
+                    TwitchConnectionStatus = "Connecting...";
+                    TwitchConnectionColor = "Yellow";
+                    TwitchLoginButton.IsEnabled = false;
                     break;
             }
         }
@@ -213,7 +223,6 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous validation operation.</returns>
         private async Task ValidateTwitchAsync()
         {
-            await _twitchWebView.EnsureInitializedAsync();
             await _twitchService.ValidateCredentialsAsync(_twitchWebView);
         }
         /// <summary>
@@ -222,7 +231,6 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous validation operation.</returns>
         private async Task ValidateKickAsync()
         {
-            await _kickWebView.EnsureInitializedAsync();
             await _kickService.ValidateCredentialsAsync(_kickWebView);
         }
     }

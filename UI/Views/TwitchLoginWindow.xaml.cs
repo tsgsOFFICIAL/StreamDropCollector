@@ -7,8 +7,6 @@ namespace UI.Views
     /// </summary>
     public partial class TwitchLoginWindow : Window
     {
-        public string? AuthToken { get; private set; }
-        public string? UniqueId { get; private set; }
         public TwitchLoginWindow()
         {
             InitializeComponent();
@@ -19,7 +17,7 @@ namespace UI.Views
         {
             await Web.EnsureCoreWebView2Async();
 
-            Web.Source = new Uri("https://twitch.tv");
+            Web.Source = new Uri("https://twitch.tv/login");
         }
     }
 }

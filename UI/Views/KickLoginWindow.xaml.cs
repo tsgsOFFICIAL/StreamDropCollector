@@ -7,7 +7,6 @@ namespace UI.Views
     /// </summary>
     public partial class KickLoginWindow : Window
     {
-        public string? SessionToken { get; private set; }
         public KickLoginWindow()
         {
             InitializeComponent();
@@ -19,6 +18,12 @@ namespace UI.Views
             await Web.EnsureCoreWebView2Async();
 
             Web.Source = new Uri("https://kick.com");
+            Web.NavigationCompleted += Web_NavigationCompleted;
+        }
+
+        private async void Web_NavigationCompleted(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
+        {
+            await Web.ExecuteScriptAsync("document.querySelector(\"[data-testid=\\\"login\\\"\").click();");
         }
     }
 }
