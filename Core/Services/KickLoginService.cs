@@ -7,7 +7,7 @@ namespace Core.Services
     {
         public override async Task ValidateCredentialsAsync(IWebViewHost host)
         {
-            UpdateStatus(ConnectionStatus.Validating);
+            UpdateStatus(ConnectionStatus.Connecting);
 
             if (host == null)
             {
@@ -17,7 +17,8 @@ namespace Core.Services
 
             await host.EnsureInitializedAsync();
             await host.NavigateAsync("https://kick.com/");
-            await host.WaitForNavigationAsync();
+
+            UpdateStatus(ConnectionStatus.Validating);
 
             string html = await GetPageHtmlAsync(host);
             bool isLoggedIn = !html.Contains("data-testid=\"login\"", StringComparison.OrdinalIgnoreCase);

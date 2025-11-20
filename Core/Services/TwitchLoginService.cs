@@ -3,11 +3,11 @@ using Core.Enums;
 
 namespace Core.Services
 {
-    public class TwitchLoginService :LoginServiceBase
+    public class TwitchLoginService : LoginServiceBase
     {
         public override async Task ValidateCredentialsAsync(IWebViewHost host)
         {
-            UpdateStatus(ConnectionStatus.Validating);
+            UpdateStatus(ConnectionStatus.Connecting);
 
             if (host == null)
             {
@@ -17,7 +17,8 @@ namespace Core.Services
 
             await host.EnsureInitializedAsync();
             await host.NavigateAsync("https://twitch.tv/");
-            await host.WaitForNavigationAsync();
+
+            UpdateStatus(ConnectionStatus.Validating);
 
             string html = await GetPageHtmlAsync(host);
             bool isLoggedIn = !html.Contains("data-a-target=\"login-button\"", StringComparison.OrdinalIgnoreCase);
