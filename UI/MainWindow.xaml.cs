@@ -29,7 +29,7 @@ namespace UI
                 UpdateTrayIconVisibility();
             }
         }
-        private string _currentPage = string.Empty;
+        private UserControl? _currentPage;
 
         public MainWindow()
         {
@@ -45,7 +45,7 @@ namespace UI
             // Initialize commands
             ToggleWindowCommand = new RelayCommand(o => ToggleWindowState());
             CloseCommand = new RelayCommand(o => CloseApplication());
-            OpenGithubCommand = new RelayCommand(o => Core.Utility.LaunchWeb("https://github.com/tsgsOFFICIAL/CS2-AutoAccept"));
+            OpenGithubCommand = new RelayCommand(o => Core.Utility.LaunchWeb("https://github.com/tsgsOFFICIAL/StreamDropCollector"));
             JoinDiscordCommand = new RelayCommand(o => Core.Utility.LaunchWeb("https://discord.gg/Cddu5aJ"));
 
             // Event handler for double-click on TaskbarIcon
@@ -54,92 +54,71 @@ namespace UI
             // Default page
             SwitchPage(new DashboardView());
         }
-
         /// <summary>
-        /// Switches the current content with a fade-in animation.
+        /// Replaces the current page displayed in the main content area with the specified page, applying a fade
+        /// animation during the transition.
         /// </summary>
-        /// <param name="newPage">The UserControl page to display</param>
+        /// <remarks>If the specified page is already displayed, no action is taken. The transition uses a
+        /// fade-out animation for the current page followed by a fade-in animation for the new page to provide a smooth
+        /// visual effect.</remarks>
+        /// <param name="newPage">The new <see cref="UserControl"/> to display as the main content. Cannot be null.</param>
         private void SwitchPage(UserControl newPage)
         {
-            bool addAnimation = _currentPage != newPage.GetType().Name;
-
-            // If animations are disabled for this switch, do a direct swap (or no-op if same page instance/type)
-            if (!addAnimation)
-            {
-                // If the currently displayed content is already the same page type, do nothing.
-                if (MainContent.Content?.GetType() == newPage.GetType())
-                {
-                    return;
-                }
-
-                // Replace without animations
-                newPage.Opacity = 1;
-                MainContent.Content = newPage;
-                _currentPage = newPage.GetType().Name;
+            // Same instance? Do nothing (prevents flicker + no new WebViews)
+            if (ReferenceEquals(_currentPage, newPage))
                 return;
-            }
 
-            if (MainContent.Content != null)
+            // Animate out → in
+            if (_currentPage is not null)
             {
-                // Fade out current page
-                DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(100));
-                fadeOut.Completed += (s, e) =>
+                DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(120));
+                fadeOut.Completed += (_, __) =>
                 {
-                    MainContent.Content = newPage;
-
-                    // Fade in new page
-                    DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150));
+                    MainContent.Content = _currentPage = newPage;
+                    DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160));
                     newPage.BeginAnimation(OpacityProperty, fadeIn);
                 };
 
-                if (MainContent.Content is UserControl current)
-                {
-                    current.BeginAnimation(OpacityProperty, fadeOut);
-                }
+                _currentPage.BeginAnimation(OpacityProperty, fadeOut);
             }
             else
             {
-                // No current content, just fade in new page
-                newPage.Opacity = 0;
+                // First load
+                _currentPage = newPage;
                 MainContent.Content = newPage;
-                DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150));
+
+                newPage.Opacity = 0;
+                DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+
                 newPage.BeginAnimation(OpacityProperty, fadeIn);
             }
-
-            _currentPage = newPage.GetType().Name;
         }
-
         /// <summary>
-        /// Handles the Click event for sidebar navigation buttons, switching the main view to the corresponding page
-        /// based on the button's tag.
+        /// Handles the Click event for sidebar navigation buttons, switching the displayed page based on the button's
+        /// tag.
         /// </summary>
-        /// <remarks>The method expects the sender to be a Button with its Tag property set to a
-        /// recognized page identifier such as "Dashboard", "Inventory", "Settings", or "Help". If the Tag does not
-        /// match a known value, no action is taken.</remarks>
-        /// <param name="sender">The source of the event, expected to be a Button representing a sidebar navigation option.</param>
+        /// <remarks>The method expects the sender to be a Button whose Tag property is set to a
+        /// recognized page identifier (such as "Dashboard", "Inventory", "Settings", or "Help"). If the Tag does not
+        /// match a known page, no action is taken.</remarks>
+        /// <param name="sender">The source of the event, expected to be a Button with its Tag property indicating the target page.</param>
         /// <param name="e">The event data associated with the button click.</param>
         private void SidebarButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn)
-            {
-                switch (btn.Tag?.ToString())
-                {
-                    case "Dashboard":
-                        SwitchPage(new DashboardView());
-                        break;
-                    case "Inventory":
-                        SwitchPage(new InventoryView());
-                        break;
-                    case "Settings":
-                        SwitchPage(new SettingsView());
-                        break;
-                    case "Help":
-                        SwitchPage(new HelpView());
-                        break;
-                }
-            }
-        }
+            if (sender is not Button btn)
+                return;
 
+            UserControl? targetPage = (btn.Tag?.ToString()) switch
+            {
+                "Dashboard" => _currentPage is DashboardView ? _currentPage : new DashboardView(),
+                "Inventory" => _currentPage is InventoryView ? _currentPage : new InventoryView(),
+                "Settings" => _currentPage is SettingsView ? _currentPage : new SettingsView(),
+                "Help" => _currentPage is HelpView ? _currentPage : new HelpView(),
+                _ => null
+            };
+
+            if (targetPage is not null)
+                SwitchPage(targetPage);
+        }
         /// <summary>
         /// Closes the application
         /// </summary>
@@ -148,7 +127,11 @@ namespace UI
             Close();
             Environment.Exit(0);
         }
-
+        /// <summary>
+        /// Updates the visibility of the tray icon to reflect the current value of the IsTrayIconVisible property.
+        /// </summary>
+        /// <remarks>Call this method after changing the IsTrayIconVisible property to ensure the tray
+        /// icon's visibility is updated accordingly.</remarks>
         private void UpdateTrayIconVisibility()
         {
             // Show or hide the tray icon based on IsTrayIconVisible
@@ -156,7 +139,12 @@ namespace UI
                 IsTrayIconVisible ? Visibility.Visible
                 : Visibility.Collapsed;
         }
-
+        /// <summary>
+        /// Toggles the window state between minimized and normal, showing or hiding the window as appropriate.
+        /// </summary>
+        /// <remarks>If the window is currently minimized, this method restores it to the normal state and
+        /// makes it visible. If the window is not minimized, it minimizes and hides the window. This method is
+        /// typically used to implement minimize-to-tray or similar window management behaviors.</remarks>
         private void ToggleWindowState()
         {
             if (WindowState == WindowState.Minimized)
@@ -170,7 +158,6 @@ namespace UI
                 Hide();
             }
         }
-
         private static void ShowNotification(string title, string message, double timeoutSeconds = 1)
         {
             Core.Managers.NotificationManager.ShowNotification(title, message, timeoutSeconds);
@@ -288,12 +275,25 @@ namespace UI
         {
             CloseApplication();
         }
+        /// <summary>
+        /// Handles the double-click event on the tray icon to display and restore the window.
+        /// </summary>
+        /// <param name="sender">The source of the event, typically the tray icon control.</param>
+        /// <param name="e">The event data associated with the double-click action.</param>
         private void OnTrayIconDoubleClick(object sender, RoutedEventArgs e)
         {
             // Show the window and restore it to normal state
             Show();
             WindowState = WindowState.Normal;
         }
+        /// <summary>
+        /// Handles changes to the window's state and updates the user interface and notification area accordingly.
+        /// </summary>
+        /// <remarks>This method updates the context menu and notification icon to reflect the current
+        /// window state. When the window is minimized, it hides the window and displays a notification. When restored
+        /// or maximized, it adjusts the window padding and restores the context menu text. Override this method to
+        /// customize window state change behavior in derived classes.</remarks>
+        /// <param name="e">An <see cref="System.EventArgs"/> that contains the event data.</param>
         protected override void OnStateChanged(EventArgs e)
         {
             base.OnStateChanged(e);
@@ -322,7 +322,6 @@ namespace UI
                 MyNotifyIcon.ToolTipText = "Stream Drop Collector by tsgsOFFICIAL";
             }
         }
-
         #endregion
     }
 }

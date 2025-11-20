@@ -329,12 +329,12 @@
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ContextMenu">
                                             <Border 
-                                    Background="{TemplateBinding Background}" 
-                                    BorderBrush="{TemplateBinding BorderBrush}" 
-                                    BorderThickness="{TemplateBinding BorderThickness}" 
-                                    CornerRadius="6" 
-                                    SnapsToDevicePixels="True" 
-                                    Padding="10">
+                                                Background="{TemplateBinding Background}" 
+                                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                                CornerRadius="6" 
+                                                SnapsToDevicePixels="True" 
+                                                Padding="10">
 
                                                 <Grid>
                                                     <ItemsPresenter/>
