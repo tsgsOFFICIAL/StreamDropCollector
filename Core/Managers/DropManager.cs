@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Core.Managers
+﻿namespace Core.Managers
 {
-    internal class DropManager
+    public sealed class DropManager
     {
     }
 }
