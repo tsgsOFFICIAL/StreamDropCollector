@@ -43,7 +43,7 @@
             <Border Grid.Row="0" Grid.Column="0" Margin="0,0,20,20" Background="#252526" Padding="20" CornerRadius="8">
                 <StackPanel>
                     <TextBlock Text="Miner Status" Foreground="#CCCCCC" FontSize="16"/>
-                    <TextBlock x:Name="MinerStatusText" Text="Idle" Foreground="Orange" FontSize="28" Margin="0,10,0,0" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="MinerStatusText" Text="{Binding MinerStatus}" Foreground="Orange" FontSize="28" Margin="0,10,0,0" FontWeight="SemiBold"/>
                     <TextBlock x:Name="MinerStatusDetails" Text="Waiting for next drop window..." Foreground="#AAAAAA" FontSize="12"/>
                 </StackPanel>
             </Border>
@@ -100,7 +100,7 @@
                                 Margin="0,0,10,0"
                                 FontWeight="SemiBold"
                                 Cursor="Hand"
-                                Click="LoginKick_Click"
+                                Click="OnKickLoginClick"
                                 IsEnabled="False">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
@@ -146,7 +146,7 @@
                                 Width="120" Height="36"
                                 FontWeight="SemiBold"
                                 Cursor="Hand"
-                                Click="LoginTwitch_Click"
+                                Click="OnTwitchLoginClick"
                                 IsEnabled="False">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">

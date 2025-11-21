@@ -1,9 +1,11 @@
 ﻿using UserControl = System.Windows.Controls.UserControl;
 using System.Runtime.CompilerServices;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using Core.Services;
 using Core.Enums;
+using Models;
 
 namespace UI.Views
 {
@@ -18,6 +20,11 @@ namespace UI.Views
         // Services
         private readonly TwitchLoginService _twitchService = new();
         private readonly KickLoginService _kickService = new();
+        private readonly DropsService _dropsService;
+
+        // Observable collection for UI binding
+        private readonly ObservableCollection<DropsCampaign> _activeCampaigns = new();
+        public IReadOnlyCollection<DropsCampaign> ActiveCampaigns => _activeCampaigns;
 
         /// <summary>
         /// Initializes a new instance of the DashboardView class and sets up event handlers for login status changes.
@@ -30,8 +37,12 @@ namespace UI.Views
             InitializeComponent();
             DataContext = this;
 
+            MinerStatus = "Initializing";
+
             _twitchService = new TwitchLoginService();
             _kickService = new KickLoginService();
+
+            _dropsService = new DropsService();
 
             _twitchService.StatusChanged += OnTwitchStatusChanged;
             _kickService.StatusChanged += OnKickStatusChanged;
@@ -82,6 +93,17 @@ namespace UI.Views
             }
         }
 
+        private string _minerStatus = "Idle";
+        public string MinerStatus
+        {
+            get => _minerStatus;
+            set
+            {
+                _minerStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
         /// <summary>
         /// Occurs when a property value changes.
         /// </summary>
@@ -105,10 +127,19 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous operation.</returns>
         private async Task OnLoadedAsync()
         {
+            MinerStatus = "Validating Credentials";
+
             await Task.WhenAll(
                 ValidateTwitchAsync(),
                 ValidateKickAsync()
             );
+
+            MinerStatus = "Loading Campaigns";
+
+            // Load campaigns / drops
+            await RefreshDropsAsync();
+
+            MinerStatus = "Idle";
         }
         /// <summary>
         /// Handles the Unloaded event to perform necessary cleanup of resources and event handlers.
@@ -201,7 +232,7 @@ namespace UI.Views
         /// </summary>
         /// <param name="sender">The source of the event, typically the Kick login button.</param>
         /// <param name="e">The event data associated with the Click event.</param>
-        private void LoginKick_Click(object sender, RoutedEventArgs e)
+        private void OnKickLoginClick(object sender, RoutedEventArgs e)
         {
             new KickLoginWindow().ShowDialog();
             _ = ValidateKickAsync();
@@ -212,10 +243,31 @@ namespace UI.Views
         /// </summary>
         /// <param name="sender">The source of the event, typically the button that was clicked.</param>
         /// <param name="e">The event data associated with the click event.</param>
-        private void LoginTwitch_Click(object sender, RoutedEventArgs e)
+        private void OnTwitchLoginClick(object sender, RoutedEventArgs e)
         {
             new TwitchLoginWindow().ShowDialog();
             _ = ValidateTwitchAsync();
+        }
+        /// <summary>
+        /// Asynchronously refreshes the list of active drops campaigns by retrieving the latest campaigns from the
+        /// drops service.
+        /// </summary>
+        /// <remarks>After calling this method, the active campaigns list is updated to reflect the
+        /// current set of active drops campaigns. Any previously stored campaigns are cleared before the new campaigns
+        /// are added. This method should be awaited to ensure the refresh completes before accessing the updated
+        /// campaigns.</remarks>
+        /// <returns>A task that represents the asynchronous refresh operation.</returns>
+        public async Task RefreshDropsAsync()
+        {
+            _activeCampaigns.Clear();
+
+            IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _twitchWebView);
+
+            _kickWebView?.Close();
+            _twitchWebView?.Close();
+
+            foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
+                _activeCampaigns.Add(c);
         }
         /// <summary>
         /// Asynchronously validates the current Twitch credentials using the associated web view and service.

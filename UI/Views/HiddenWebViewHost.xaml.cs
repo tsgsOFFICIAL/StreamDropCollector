@@ -1,16 +1,21 @@
 ﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using System.Text.Json;
 using Core.Interfaces;
 using System.Windows;
 
 namespace UI.Views
 {
-
     public partial class HiddenWebViewHost : Window, IWebViewHost
     {
         public WebView2 WebView => WebViewControl;
         private WebView2 WebViewControl => WebViewElement;
-
+        /// <summary>
+        /// Initializes a new instance of the HiddenWebViewHost class with a fully hidden and non-interactive window.
+        /// </summary>
+        /// <remarks>This constructor configures the window to be completely invisible and non-activating,
+        /// making it suitable for scenarios where a background WebView is required without any user interface or
+        /// taskbar presence.</remarks>
         public HiddenWebViewHost()
         {
             InitializeComponent();
@@ -61,6 +66,229 @@ namespace UI.Views
             cookieManager.AddOrUpdateCookie(cookie);
 
             return Task.CompletedTask;
+        }
+        /// <summary>
+        /// Asynchronously retrieves all cookies associated with the specified URL from the underlying WebView2 control.
+        /// </summary>
+        /// <remarks>The returned list reflects the state of cookies at the time of the call. Subsequent
+        /// changes to cookies will not be reflected in the returned collection. This method does not modify the cookie
+        /// store.</remarks>
+        /// <param name="url">The URL for which to retrieve cookies. Must be a valid absolute URI; cookies are returned for this specific
+        /// address.</param>
+        /// <returns>A read-only list of <see cref="CoreWebView2Cookie"/> objects representing the cookies for the specified URL.
+        /// Returns an empty list if the WebView2 control is not initialized or if no cookies are found.</returns>
+        public async Task<IReadOnlyList<CoreWebView2Cookie>> GetCookiesAsync(string url)
+        {
+            if (WebView?.CoreWebView2 == null)
+                return [];
+
+            List<CoreWebView2Cookie> cookies = await WebView.CoreWebView2.CookieManager.GetCookiesAsync(url);
+            return cookies.ToList().AsReadOnly();
+        }
+        /// <summary>
+        /// Asynchronously retrieves the value of the specified cookie for the given URL.
+        /// </summary>
+        /// <param name="url">The URL for which to retrieve the cookie. Must be a valid absolute URI.</param>
+        /// <param name="name">The name of the cookie whose value is to be retrieved. The comparison is case-sensitive.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the value of the specified
+        /// cookie if found; otherwise, null.</returns>
+        public async Task<string?> GetCookieValueAsync(string url, string name)
+        {
+            IReadOnlyList<CoreWebView2Cookie> cookies = await GetCookiesAsync(url);
+            return cookies.FirstOrDefault(c => c.Name == name)?.Value;
+        }
+        /// <summary>
+        /// Asynchronously captures the value of a specified HTTP request header from the first network request whose URL
+        /// contains the given substring.
+        /// </summary>
+        /// <remarks>This method listens for network requests initiated by the WebView and captures the
+        /// specified header from the first request whose URL matches the provided substring. If no such request is
+        /// observed within the timeout period, the fallback value is returned. The header name comparison is
+        /// case-insensitive. The method automatically enables network tracking via the DevTools protocol if it is not
+        /// already enabled.</remarks>
+        /// <param name="headerName">The name of the HTTP request header to capture. The comparison is case-insensitive.</param>
+        /// <param name="urlContains">A substring to match against the request URL. The header is captured from the first request whose URL
+        /// contains this value, using a case-insensitive comparison.</param>
+        /// <param name="fallbackValue">The value to return if no matching request is captured within the specified timeout period.</param>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for a matching request before returning the fallback value. The
+        /// default is 8000 milliseconds.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the value of the specified
+        /// request header if captured; otherwise, the fallback value if the timeout elapses or the operation is
+        /// canceled.</returns>
+        public async Task<string> CaptureRequestHeaderAsync(string headerName, string urlContains, string fallbackValue, int timeoutMs = 8000, CancellationToken ct = default)
+        {
+            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
+
+            // Get the event receiver for the "Network.requestWillBeSent" event
+            CoreWebView2DevToolsProtocolEventReceiver eventReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.requestWillBeSent");
+
+            void Handler(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+            {
+                try
+                {
+                    JsonElement json = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                    JsonElement request = json.GetProperty("request");
+                    string url = request.GetProperty("url").GetString() ?? "";
+                    JsonElement headersObj = request.GetProperty("headers");
+
+                    if (!url.Contains(urlContains, StringComparison.OrdinalIgnoreCase))
+                        return;
+
+                    if (headersObj.TryGetProperty(headerName, out JsonElement valueElem))
+                    {
+                        string? value = valueElem.GetString();
+                        if (!string.IsNullOrEmpty(value))
+                        {
+                            eventReceiver.DevToolsProtocolEventReceived -= Handler;
+                            tcs.TrySetResult(value);
+                        }
+                    }
+                    else
+                    {
+                        foreach (JsonProperty prop in headersObj.EnumerateObject())
+                        {
+                            if (string.Equals(prop.Name, headerName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string? value = prop.Value.GetString();
+                                if (!string.IsNullOrEmpty(value))
+                                {
+                                    eventReceiver.DevToolsProtocolEventReceived -= Handler;
+                                    tcs.TrySetResult(value);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { /* firehose - ignore */ }
+            }
+
+            eventReceiver.DevToolsProtocolEventReceived += Handler;
+            await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+
+            Task<string> captureTask = tcs.Task;
+            Task<string> timeoutTask = Task.Delay(timeoutMs, ct).ContinueWith(_ => fallbackValue, TaskScheduler.Default);
+
+            Task<string> result = await Task.WhenAny(captureTask, timeoutTask).ConfigureAwait(false);
+            Dispatcher.Invoke(() =>
+            {
+                eventReceiver.DevToolsProtocolEventReceived -= Handler; // cleanup just in case
+            });
+
+            return await result; // unwrap
+        }
+        /// <summary>
+        /// Asynchronously captures the body of the first outgoing GraphQL POST request whose payload contains the
+        /// specified trigger text, or throws if no such request is observed within the timeout period.
+        /// </summary>
+        /// <remarks>This method listens for outgoing GraphQL POST requests made by the underlying WebView
+        /// and inspects their payloads in real time. Only the first matching request body is returned. If the operation
+        /// is cancelled via the provided cancellation token, the returned task is cancelled. This method enables
+        /// network monitoring scenarios where it is necessary to capture specific GraphQL requests as they
+        /// occur.</remarks>
+        /// <param name="triggerText">The text to search for within the body of outgoing GraphQL POST requests. The method returns the first
+        /// request body that contains this text, using a case-insensitive search.</param>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for a matching GraphQL request before timing out.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation before the timeout elapses. The default value
+        /// is <see cref="CancellationToken.None"/>.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the body of the first GraphQL
+        /// POST request whose payload includes the specified trigger text.</returns>
+        /// <exception cref="TimeoutException">Thrown if no GraphQL POST request containing the specified trigger text is observed before the timeout
+        /// period elapses.</exception>
+        public async Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default)
+        {
+            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
+
+            HashSet<string> gqlRequestIds = new HashSet<string>();
+            int checkedCount = 0;
+
+            // 1. Collect all GQL POST requestIds
+            CoreWebView2DevToolsProtocolEventReceiver requestWillBeSent = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.requestWillBeSent");
+            void OnRequestWillBeSent(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+            {
+                try
+                {
+                    JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                    JsonElement request = root.GetProperty("request");
+                    string url = request.GetProperty("url").GetString() ?? "";
+                    string method = request.GetProperty("method").GetString() ?? "";
+
+                    if (url.Contains("gql.twitch.tv/gql") && method == "POST")
+                    {
+                        string? requestId = root.GetProperty("requestId").GetString();
+
+                        if (requestId != null)
+                            gqlRequestIds.Add(requestId);
+                    }
+                }
+                catch { }
+            }
+            requestWillBeSent.DevToolsProtocolEventReceived += OnRequestWillBeSent;
+
+            // 2. When loading finishes → pull the real postData
+            CoreWebView2DevToolsProtocolEventReceiver loadingFinished = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
+            async void OnLoadingFinished(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+            {
+                try
+                {
+                    string? requestId = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement.GetProperty("requestId").GetString();
+                    if (requestId == null || !gqlRequestIds.Contains(requestId))
+                        return;
+
+                    checkedCount++;
+
+                    string result = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.getRequestPostData", JsonSerializer.Serialize(new { requestId }));
+
+                    string postData = JsonDocument.Parse(result).RootElement.GetProperty("postData").GetString() ?? "";
+                    if (string.IsNullOrWhiteSpace(postData))
+                        return;
+                                        
+                    if (postData.Contains(triggerText, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Cleanup();
+                        tcs.TrySetResult(postData);
+                    }
+                }
+                catch (Exception)
+                { }
+            }
+
+            loadingFinished.DevToolsProtocolEventReceived += OnLoadingFinished;
+
+            void Cleanup()
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    requestWillBeSent.DevToolsProtocolEventReceived -= OnRequestWillBeSent;
+                    loadingFinished.DevToolsProtocolEventReceived -= OnLoadingFinished;
+                });
+            }
+
+            // Timeout fallback
+            Task timeoutTask = Task.Delay(timeoutMs, ct).ContinueWith(_ =>
+            {
+                // Check if tcs already completed
+                if (tcs.Task.IsCompleted)
+                    return;
+
+                Cleanup();
+                tcs.TrySetResult(string.Empty);
+            }, TaskScheduler.Default);
+
+            // Start everything
+            await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+
+            requestWillBeSent.DevToolsProtocolEventReceived += OnRequestWillBeSent;
+            loadingFinished.DevToolsProtocolEventReceived += OnLoadingFinished;
+
+            Task completed = await Task.WhenAny(tcs.Task, timeoutTask);
+            Cleanup();
+
+            string body = await tcs.Task;
+            if (string.IsNullOrEmpty(body))
+                throw new TimeoutException($"No GQL payload containing \"{triggerText}\" found");
+
+            return body;
         }
         /// <summary>
         /// Navigates the web view to the specified URL, forcing a fresh reload each time.
