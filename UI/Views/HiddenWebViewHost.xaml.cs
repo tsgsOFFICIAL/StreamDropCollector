@@ -1,5 +1,6 @@
 ﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using System.Diagnostics;
 using System.Text.Json;
 using Core.Interfaces;
 using System.Windows;
@@ -289,6 +290,90 @@ namespace UI.Views
                 throw new TimeoutException($"No GQL payload containing \"{triggerText}\" found");
 
             return body;
+        }
+        /// <summary>
+        /// Captures the response body of the Twitch Viewer Drops Dashboard network request from the embedded web view
+        /// asynchronously.
+        /// </summary>
+        /// <remarks>This method listens for the Twitch Viewer Drops Dashboard network response and
+        /// returns its body as a JSON string. If the response is not received within the specified timeout, a
+        /// TimeoutException is thrown. The operation can also be cancelled using the provided cancellation
+        /// token.</remarks>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for the Viewer Drops Dashboard response before timing out. The
+        /// default is 15,000 milliseconds.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A JSON string containing the response body of the Viewer Drops Dashboard network request.</returns>
+        /// <exception cref="TimeoutException">Thrown if the Viewer Drops Dashboard response is not captured within the specified timeout period.</exception>
+        public async Task<string> CaptureViewerDropsDashboardResponseAsync(int timeoutMs = 15000, CancellationToken ct = default)
+        {
+            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
+
+            await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+
+            CoreWebView2DevToolsProtocolEventReceiver responseReceived = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.responseReceived");
+
+            async void Handler(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+            {
+                try
+                {
+                    JsonElement payload = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                    string url = payload.GetProperty("response").GetProperty("url").GetString() ?? "";
+                    string? requestId = payload.GetProperty("requestId").GetString();
+
+                    if (url == "https://gql.twitch.tv/gql" && requestId != null)
+                    {
+                        JsonElement headers = payload.GetProperty("response").GetProperty("headers");
+                        if (headers.TryGetProperty("content-type", out JsonElement ctHeader) &&
+                            ctHeader.GetString()?.Contains("application/json") == true)
+                        {
+                            // Get the response body
+                            string bodyResult = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
+                                "Network.getResponseBody",
+                                JsonSerializer.Serialize(new { requestId }));
+
+                            JsonElement bodyJson = JsonDocument.Parse(bodyResult).RootElement;
+                            string body = bodyJson.GetProperty("body").GetString() ?? "";
+
+                            Debug.WriteLine($"Body captured for ViewerDropsDashboard response: {body}\n\nlength={body.Length}");
+
+                            if (body.Contains("ViewerDropsDashboard") || body.Contains("rewardCampaignsAvailableToUser"))
+                            {
+                                Dispatcher.Invoke(() =>
+                                {
+                                    responseReceived.DevToolsProtocolEventReceived -= Handler;
+                                });
+
+                                tcs.TrySetResult(body);
+                                return;
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            responseReceived.DevToolsProtocolEventReceived += Handler;
+
+            // Trigger the real request
+            await NavigateAsync("https://www.twitch.tv/drops/campaigns?t=" + DateTimeOffset.Now.ToUnixTimeMilliseconds());
+
+            Task result = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs, ct));
+            responseReceived.DevToolsProtocolEventReceived -= Handler;
+
+            if (result != tcs.Task)
+                throw new TimeoutException("Failed to capture ViewerDropsDashboard response");
+
+            return await tcs.Task;
+        }
+        /// <summary>
+        /// Forces a refresh of the current web content by reloading the source URL asynchronously.
+        /// </summary>
+        /// <remarks>If the source URL is not set, the method navigates to "about:blank". This method does
+        /// not block the calling thread.</remarks>
+        /// <returns>A task that represents the asynchronous refresh operation.</returns>
+        public async Task ForceRefreshAsync()
+        {
+            await NavigateAsync(WebView.Source.ToString() ?? "about:blank");
         }
         /// <summary>
         /// Navigates the web view to the specified URL, forcing a fresh reload each time.

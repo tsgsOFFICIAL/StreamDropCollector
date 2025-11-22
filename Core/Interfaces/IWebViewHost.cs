@@ -56,6 +56,20 @@ namespace Core.Interfaces
         /// matching <script> element, or null if no such element is found within the timeout period.</returns>
         Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default);
         /// <summary>
+        /// Asynchronously retrieves the raw dashboard response containing viewer drops data.
+        /// </summary>
+        /// <param name="timeoutMs">The maximum duration, in milliseconds, to wait for the dashboard response before timing out. Must be greater
+        /// than zero.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains a string with the raw dashboard
+        /// response data.</returns>
+        Task<string> CaptureViewerDropsDashboardResponseAsync(int timeoutMs = 15000, CancellationToken ct = default);
+        /// <summary>
+        /// Initiates an asynchronous operation to force a refresh of the underlying data or cache.
+        /// </summary>
+        /// <returns>A task that represents the asynchronous refresh operation.</returns>
+        Task ForceRefreshAsync();
+        /// <summary>
         /// Navigate the webview to a URL (used to set origin/referrer).
         /// </summary>
         Task NavigateAsync(string url);
