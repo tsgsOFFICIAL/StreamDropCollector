@@ -49,7 +49,7 @@ namespace Core.Services
             // 1. Get auth token from httpOnly cookie (universal)
             string? rawToken = await host.GetCookieValueAsync("https://twitch.tv", "auth-token");
             if (string.IsNullOrEmpty(rawToken))
-                throw new InvalidOperationException("User not logged in — missing auth-token cookie");
+                return [];
 
             string authHeader = "OAuth " + rawToken.ToLower();
 
@@ -89,11 +89,27 @@ namespace Core.Services
                 timeoutMs: 5 * 1000,
                 ct);
 
-            Match hashMatch = Regex.Match(gqlPayload, @"sha256Hash"":""([a-f0-9]{64})""");
-            string liveHash = hashMatch.Groups[1].Value;
+            JsonDocument doc = JsonDocument.Parse(gqlPayload);
+            string? hash = null;
 
-            Debug.WriteLine($"LIVE VIEWERDROPS DASHBOARD HASH: {liveHash}");
-            return liveHash;
+            foreach (JsonElement operation in doc.RootElement.EnumerateArray())
+            {
+                if (operation.TryGetProperty("operationName", out JsonElement opName) &&
+                    opName.GetString() == "ViewerDropsDashboard" &&
+                    operation.TryGetProperty("extensions", out JsonElement extensions) &&
+                    extensions.TryGetProperty("persistedQuery", out JsonElement pq) &&
+                    pq.TryGetProperty("sha256Hash", out JsonElement hashElement))
+                {
+                    hash = hashElement.GetString();
+                    break;
+                }
+            }
+
+            if (hash == null)
+                throw new InvalidOperationException("ViewerDropsDashboard operation not found or missing hash in payload");
+
+            Debug.WriteLine($"LIVE & CORRECT ViewerDropsDashboard HASH → {hash}");
+            return hash;
         }
     }
 }
