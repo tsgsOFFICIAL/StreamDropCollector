@@ -14,5 +14,6 @@
         DateTimeOffset StartsAt,
         DateTimeOffset EndsAt,
         IReadOnlyList<DropsReward> Rewards,
-        string? ConnectUrl = null);
+        string? ConnectUrl = null,
+        Platform Platform);
 }

@@ -1,5 +1,5 @@
 ﻿using Core.Interfaces;
-using Models;
+using Core.Models;
 
 namespace Core.Services
 {

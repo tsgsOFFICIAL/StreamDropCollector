@@ -1,7 +1,8 @@
-﻿using System.Text.Json;
+﻿using Core.Enums;
 using Core.Interfaces;
-using Core.Enums;
-using Models;
+using Core.Models;
+using System.Diagnostics;
+using System.Text.Json;
 
 namespace Core.Services
 {
@@ -31,51 +32,78 @@ namespace Core.Services
             await host.EnsureInitializedAsync();
             await host.NavigateAsync("https://web.kick.com/api/v1/drops/campaigns");
 
-            // Grab the json from <body><pre>
-
             string rawJson = await host.ExecuteScriptAsync("document.body.innerText");
             string json = rawJson.Trim('"').Replace("\\n", "").Replace("\\\"", "\"");
 
-            if (json == "null" || string.IsNullOrWhiteSpace(json))
-                return [];
+            if (string.IsNullOrWhiteSpace(json) || json == "null")
+                return Array.Empty<DropsCampaign>().AsReadOnly();
 
-            JsonDocument doc = JsonDocument.Parse(json);
+            var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("data", out var dataArray) || dataArray.ValueKind != JsonValueKind.Array)
+                return Array.Empty<DropsCampaign>().AsReadOnly();
 
-            if (!doc.RootElement.TryGetProperty("data", out JsonElement dataArray) ||
-                dataArray.ValueKind != JsonValueKind.Array)
-                return [];
+            var campaigns = new List<DropsCampaign>();
 
-            List<DropsCampaign> campaigns = new List<DropsCampaign>();
-
-            foreach (JsonElement camp in dataArray.EnumerateArray())
+            foreach (var camp in dataArray.EnumerateArray())
             {
-                if (camp.GetProperty("status").GetString() != "active")
+                if (!camp.TryGetProperty("status", out var status) || status.GetString() != "active")
                     continue;
 
-                JsonElement category = camp.GetProperty("category");
+                var category = camp.GetProperty("category");
 
-                List<DropsReward> rewards = [.. camp.GetProperty("rewards")
+                var rewards = camp.GetProperty("rewards")
                     .EnumerateArray()
                     .Select(r => new DropsReward(
                         Id: r.GetProperty("id").GetString()!,
                         Name: r.GetProperty("name").GetString()!,
                         ImageUrl: "https://files.kick.com/" + r.GetProperty("image_url").GetString(),
                         RequiredMinutes: r.GetProperty("required_units").GetInt32()
-                    ))];
+                    ))
+                    .ToArray();
+
+                if (rewards.Length == 0) continue;
+
+                // ALL CHANNELS — FULL REDUNDANCY
+                var connectUrls = new List<string>();
+
+                if (camp.TryGetProperty("channels", out var channels) && channels.GetArrayLength() > 0)
+                {
+                    foreach (var channel in channels.EnumerateArray())
+                    {
+                        string? username = channel.TryGetProperty("slug", out var slug)
+                            ? slug.GetString()
+                            : channel.GetProperty("user").GetProperty("username").GetString();
+
+                        if (!string.IsNullOrEmpty(username))
+                            connectUrls.Add($"https://kick.com/{username.ToLowerInvariant()}");
+                    }
+                }
+
+                // General drops = watch ANYONE in category
+                if (connectUrls.Count == 0)
+                {
+                    string slug = category.GetProperty("slug").GetString()!;
+                    connectUrls.Add($"https://kick.com/category/{slug}");
+                }
+
+                // Remove duplicates + sort by preference (optional)
+                connectUrls = connectUrls.Distinct().ToList();
 
                 campaigns.Add(new DropsCampaign(
                     Id: camp.GetProperty("id").GetString()!,
                     Name: camp.GetProperty("name").GetString()!,
                     GameName: category.GetProperty("name").GetString()!,
-                    GameImageUrl: category.GetProperty("image_url").GetString(),
+                    GameImageUrl: "https://files.kick.com/" + category.GetProperty("image_url").GetString(),
                     StartsAt: DateTimeOffset.Parse(camp.GetProperty("starts_at").GetString()!),
                     EndsAt: DateTimeOffset.Parse(camp.GetProperty("ends_at").GetString()!),
                     Rewards: rewards,
-                    ConnectUrl: camp.TryGetProperty("connect_url", out JsonElement url) ? url.GetString() : null
+                    Platform: Platform,
+                    ConnectUrls: connectUrls.AsReadOnly()
                 ));
             }
 
-            return campaigns;
+            Debug.WriteLine($"[Kick Drops] Loaded {campaigns.Count} campaigns with full channel redundancy");
+            return campaigns.AsReadOnly();
         }
     }
 }

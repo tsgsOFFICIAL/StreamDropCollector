@@ -1,5 +1,4 @@
 <Solution>
   <Project Path="Core/Core.csproj" />
-  <Project Path="Models/Models.csproj" Id="59f5c4f8-3836-4441-9090-093aa7122760" />
   <Project Path="UI/UI.csproj" />
 </Solution>

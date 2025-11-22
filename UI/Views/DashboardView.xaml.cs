@@ -4,8 +4,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using Core.Services;
+using Core.Models;
 using Core.Enums;
-using Models;
 
 namespace UI.Views
 {

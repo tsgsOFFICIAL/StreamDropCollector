@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
 using Core.Interfaces;
+using Core.Models;
 using Core.Enums;
-using Models;
 
 namespace Core.Services
 {
@@ -49,7 +49,7 @@ namespace Core.Services
             }
 
             List<DropsCampaign> campaigns = new List<DropsCampaign>();
-            bool includePaid = false;
+            bool includePaid = true;
 
             JsonElement root = JsonDocument.Parse(rawJson).RootElement;
 
@@ -95,7 +95,8 @@ namespace Core.Services
                             StartsAt: DateTimeOffset.Parse(camp.GetProperty("startsAt").GetString()!),
                             EndsAt: DateTimeOffset.Parse(camp.GetProperty("endsAt").GetString()!),
                             Rewards: rewards,
-                            ConnectUrl: null
+                            Platform: Platform,
+                            ConnectUrls: []
                         ));
                     }
                 }
