@@ -15,7 +15,13 @@ namespace Core.Services
                 return;
             }
 
-            await host.EnsureInitializedAsync();
+            try
+            {
+                await host.EnsureInitializedAsync();
+            }
+            catch (Exception)
+            { }
+
             await host.NavigateAsync("https://kick.com/");
 
             UpdateStatus(ConnectionStatus.Validating);

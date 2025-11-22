@@ -7,6 +7,7 @@ namespace Core.Services
     {
         public override async Task ValidateCredentialsAsync(IWebViewHost host)
         {
+            System.Diagnostics.Debug.WriteLine("[TwitchLogin] Validating credentials...");
             UpdateStatus(ConnectionStatus.Connecting);
 
             if (host == null)
@@ -15,7 +16,13 @@ namespace Core.Services
                 return;
             }
 
-            await host.EnsureInitializedAsync();
+            try
+            {
+                await host.EnsureInitializedAsync();
+            }
+            catch (Exception)
+            { }
+
             await host.NavigateAsync("https://twitch.tv/");
 
             UpdateStatus(ConnectionStatus.Validating);

@@ -60,7 +60,6 @@ namespace Core.Services
             string clientId = await host.CaptureRequestHeaderAsync(
                 headerName: "Client-ID",
                 urlContains: "gql.twitch.tv",
-                fallbackValue: "kimne78kx3ncx6brgo4mv6wki5h1ko",
                 timeoutMs: 5 * 1000,
                 ct);
 
@@ -77,7 +76,7 @@ namespace Core.Services
             _httpClient.DefaultRequestHeaders.Add("X-Device-Id", Guid.NewGuid().ToString("N"));
 
             // Profit
-            return null!;// await QueryDropsInventoryAsync(ct);
+            return [];// await QueryDropsInventoryAsync(ct);
         }
 
         private static async Task<string> GetViewerDropsDashboardHashAsync(IWebViewHost host, CancellationToken ct = default)

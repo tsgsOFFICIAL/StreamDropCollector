@@ -38,13 +38,12 @@ namespace Core.Interfaces
         /// <param name="headerName">The name of the HTTP request header to capture. Cannot be null or empty.</param>
         /// <param name="urlContains">A substring that must be present in the request URL for the header to be captured. Matching is
         /// case-sensitive.</param>
-        /// <param name="fallbackValue">The value to return if the specified header is not found within the timeout period.</param>
         /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for a matching request before returning the fallback value. Must
         /// be greater than zero.</param>
         /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
         /// <returns>A task that represents the asynchronous operation. The task result contains the value of the specified
         /// header if found; otherwise, the fallback value.</returns>
-        Task<string> CaptureRequestHeaderAsync(string headerName, string urlContains, string fallbackValue, int timeoutMs = 8000, CancellationToken ct = default);
+        Task<string> CaptureRequestHeaderAsync(string headerName, string urlContains, int timeoutMs = 8000, CancellationToken ct = default);
         /// <summary>
         /// Asynchronously retrieves the body content of the first <script> element that contains the specified text.
         /// </summary>

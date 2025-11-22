@@ -116,7 +116,7 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous operation. The task result contains the value of the specified
         /// request header if captured; otherwise, the fallback value if the timeout elapses or the operation is
         /// canceled.</returns>
-        public async Task<string> CaptureRequestHeaderAsync(string headerName, string urlContains, string fallbackValue, int timeoutMs = 8000, CancellationToken ct = default)
+        public async Task<string> CaptureRequestHeaderAsync(string headerName, string urlContains, int timeoutMs = 8000, CancellationToken ct = default)
         {
             TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
 
@@ -167,7 +167,7 @@ namespace UI.Views
             await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
 
             Task<string> captureTask = tcs.Task;
-            Task<string> timeoutTask = Task.Delay(timeoutMs, ct).ContinueWith(_ => fallbackValue, TaskScheduler.Default);
+            Task<string> timeoutTask = Task.Delay(timeoutMs, ct).ContinueWith(_ => string.Empty, TaskScheduler.Default);
 
             Task<string> result = await Task.WhenAny(captureTask, timeoutTask).ConfigureAwait(false);
             Dispatcher.Invoke(() =>
