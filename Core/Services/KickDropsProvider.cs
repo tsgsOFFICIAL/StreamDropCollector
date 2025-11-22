@@ -1,8 +1,8 @@
-﻿using Core.Enums;
+﻿using System.Diagnostics;
+using System.Text.Json;
 using Core.Interfaces;
 using Core.Models;
-using System.Diagnostics;
-using System.Text.Json;
+using Core.Enums;
 
 namespace Core.Services
 {
