@@ -5,7 +5,10 @@
     /// </summary>
     public partial class InventoryView : System.Windows.Controls.UserControl
     {
-        public InventoryView()
+        private static readonly Lazy<InventoryView> _instance = new(() => new InventoryView());
+        public static InventoryView Instance => _instance.Value;
+
+        private InventoryView()
         {
             InitializeComponent();
         }

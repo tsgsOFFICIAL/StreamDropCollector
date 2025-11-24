@@ -7,7 +7,7 @@ using System.Windows;
 
 namespace UI.Views
 {
-    public partial class HiddenWebViewHost : Window, IWebViewHost
+    public partial class HiddenWebViewHost : Window, IWebViewHost, IDisposable
     {
         public WebView2 WebView => WebViewControl;
         private WebView2 WebViewControl => WebViewElement;
@@ -21,15 +21,15 @@ namespace UI.Views
         {
             InitializeComponent();
 
-            // Fully invisible, no taskbar, no activation
-            Width = Height = 0;
-            WindowStyle = WindowStyle.None;
-            ShowInTaskbar = false;
-            Topmost = false;
-            AllowsTransparency = true;
-            Opacity = 0;
-            Visibility = Visibility.Hidden;
-            ShowActivated = false;
+            //// Fully invisible, no taskbar, no activation
+            //Width = Height = 0;
+            //WindowStyle = WindowStyle.None;
+            //ShowInTaskbar = false;
+            //Topmost = false;
+            //AllowsTransparency = true;
+            //Opacity = 0;
+            //Visibility = Visibility.Hidden;
+            //ShowActivated = false;
         }
 
         /// <summary>
@@ -427,6 +427,13 @@ namespace UI.Views
 
             WebView.CoreWebView2.NavigationCompleted += handler;
             return tcs.Task;
+        }
+
+        public void Dispose()
+        {
+            WebView.Dispose();
+            GC.SuppressFinalize(this);
+            Close();
         }
     }
 }

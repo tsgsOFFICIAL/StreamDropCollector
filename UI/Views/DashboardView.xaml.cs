@@ -16,8 +16,13 @@ namespace UI.Views
     {
         private readonly System.Timers.Timer _refreshTimer = new(TimeSpan.FromHours(1).TotalMilliseconds);
 
-        private readonly HiddenWebViewHost _twitchWebView = new();
-        private readonly HiddenWebViewHost _kickWebView = new();
+        private HiddenWebViewHost _twitchWebView = new();
+        private HiddenWebViewHost _kickWebView = new();
+
+        private static bool _isInitialized = false;
+
+        private static readonly Lazy<DashboardView> _instance = new(() => new DashboardView());
+        public static DashboardView Instance => _instance.Value;
 
         // Services
         private readonly TwitchLoginService _twitchService = new();
@@ -28,31 +33,7 @@ namespace UI.Views
         private readonly ObservableCollection<DropsCampaign> _activeCampaigns = new();
         public IReadOnlyCollection<DropsCampaign> ActiveCampaigns => _activeCampaigns;
 
-        /// <summary>
-        /// Initializes a new instance of the DashboardView class and sets up event handlers for login status changes.
-        /// </summary>
-        /// <remarks>This constructor sets the data context to the current instance and subscribes to
-        /// login status events for both Kick and Twitch platforms. Event handlers are automatically unsubscribed when
-        /// the view is unloaded to prevent memory leaks.</remarks>
-        public DashboardView()
-        {
-            InitializeComponent();
-            DataContext = this;
-
-            MinerStatus = "Initializing";
-
-            _twitchService = new TwitchLoginService();
-            _kickService = new KickLoginService();
-
-            _dropsService = new DropsService();
-
-            _twitchService.StatusChanged += OnTwitchStatusChanged;
-            _kickService.StatusChanged += OnKickStatusChanged;
-
-            Loaded += async (s, e) => await OnLoadedAsync();
-            Unloaded += OnUnloaded;
-        }
-
+        // UI Properties
         private string _twitchConnectionStatus = "Not Connected";
         public string TwitchConnectionStatus
         {
@@ -123,21 +104,120 @@ namespace UI.Views
         /// <param name="name">The name of the property that changed. This value is optional and is automatically provided when called from
         /// a property setter.</param>
         private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        /// <summary>
+        /// Initializes a new instance of the DashboardView class and sets up event handlers for login status changes.
+        /// </summary>
+        /// <remarks>This constructor sets the data context to the current instance and subscribes to
+        /// login status events for both Kick and Twitch platforms. Event handlers are automatically unsubscribed when
+        /// the view is unloaded to prevent memory leaks.</remarks>
+        private DashboardView()
+        {
+            InitializeComponent();
+            DataContext = this;
+
+            MinerStatus = "Initializing";
+
+            _twitchService = new TwitchLoginService();
+            _kickService = new KickLoginService();
+
+            _dropsService = new DropsService();
+
+            Loaded += async (s, e) => await OnLoadedAsync();
+            Unloaded += OnUnloaded;
+        }
+
+        /// <summary>
+        /// Asynchronously refreshes the list of active drops campaigns by retrieving the latest campaigns from the
+        /// drops service.
+        /// </summary>
+        /// <remarks>After calling this method, the active campaigns list is updated to reflect the
+        /// current set of active drops campaigns. Any previously stored campaigns are cleared before the new campaigns
+        /// are added. This method should be awaited to ensure the refresh completes before accessing the updated
+        /// campaigns.</remarks>
+        /// <returns>A task that represents the asynchronous refresh operation.</returns>
+        public async Task StartAutoRefreshDropsAsync()
+        {
+            if (!_isInitialized)
+            {
+                await LoadDropsAsync();
+
+                _refreshTimer.Elapsed += async (s, e) => await Dispatcher.InvokeAsync(async () => await LoadDropsAsync());
+                _refreshTimer.AutoReset = true; // Run forever
+                _refreshTimer.Start();
+            }
+        }
+        /// <summary>
+        /// Asynchronously loads the list of active drops campaigns and updates the internal campaign collection.
+        /// </summary>
+        /// <returns>A task that represents the asynchronous load operation.</returns>
+        private async Task LoadDropsAsync()
+        {
+            MinerStatus = "Loading Campaigns";
+
+            _activeCampaigns.Clear();
+            IReadOnlyList<DropsCampaign> allCampaigns;
+            
+            allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _twitchWebView);
+
+            _kickWebView?.Close();
+            _twitchWebView?.Close();
+            _kickWebView?.Dispose();
+            _twitchWebView?.Dispose();
+
+            _kickWebView = new HiddenWebViewHost();
+            _twitchWebView = new HiddenWebViewHost();
+
+            foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
+                _activeCampaigns.Add(c);
+
+            MinerStatus = "Idle";
+        }
+        /// <summary>
+        /// Asynchronously validates the current Twitch credentials using the associated web view and service.
+        /// </summary>
+        /// <returns>A task that represents the asynchronous validation operation.</returns>
+        private async Task ValidateTwitchCredentialsAsync()
+        {
+            MinerStatus = "Validating Twitch";
+            await _twitchService.ValidateCredentialsAsync(_twitchWebView);
+        }
+        /// <summary>
+        /// Validates the current Kick service credentials asynchronously.
+        /// </summary>
+        /// <returns>A task that represents the asynchronous validation operation.</returns>
+        private async Task ValidateKickCredentialsAsync()
+        {
+            MinerStatus = "Validating Kick";
+            await _kickService.ValidateCredentialsAsync(_kickWebView);
+        }
+        private async Task ValidateCredentialsAsync()
+        {
+            if (_twitchService.Status != ConnectionStatus.Connected)
+                await ValidateTwitchCredentialsAsync();
+
+            if (_kickService.Status != ConnectionStatus.Connected)
+                await ValidateKickCredentialsAsync();
+
+            MinerStatus = "Idle";
+        }
+
+        #region Event Handlers
         /// <summary>
         /// Performs asynchronous validation of Twitch and Kick services when the component is loaded.
         /// </summary>
         /// <returns>A task that represents the asynchronous operation.</returns>
         private async Task OnLoadedAsync()
         {
-            MinerStatus = "Validating Credentials";
+            _twitchService.StatusChanged += OnTwitchStatusChanged;
+            _kickService.StatusChanged += OnKickStatusChanged;
 
-            await Task.WhenAll(
-                ValidateTwitchCredentialsAsync(),
-                ValidateKickCredentialsAsync()
-            );
+            await ValidateCredentialsAsync();
 
             // Load campaigns / drops
             await StartAutoRefreshDropsAsync();
+
+            _isInitialized = true;
         }
         /// <summary>
         /// Handles the Unloaded event to perform necessary cleanup of resources and event handlers.
@@ -151,11 +231,6 @@ namespace UI.Views
             // Properly clean up everything
             _twitchService.StatusChanged -= OnTwitchStatusChanged;
             _kickService.StatusChanged -= OnKickStatusChanged;
-
-            _twitchWebView?.Close();
-            _kickWebView?.Close();
-
-            _refreshTimer?.Stop();
         }
         /// <summary>
         /// Handles changes to the Kick connection status and updates related UI elements accordingly.
@@ -248,54 +323,6 @@ namespace UI.Views
             new TwitchLoginWindow().ShowDialog();
             _ = ValidateTwitchCredentialsAsync();
         }
-        /// <summary>
-        /// Asynchronously refreshes the list of active drops campaigns by retrieving the latest campaigns from the
-        /// drops service.
-        /// </summary>
-        /// <remarks>After calling this method, the active campaigns list is updated to reflect the
-        /// current set of active drops campaigns. Any previously stored campaigns are cleared before the new campaigns
-        /// are added. This method should be awaited to ensure the refresh completes before accessing the updated
-        /// campaigns.</remarks>
-        /// <returns>A task that represents the asynchronous refresh operation.</returns>
-        public async Task StartAutoRefreshDropsAsync()
-        {
-            await LoadDropsAsync();
-         
-            _refreshTimer.Elapsed += async (s, e) => await Dispatcher.InvokeAsync(async () => await LoadDropsAsync());
-            _refreshTimer.AutoReset = true;
-            _refreshTimer.Start();
-        }
-        private async Task LoadDropsAsync()
-        {
-            MinerStatus = "Loading Campaigns";
-
-            _activeCampaigns.Clear();
-
-            IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _twitchWebView);
-
-            _kickWebView?.Close();
-            _twitchWebView?.Close();
-
-            foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
-                _activeCampaigns.Add(c);
-
-            MinerStatus = "Idle";
-        }
-        /// <summary>
-        /// Asynchronously validates the current Twitch credentials using the associated web view and service.
-        /// </summary>
-        /// <returns>A task that represents the asynchronous validation operation.</returns>
-        private async Task ValidateTwitchCredentialsAsync()
-        {
-            await _twitchService.ValidateCredentialsAsync(_twitchWebView);
-        }
-        /// <summary>
-        /// Validates the current Kick service credentials asynchronously.
-        /// </summary>
-        /// <returns>A task that represents the asynchronous validation operation.</returns>
-        private async Task ValidateKickCredentialsAsync()
-        {
-            await _kickService.ValidateCredentialsAsync(_kickWebView);
-        }
+        #endregion
     }
 }

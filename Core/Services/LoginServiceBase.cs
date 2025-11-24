@@ -5,6 +5,27 @@ namespace Core.Services
 {
     public abstract class LoginServiceBase : ILoginService
     {
+        private ConnectionStatus _connectionStatus;
+        public ConnectionStatus? Status
+        {
+            get => _connectionStatus;
+            protected set
+            {
+                if (value.HasValue && _connectionStatus != value.Value)
+                {
+                    _connectionStatus = value.Value;
+                    UpdateStatus(_connectionStatus);
+                }
+            }
+        }
+
+        protected LoginServiceBase()
+        {
+            StatusChanged += status => {
+                _connectionStatus = status;
+            };
+        }
+
         /// <summary>
         /// Occurs when the connection status changes.
         /// </summary>

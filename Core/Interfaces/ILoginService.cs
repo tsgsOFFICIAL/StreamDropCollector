@@ -6,5 +6,6 @@ namespace Core.Interfaces
     {
         event Action<ConnectionStatus>? StatusChanged;
         Task ValidateCredentialsAsync(IWebViewHost host);
+        ConnectionStatus? Status { get; }
     }
 }

@@ -52,7 +52,7 @@ namespace UI
             MyNotifyIcon.TrayMouseDoubleClick += OnTrayIconDoubleClick;
 
             // Default page
-            SwitchPage(new DashboardView());
+            SwitchPage(DashboardView.Instance);
         }
         /// <summary>
         /// Replaces the current page displayed in the main content area with the specified page, applying a fade
@@ -109,10 +109,10 @@ namespace UI
 
             UserControl? targetPage = (btn.Tag?.ToString()) switch
             {
-                "Dashboard" => _currentPage is DashboardView ? _currentPage : new DashboardView(),
-                "Inventory" => _currentPage is InventoryView ? _currentPage : new InventoryView(),
-                "Settings" => _currentPage is SettingsView ? _currentPage : new SettingsView(),
-                "Help" => _currentPage is HelpView ? _currentPage : new HelpView(),
+                "Dashboard" => _currentPage is DashboardView ? _currentPage : DashboardView.Instance,
+                "Inventory" => _currentPage is InventoryView ? _currentPage : InventoryView.Instance,
+                "Settings" => _currentPage is SettingsView ? _currentPage : SettingsView.Instance,
+                "Help" => _currentPage is HelpView ? _currentPage : HelpView.Instance,
                 _ => null
             };
 

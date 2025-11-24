@@ -7,7 +7,10 @@ namespace UI.Views
     /// </summary>
     public partial class HelpView : System.Windows.Controls.UserControl
     {
-        public HelpView()
+        private static readonly Lazy<HelpView> _instance = new(() => new HelpView());
+        public static HelpView Instance => _instance.Value;
+
+        private HelpView()
         {
             InitializeComponent();
         }
