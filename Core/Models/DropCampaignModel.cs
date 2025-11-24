@@ -13,7 +13,9 @@ namespace Core.Models
         string Id,
         string Name,
         string? ImageUrl,
-        int RequiredMinutes);
+        int RequiredMinutes,
+        int ProgressMinutes = 0,
+        bool IsClaimed = false);
     /// <summary>
     /// Represents a campaign for in-game item drops, including details about the associated game, rewards, and
     /// platform.

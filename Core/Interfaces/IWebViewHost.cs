@@ -10,52 +10,6 @@ namespace Core.Interfaces
         /// </summary>
         Task EnsureInitializedAsync();
         /// <summary>
-        /// Adds or updates a cookie for the given domain/path.
-        /// </summary>
-        Task AddOrUpdateCookieAsync(string name, string value, string domain, string path);
-        /// <summary>
-        /// Asynchronously retrieves all cookies associated with the specified URL.
-        /// </summary>
-        /// <param name="url">The URL for which to retrieve cookies. Must be an absolute URI. Cannot be null or empty.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains a read-only list of cookies
-        /// associated with the specified URL. The list is empty if no cookies are found.</returns>
-        Task<IReadOnlyList<CoreWebView2Cookie>> GetCookiesAsync(string url);
-        /// <summary>
-        /// Asynchronously retrieves the value of the specified cookie for the given URL.
-        /// </summary>
-        /// <param name="url">The URL for which to retrieve the cookie value. Must be a valid absolute URI.</param>
-        /// <param name="name">The name of the cookie to retrieve. Cannot be null or empty.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains the cookie value if found;
-        /// otherwise, null.</returns>
-        Task<string?> GetCookieValueAsync(string url, string name);
-        /// <summary>
-        /// Asynchronously captures the value of a specified HTTP request header from network traffic that matches a
-        /// given URL substring.
-        /// </summary>
-        /// <remarks>If multiple requests match the specified URL substring, the header is captured from
-        /// the first matching request. This method is typically used in scenarios where network traffic is being
-        /// monitored or intercepted.</remarks>
-        /// <param name="headerName">The name of the HTTP request header to capture. Cannot be null or empty.</param>
-        /// <param name="urlContains">A substring that must be present in the request URL for the header to be captured. Matching is
-        /// case-sensitive.</param>
-        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for a matching request before returning the fallback value. Must
-        /// be greater than zero.</param>
-        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains the value of the specified
-        /// header if found; otherwise, the fallback value.</returns>
-        Task<string> CaptureRequestHeaderAsync(string headerName, string urlContains, int timeoutMs = 8000, CancellationToken ct = default);
-        /// <summary>
-        /// Asynchronously retrieves the body content of the first <script> element that contains the specified text.
-        /// </summary>
-        /// <param name="containsText">The text to search for within the contents of <script> elements. The method returns the body of the first
-        /// script containing this text.</param>
-        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for a matching <script> element to be found. Defaults to 20,000
-        /// milliseconds.</param>
-        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains the body content of the first
-        /// matching <script> element, or null if no such element is found within the timeout period.</returns>
-        Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default);
-        /// <summary>
         /// Asynchronously retrieves the raw dashboard response containing viewer drops data.
         /// </summary>
         /// <param name="timeoutMs">The maximum duration, in milliseconds, to wait for the dashboard response before timing out. Must be greater
@@ -63,7 +17,25 @@ namespace Core.Interfaces
         /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
         /// <returns>A task that represents the asynchronous operation. The task result contains a string with the raw dashboard
         /// response data.</returns>
-        Task<string> CaptureViewerDropsDashboardResponseAsync(int timeoutMs = 15000, CancellationToken ct = default);
+        Task<string> CaptureViewerDropsDashboardResponseAsync(int timeoutMs = 10 * 1000, CancellationToken ct = default);
+        /// <summary>
+        /// Asynchronously captures the progress response from the viewer drops endpoint.
+        /// </summary>
+        /// <param name="timeoutMs">The maximum duration, in milliseconds, to wait for the response before timing out. Must be greater than
+        /// zero.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the response string from the
+        /// viewer drops endpoint.</returns>
+        Task<string> CaptureViewerDropsProgressResponseAsync(int timeoutMs = 15000, CancellationToken ct = default);
+        /// <summary>
+        /// Asynchronously captures the progress response from the operation, waiting up to the specified timeout.
+        /// </summary>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for the progress response before timing out. Must be greater than
+        /// zero.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the progress response as a
+        /// string, or an empty string if no response is received within the timeout period.</returns>
+        Task<string> CaptureProgressResponseAsync(int timeoutMs = 10 * 1000, CancellationToken ct = default);
         /// <summary>
         /// Initiates an asynchronous operation to force a refresh of the underlying data or cache.
         /// </summary>

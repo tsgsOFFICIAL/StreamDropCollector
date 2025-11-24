@@ -34,7 +34,7 @@ namespace Core.Services
         public override async Task<IReadOnlyList<DropsCampaign>> GetActiveCampaignsAsync(IWebViewHost host, CancellationToken ct = default)
         {
             await host.EnsureInitializedAsync();
-            await host.NavigateAsync("https://twitch.tv/drops/campaigns?t=" + DateTimeOffset.Now.ToUnixTimeMilliseconds());
+            
             string rawJson = string.Empty;
 
             while (string.IsNullOrEmpty(rawJson))
@@ -70,6 +70,7 @@ namespace Core.Services
                     {
                         if (!camp.TryGetProperty("unlockRequirements", out JsonElement req))
                             continue;
+
                         int subs = req.GetProperty("subsGoal").GetInt32();
                         int mins = req.GetProperty("minuteWatchedGoal").GetInt32();
 
@@ -102,7 +103,83 @@ namespace Core.Services
                 }
             }
 
-            Debug.WriteLine($"[TwitchDrops] FINAL: {campaigns.Count} campaigns loaded");
+            string rawProgress = string.Empty;
+
+            while (string.IsNullOrEmpty(rawProgress))
+                try
+                {
+                    rawProgress = await host.CaptureViewerDropsProgressResponseAsync(10000, ct);
+                }
+                catch (TimeoutException)
+                {
+                    Debug.WriteLine("[TwitchDrops] Initial attempt to capture drops progress response timed out, refreshing and retrying...");
+                    await host.ForceRefreshAsync();
+                }
+
+            if (!string.IsNullOrWhiteSpace(rawProgress) && rawProgress.Trim() != "null")
+            {
+                try
+                {
+                    JsonElement rootArray = JsonDocument.Parse(rawProgress).RootElement;
+
+                    foreach (JsonElement operation in rootArray.EnumerateArray())
+                    {
+                        if (!operation.TryGetProperty("data", out JsonElement data))
+                            continue;
+
+                        if (!data.TryGetProperty("currentUser", out JsonElement currentUser))
+                            continue;
+
+                        if (!currentUser.TryGetProperty("inventory", out JsonElement inventory))
+                            continue;
+
+                        // This is the array that contains all claimed + in-progress rewards
+                        if (!inventory.TryGetProperty("gameEventDrops", out JsonElement gameEventDrops) ||
+                            gameEventDrops.ValueKind == JsonValueKind.Null)
+                            continue;
+
+                        foreach (JsonElement reward in gameEventDrops.EnumerateArray())
+                        {
+                            string rewardId = reward.GetProperty("id").GetString()!;
+                            string rewardName = reward.GetProperty("name").GetString()!;
+                            string imageUrl = reward.GetProperty("imageURL").GetString()!;
+                            bool isClaimed = reward.TryGetProperty("lastAwardedAt", out _); // has lastAwardedAt → claimed, TODO VERIFY
+
+                            // Find any campaign that contains a reward with this exact ID
+                            foreach (DropsCampaign campaign in campaigns)
+                            {
+                                DropsReward? matchingReward = campaign.Rewards.FirstOrDefault(r => r.Id == rewardId);
+                                if (matchingReward == null)
+                                    continue;
+
+                                DropsReward updatedReward = matchingReward with
+                                {
+                                    Name = rewardName,
+                                    ImageUrl = imageUrl,
+                                    IsClaimed = isClaimed,
+                                    ProgressMinutes = isClaimed ? matchingReward.RequiredMinutes : matchingReward.ProgressMinutes
+                                };
+
+                                List<DropsReward> newList = [.. campaign.Rewards];
+                                int idx = newList.IndexOf(matchingReward);
+                                newList[idx] = updatedReward;
+
+                                DropsCampaign updatedCampaign = campaign with { Rewards = newList.AsReadOnly() };
+                                int campIdx = campaigns.IndexOf(campaign);
+                                campaigns[campIdx] = updatedCampaign;
+
+                                break; // reward found and updated → no need to check other campaigns
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[TwitchDrops] Failed to parse progress payload: {ex.Message}");
+                }
+            }
+
+            Debug.WriteLine($"[TwitchDrops] FINAL: {campaigns.Count} campaigns loaded (progress + claimed status merged)");
             return campaigns.AsReadOnly();
         }
     }
