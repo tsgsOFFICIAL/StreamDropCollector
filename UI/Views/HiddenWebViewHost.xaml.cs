@@ -21,15 +21,15 @@ namespace UI.Views
         {
             InitializeComponent();
 
-            //// Fully invisible, no taskbar, no activation
-            //Width = Height = 0;
-            //WindowStyle = WindowStyle.None;
-            //ShowInTaskbar = false;
-            //Topmost = false;
-            //AllowsTransparency = true;
-            //Opacity = 0;
-            //Visibility = Visibility.Hidden;
-            //ShowActivated = false;
+            // Fully invisible, no taskbar, no activation
+            Width = Height = 0;
+            WindowStyle = WindowStyle.None;
+            ShowInTaskbar = false;
+            Topmost = false;
+            AllowsTransparency = true;
+            Opacity = 0;
+            Visibility = Visibility.Hidden;
+            ShowActivated = false;
         }
 
         /// <summary>
@@ -243,7 +243,7 @@ namespace UI.Views
                     string postData = JsonDocument.Parse(result).RootElement.GetProperty("postData").GetString() ?? "";
                     if (string.IsNullOrWhiteSpace(postData))
                         return;
-                                        
+
                     if (postData.Contains(triggerText, StringComparison.OrdinalIgnoreCase))
                     {
                         Cleanup();
@@ -362,6 +362,68 @@ namespace UI.Views
 
             if (result != tcs.Task)
                 throw new TimeoutException("Failed to capture ViewerDropsDashboard response");
+
+            return await tcs.Task;
+        }
+        public async Task<string> CaptureProgressResponseAsync(int timeoutMs = 10000, CancellationToken ct = default)
+        {
+            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
+
+            await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+
+            CoreWebView2DevToolsProtocolEventReceiver responseReceived = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.responseReceived");
+
+            void Handler(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+            {
+                try
+                {
+                    JsonElement payload = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                    string url = payload.GetProperty("response").GetProperty("url").GetString() ?? "";
+
+                    if (!url.Contains("/api/v1/drops/progress"))
+                        return;
+
+                    string? requestId = payload.GetProperty("requestId").GetString();
+                    if (requestId == null) return;
+
+                    // MUST RUN ON UI THREAD — THIS IS THE FIX
+                    Dispatcher.InvokeAsync(async () =>
+                    {
+                        try
+                        {
+                            string result = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
+                                "Network.getResponseBody",
+                                JsonSerializer.Serialize(new { requestId }));
+
+                            JsonElement bodyJson = JsonDocument.Parse(result).RootElement;
+                            string body = bodyJson.GetProperty("body").GetString() ?? "";
+
+                            if (body.Contains("claimed") || body.Contains("progress_units") || body.Contains("rewards"))
+                            {
+                                Debug.WriteLine($"[Kick Progress] SUCCESS — REAL RESPONSE CAPTURED ({body.Length} chars)");
+                                responseReceived.DevToolsProtocolEventReceived -= Handler;
+                                tcs.TrySetResult(body);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[Kick Progress] getResponseBody failed: {ex.Message}");
+                        }
+                    });
+                }
+                catch { }
+            }
+
+            responseReceived.DevToolsProtocolEventReceived += Handler;
+
+            // Trigger the real request
+            await NavigateAsync("https://kick.com/drops/inventory?t=" + DateTimeOffset.Now.ToUnixTimeMilliseconds());
+
+            Task completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs, ct));
+            responseReceived.DevToolsProtocolEventReceived -= Handler;
+
+            if (completed != tcs.Task)
+                throw new TimeoutException("Failed to capture Kick progress response");
 
             return await tcs.Task;
         }
