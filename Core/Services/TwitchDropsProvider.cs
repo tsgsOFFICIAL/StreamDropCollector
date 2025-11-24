@@ -49,7 +49,7 @@ namespace Core.Services
                 }
 
             List<DropsCampaign> campaigns = new List<DropsCampaign>();
-            bool includePaid = true;
+            bool includePaid = false;
 
             JsonElement root = JsonDocument.Parse(rawJson).RootElement;
 
