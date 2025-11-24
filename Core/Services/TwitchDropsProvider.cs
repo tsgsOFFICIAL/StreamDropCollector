@@ -37,16 +37,16 @@ namespace Core.Services
             await host.NavigateAsync("https://twitch.tv/drops/campaigns?t=" + DateTimeOffset.Now.ToUnixTimeMilliseconds());
             string rawJson = string.Empty;
 
-            try
-            {
-                rawJson = await host.CaptureViewerDropsDashboardResponseAsync(10000, ct);
-            }
-            catch (TimeoutException)
-            {
-                Debug.WriteLine("[TwitchDrops] Initial attempt to capture drops dashboard response timed out, refreshing and retrying...");
-                await host.ForceRefreshAsync();
-                rawJson = await host.CaptureViewerDropsDashboardResponseAsync(10000, ct);
-            }
+            while (string.IsNullOrEmpty(rawJson))
+                try
+                {
+                    rawJson = await host.CaptureViewerDropsDashboardResponseAsync(10000, ct);
+                }
+                catch (TimeoutException)
+                {
+                    Debug.WriteLine("[TwitchDrops] Initial attempt to capture drops dashboard response timed out, refreshing and retrying...");
+                    await host.ForceRefreshAsync();
+                }
 
             List<DropsCampaign> campaigns = new List<DropsCampaign>();
             bool includePaid = true;
