@@ -153,6 +153,12 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous load operation.</returns>
         private async Task LoadDropsAsync()
         {
+            if (_twitchService.Status != ConnectionStatus.Connected && _kickService.Status != ConnectionStatus.Connected)
+            {
+                MinerStatus = "Idle";
+                return;
+            }
+
             MinerStatus = "Loading Campaigns";
 
             _activeCampaigns.Clear();

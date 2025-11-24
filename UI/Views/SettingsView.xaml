@@ -68,119 +68,132 @@
             </Setter>
         </Style>
 
-        <!-- ULTIMATE COMBOBOX — NO WPF BULLSHIT, JUST PERFECTION -->
-        <Style x:Key="UltimateComboBoxStyle" TargetType="ComboBox">
+        <!-- NEON FLAT COMBOBOX — ACTUALLY FINAL THIS TIME (no blue anything, ever) -->
+        <SolidColorBrush x:Key="ComboBox.Border.Normal"     Color="#404040"/>
+        <SolidColorBrush x:Key="ComboBox.Border.Hover"      Color="#00FF9D"/>
+        <SolidColorBrush x:Key="ComboBox.Background.Normal" Color="#2D2D2D"/>
+        <SolidColorBrush x:Key="ComboBox.Background.Hover"  Color="#333333"/>
+        <SolidColorBrush x:Key="ComboBox.Item.Hover"        Color="#3A3A3A"/>
+        <SolidColorBrush x:Key="ComboBox.Item.Selected"     Color="#003322"/>
+
+        <Style x:Key="NeonFlatComboBoxStyle" TargetType="ComboBox">
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="#2D2D2D"/>
-            <Setter Property="BorderBrush" Value="#444444"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="12,0"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Background" Value="{StaticResource ComboBox.Background.Normal}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource ComboBox.Border.Normal}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Padding" Value="10,0,30,0"/>
             <Setter Property="Height" Value="40"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="14"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
+                            <!-- Our visible border -->
                             <Border x:Name="MainBorder"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="10">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="40"/>
-                                    </Grid.ColumnDefinitions>
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="8"/>
 
-                                    <!-- SELECTED ITEM — THIS WORKS 100% -->
-                                    <ContentPresenter Grid.Column="0"
-                                                      Content="{TemplateBinding SelectedItem}"
-                                                      Margin="{TemplateBinding Padding}"
-                                                      HorizontalAlignment="Left"
-                                                      VerticalAlignment="Center"
-                                                      RecognizesAccessKey="True"/>
+                            <!-- Invisible ToggleButton that only handles clicks — NO visuals, NO focus rectangle -->
+                            <ToggleButton x:Name="ToggleButton"
+                          Background="Transparent"
+                          BorderBrush="Transparent"
+                          BorderThickness="0"
+                          Focusable="False"
+                          IsHitTestVisible="True"
+                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate>
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
 
-                                    <!-- ARROW -->
-                                    <ToggleButton x:Name="ToggleButton"
-                                      Grid.ColumnSpan="2"
-                                      Background="Transparent"
-                                      BorderBrush="Transparent"
-                                      IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                                      Focusable="False">
+                            <!-- Selected text -->
+                            <ContentPresenter x:Name="ContentSite"
+                              Margin="{TemplateBinding Padding}"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Left"
+                              Content="{TemplateBinding SelectionBoxItem}"
+                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
 
-                                        <Path x:Name="Arrow"
-                                          Data="M 0,0 L 8,8 L 16,0 Z"
-                                          Fill="#AAAAAA"
-                                          Width="10" Height="6"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
-                                    </ToggleButton>
-                                </Grid>
-                            </Border>
+                            <!-- Arrow -->
+                            <Path x:Name="Arrow"
+                  Data="M 0,0 L 6,6 L 12,0 Z"
+                  Fill="#AAAAAA"
+                  Width="10" Height="6"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Margin="0,0,14,0"/>
 
-                            <!-- DROPDOWN -->
-                            <Popup x:Name="PART_Popup"
-                                   IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
-                                   Placement="Bottom"
-                                   AllowsTransparency="True">
-                                <Border Background="#2A2A2A"
-                                        BorderBrush="#00FF9D"
-                                        BorderThickness="1"
-                                        CornerRadius="10"
-                                        MinWidth="{TemplateBinding ActualWidth}"
-                                        MaxHeight="300">
-                                    <ScrollViewer>
-                                        <ItemsPresenter/>
+                            <!-- Popup -->
+                            <Popup x:Name="Popup"
+                   Placement="Bottom"
+                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                   AllowsTransparency="True"
+                   Focusable="False"
+                   PopupAnimation="Slide">
+                                <Border Background="#2D2D2D"
+                        BorderBrush="#404040"
+                        BorderThickness="2"
+                        CornerRadius="8"
+                        MinWidth="{TemplateBinding ActualWidth}"
+                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer Padding="4" BorderThickness="0">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
                                     </ScrollViewer>
                                 </Border>
                             </Popup>
                         </Grid>
 
                         <ControlTemplate.Triggers>
+                            <!-- Hover -->
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#00FF9D"/>
+                                <Setter TargetName="MainBorder" Property="Background" Value="{StaticResource ComboBox.Background.Hover}"/>
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{StaticResource ComboBox.Border.Hover}"/>
+                                <Setter TargetName="Arrow" Property="Fill" Value="#00FF9D"/>
                             </Trigger>
+
+                            <!-- Open -->
                             <Trigger Property="IsDropDownOpen" Value="True">
                                 <Setter TargetName="MainBorder" Property="BorderBrush" Value="#00FF9D"/>
                                 <Setter TargetName="Arrow" Property="Fill" Value="#00FF9D"/>
-                                <Setter TargetName="Arrow" Property="Data" Value="M 0,8 L 8,0 L 16,8 Z"/>
+                            </Trigger>
+
+                            <!-- Disabled -->
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
 
-            <!-- ITEM STYLE — SELECTED = GREEN, HOVER = SUBTLE -->
+            <!-- Beautiful items inside the dropdown -->
             <Setter Property="ItemContainerStyle">
                 <Setter.Value>
                     <Style TargetType="ComboBoxItem">
-                        <Setter Property="Padding" Value="16,12"/>
+                        <Setter Property="Padding" Value="12,8"/>
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ComboBoxItem">
-                                    <Border x:Name="Border"
-                                            Background="Transparent"
-                                            Padding="{TemplateBinding Padding}"
-                                            CornerRadius="8">
-                                        <ContentPresenter/>
+                                    <Border x:Name="Bd"
+                            Background="Transparent"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="6">
+                                        <ContentPresenter />
                                     </Border>
                                     <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Border" Property="Background" Value="#00FF9D22"/>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource ComboBox.Item.Hover}"/>
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Border" Property="Background" Value="#00FF9D"/>
-                                            <Setter Property="Foreground" Value="Black"/>
+                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource ComboBox.Item.Selected}"/>
+                                            <Setter Property="Foreground" Value="#00FF9D"/>
                                         </Trigger>
-                                        <MultiTrigger>
-                                            <MultiTrigger.Conditions>
-                                                <Condition Property="IsSelected" Value="True"/>
-                                                <Condition Property="IsMouseOver" Value="True"/>
-                                            </MultiTrigger.Conditions>
-                                            <Setter TargetName="Border" Property="Background" Value="#00FFAA"/>
-                                        </MultiTrigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
@@ -243,15 +256,16 @@
                 <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
                     <StackPanel>
                         <TextBlock Text="General" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <CheckBox Style="{StaticResource ModernCheckBoxStyle}"
-                                  x:Name="StartWithWindowsCheckBox"
+
+                        <CheckBox x:Name="StartWithWindowsCheckBox"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Start with Windows"
-                                  IsChecked="{Binding StartWithWindows}"
                                   Margin="0,0,0,12"/>
-                        <CheckBox Style="{StaticResource ModernCheckBoxStyle}"
-                                  Content="Minimize to system tray on startup"                                  
-                                  IsEnabled="{Binding ElementName=StartWithWindowsCheckBox, Path=IsChecked}"
-                                  IsChecked="{Binding MinimizeToTrayOnStartup}"/>
+
+                        <CheckBox x:Name="MinimizeToTrayOnStartupCheckBox"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Minimize to system tray on startup"
+                                  IsEnabled="{Binding ElementName=StartWithWindowsCheckBox, Path=IsChecked}"/>
                     </StackPanel>
                 </Border>
 
@@ -261,11 +275,10 @@
                         <TextBlock Text="Appearance" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <TextBlock Text="Theme" Foreground="#AAAAAA" Width="140" VerticalAlignment="Center"/>
-                            <ComboBox Width="200"
-                                      Style="{StaticResource UltimateComboBoxStyle}"
-                                      SelectedValue="{Binding Theme}"
+                            <ComboBox x:Name="ThemeComboBox"
+                                      Width="200"
+                                      Style="{StaticResource NeonFlatComboBoxStyle}"
                                       SelectedValuePath="Content">
-
                                 <ComboBoxItem Content="Dark"/>
                                 <ComboBoxItem Content="Light"/>
                                 <ComboBoxItem Content="System"/>
@@ -278,9 +291,9 @@
                 <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
                     <StackPanel>
                         <TextBlock Text="Drops Behavior" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <CheckBox Style="{StaticResource ModernCheckBoxStyle}"
-                                  Content="Auto-claim rewards when ready"
-                                  IsChecked="{Binding AutoClaimRewards}"/>
+                        <CheckBox x:Name="AutoClaimRewardsCheckBox"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Auto-claim rewards when ready"/>
                     </StackPanel>
                 </Border>
 
@@ -288,24 +301,29 @@
                 <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
                     <StackPanel>
                         <TextBlock Text="Notifications" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <CheckBox Style="{StaticResource ModernCheckBoxStyle}"
+
+                        <CheckBox x:Name="NotifyOnDropUnlockedCheckBox"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="New drop unlocked"
-                                  IsChecked="{Binding NotifyOnDropUnlocked}"
                                   Margin="0,0,0,12"/>
-                        <CheckBox Style="{StaticResource ModernCheckBoxStyle}"
+
+                        <CheckBox x:Name="NotifyOnReadyToClaimCheckBox"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop ready to claim (only if auto-claim is off)"
-                                  IsChecked="{Binding NotifyOnReadyToClaim}"
                                   Margin="0,0,0,12"/>
-                        <CheckBox Style="{StaticResource ModernCheckBoxStyle}"
+
+                        <CheckBox x:Name="NotifyOnAutoClaimedCheckBox"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop successfully auto-claimed"
-                                  IsChecked="{Binding NotifyOnAutoClaimed}"
                                   Margin="0,0,0,16"/>
+
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <CheckBox Style="{StaticResource ModernCheckBoxStyle}"
-                                      x:Name="SoundCheckBox"
-                                      Content="Play sound"
-                                      IsChecked="{Binding PlayNotificationSound}"/>
-                            <Button Content="Test Sound"
+                            <CheckBox x:Name="SoundCheckBox"
+                                      Style="{StaticResource ModernCheckBoxStyle}"
+                                      Content="Play sound"/>
+
+                            <Button x:Name="TestSoundButton"
+                                    Content="Test Sound"
                                     Style="{StaticResource AccentButtonStyle}"
                                     Margin="24,0,0,0"
                                     IsEnabled="{Binding ElementName=SoundCheckBox, Path=IsChecked}"/>
@@ -320,7 +338,9 @@
                         <TextBlock Text="DANGER ZONE" Foreground="#FF5555" FontSize="16" FontWeight="Bold" Margin="0,8,0,4"/>
                         <TextBlock Text="Permanently delete ALL logged-in accounts from this device"
                                    Foreground="#FFAAAA" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                        <Button Content="Remove ALL Accounts"
+
+                        <Button x:Name="RemoveAllAccountsButton"
+                                Content="Remove ALL Accounts"
                                 Background="#B33A3A"
                                 Foreground="White"
                                 FontWeight="SemiBold"
@@ -346,10 +366,8 @@
                 <!-- COMING SOON -->
                 <Border Background="#252526" CornerRadius="10" Padding="24" Opacity="0.5">
                     <StackPanel>
-                        <TextBlock Text="Your ideas could be here! (coming soon)" 
-                                   Foreground="#888888" FontSize="16" FontStyle="Italic" Margin="0,0,0,8"/>
-                        <TextBlock Text="Drop your suggestions, to have them implemented here" 
-                                   Foreground="#666666" FontSize="13"/>
+                        <TextBlock Text="Your ideas could be here! (coming soon)" Foreground="#888888" FontSize="16" FontStyle="Italic" Margin="0,0,0,8"/>
+                        <TextBlock Text="Drop your suggestions, to have them implemented here" Foreground="#666666" FontSize="13"/>
                     </StackPanel>
                 </Border>
 
