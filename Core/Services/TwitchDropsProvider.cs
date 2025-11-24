@@ -76,13 +76,13 @@ namespace Core.Services
                         if (subs > 0 && !includePaid)
                             continue;
 
-                        DropsReward[] rewards = camp.GetProperty("rewards").EnumerateArray()
+                        DropsReward[] rewards = [.. camp.GetProperty("rewards").EnumerateArray()
                             .Select(r => new DropsReward(
                                 Id: r.GetProperty("id").GetString()!,
                                 Name: r.GetProperty("name").GetString()!,
                                 ImageUrl: r.GetProperty("thumbnailImage").GetProperty("image1xURL").GetString()!,
                                 RequiredMinutes: mins
-                            )).ToArray();
+                            ))];
 
                         if (rewards.Length == 0)
                             continue;
