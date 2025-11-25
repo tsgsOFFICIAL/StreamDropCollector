@@ -317,18 +317,6 @@
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop successfully auto-claimed"
                                   Margin="0,0,0,16"/>
-
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <CheckBox x:Name="SoundCheckBox"
-                                      Style="{StaticResource ModernCheckBoxStyle}"
-                                      Content="Play sound"/>
-
-                            <Button x:Name="TestSoundButton"
-                                    Content="Test Sound"
-                                    Style="{StaticResource AccentButtonStyle}"
-                                    Margin="24,0,0,0"
-                                    IsEnabled="{Binding ElementName=SoundCheckBox, Path=IsChecked}"/>
-                        </StackPanel>
                     </StackPanel>
                 </Border>
 

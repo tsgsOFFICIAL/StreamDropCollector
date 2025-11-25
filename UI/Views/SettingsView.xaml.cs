@@ -1,9 +1,9 @@
-﻿using Core.Managers;
-using System.Diagnostics;
-using System.IO;
-using System.Windows;
+﻿using MessageBox = System.Windows.MessageBox;
 using System.Windows.Controls;
-using MessageBox = System.Windows.MessageBox;
+using System.Diagnostics;
+using System.Windows;
+using Core.Managers;
+using System.IO;
 
 namespace UI.Views
 {
@@ -42,7 +42,6 @@ namespace UI.Views
             NotifyOnDropUnlockedCheckBox.IsChecked = _settingsManager.NotifyOnDropUnlocked;
             NotifyOnReadyToClaimCheckBox.IsChecked = _settingsManager.NotifyOnReadyToClaim;
             NotifyOnAutoClaimedCheckBox.IsChecked = _settingsManager.NotifyOnAutoClaimed;
-            SoundCheckBox.IsChecked = _settingsManager.PlayNotificationSound;
 
             // === SUBSCRIBE TO CHANGES ===
             StartWithWindowsCheckBox.Checked += OnSettingChanged;
@@ -58,11 +57,6 @@ namespace UI.Views
             NotifyOnReadyToClaimCheckBox.Unchecked += OnSettingChanged;
             NotifyOnAutoClaimedCheckBox.Checked += OnSettingChanged;
             NotifyOnAutoClaimedCheckBox.Unchecked += OnSettingChanged;
-            SoundCheckBox.Checked += OnSettingChanged;
-            SoundCheckBox.Unchecked += OnSettingChanged;
-
-            // === TEST SOUND BUTTON ===
-            //TestSoundButton.Click += (s, e) => UISettings.Instance.PlayTestSound();
 
             // === DANGER BUTTON ===
             RemoveAllAccountsButton.Click += RemoveAllAccountsButton_Click;
@@ -77,7 +71,6 @@ namespace UI.Views
             _settingsManager.NotifyOnDropUnlocked = NotifyOnDropUnlockedCheckBox.IsChecked == true;
             _settingsManager.NotifyOnReadyToClaim = NotifyOnReadyToClaimCheckBox.IsChecked == true;
             _settingsManager.NotifyOnAutoClaimed = NotifyOnAutoClaimedCheckBox.IsChecked == true;
-            _settingsManager.PlayNotificationSound = SoundCheckBox.IsChecked == true;
 
             _settingsManager.SaveSettings();
         }
