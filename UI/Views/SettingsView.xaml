@@ -237,17 +237,17 @@
     <!-- ============================================= -->
     <!-- MAIN LAYOUT — PURE PERFECTION -->
     <!-- ============================================= -->
-    <Grid Margin="30">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <TextBlock Text="Settings"
-                   FontSize="32"
-                   FontWeight="Bold"
+                   FontSize="30"
                    Foreground="White"
-                   Margin="0,0,0,30"/>
+                   FontWeight="Bold"
+                   Margin="0,0,0,20"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
@@ -310,7 +310,8 @@
                         <CheckBox x:Name="NotifyOnReadyToClaimCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop ready to claim (only if auto-claim is off)"
-                                  Margin="0,0,0,12"/>
+                                  Margin="0,0,0,12"
+                                  IsEnabled="{Binding ElementName=AutoClaimRewardsCheckBox, Path=IsChecked}"/>
 
                         <CheckBox x:Name="NotifyOnAutoClaimedCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
