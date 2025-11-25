@@ -124,7 +124,6 @@ namespace UI.Views
             _dropsService = new DropsService();
 
             Loaded += async (s, e) => await OnLoadedAsync();
-            Unloaded += OnUnloaded;
         }
 
         /// <summary>
@@ -138,14 +137,11 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous refresh operation.</returns>
         public async Task StartAutoRefreshDropsAsync()
         {
-            if (!_isInitialized)
-            {
-                await LoadDropsAsync();
+            await LoadDropsAsync();
 
-                _refreshTimer.Elapsed += async (s, e) => await Dispatcher.InvokeAsync(async () => await LoadDropsAsync());
-                _refreshTimer.AutoReset = true; // Run forever
-                _refreshTimer.Start();
-            }
+            _refreshTimer.Elapsed += async (s, e) => await Dispatcher.InvokeAsync(async () => await LoadDropsAsync());
+            _refreshTimer.AutoReset = true; // Run forever
+            _refreshTimer.Start();
         }
         /// <summary>
         /// Asynchronously loads the list of active drops campaigns and updates the internal campaign collection.
@@ -163,16 +159,8 @@ namespace UI.Views
 
             _activeCampaigns.Clear();
             IReadOnlyList<DropsCampaign> allCampaigns;
-            
+
             allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _twitchWebView);
-
-            _kickWebView?.Close();
-            _twitchWebView?.Close();
-            _kickWebView?.Dispose();
-            _twitchWebView?.Dispose();
-
-            _kickWebView = new HiddenWebViewHost();
-            _twitchWebView = new HiddenWebViewHost();
 
             foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
                 _activeCampaigns.Add(c);
@@ -215,28 +203,18 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous operation.</returns>
         private async Task OnLoadedAsync()
         {
-            _twitchService.StatusChanged += OnTwitchStatusChanged;
-            _kickService.StatusChanged += OnKickStatusChanged;
+            if (!_isInitialized)
+            {
+                _twitchService.StatusChanged += OnTwitchStatusChanged;
+                _kickService.StatusChanged += OnKickStatusChanged;
 
-            await ValidateCredentialsAsync();
+                _isInitialized = true;
 
-            // Load campaigns / drops
-            await StartAutoRefreshDropsAsync();
+                await ValidateCredentialsAsync();
 
-            _isInitialized = true;
-        }
-        /// <summary>
-        /// Handles the Unloaded event to perform necessary cleanup of resources and event handlers.
-        /// </summary>
-        /// <remarks>This method should be attached to the Unloaded event of the control to ensure that
-        /// all associated resources are properly released when the control is removed from the visual tree.</remarks>
-        /// <param name="sender">The source of the Unloaded event.</param>
-        /// <param name="e">The event data associated with the Unloaded event.</param>
-        private void OnUnloaded(object? sender, RoutedEventArgs e)
-        {
-            // Properly clean up everything
-            _twitchService.StatusChanged -= OnTwitchStatusChanged;
-            _kickService.StatusChanged -= OnKickStatusChanged;
+                // Load campaigns / drops
+                await StartAutoRefreshDropsAsync();
+            }
         }
         /// <summary>
         /// Handles changes to the Kick connection status and updates related UI elements accordingly.
