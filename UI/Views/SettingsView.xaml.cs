@@ -80,8 +80,6 @@ namespace UI.Views
             if (ThemeComboBox.SelectedItem is ComboBoxItem item && item.Content is string theme)
             {
                 _settingsManager.Theme = theme;
-                //_settingsManager.ApplyTheme();
-                _settingsManager.SaveSettings();
             }
         }
 

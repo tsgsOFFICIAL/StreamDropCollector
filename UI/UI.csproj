@@ -43,17 +43,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Compile
-			Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
+		<Compile Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
 		<Compile Remove="Windows\**" />
-		<EmbeddedResource
-			Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
+		<EmbeddedResource Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
 		<EmbeddedResource Remove="Windows\**" />
-		<None
-			Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
+		<None Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
 		<None Remove="Windows\**" />
-		<Page
-			Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
+		<Page Remove="bin\Release\net10.0-windows10.0.17763.0\publish\win-x64\Stream Drop Collector.exe.WebView2\**" />
 		<Page Remove="Windows\**" />
 	</ItemGroup>
 
