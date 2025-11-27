@@ -1,5 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using System.ComponentModel;
+using System.Text.Json;
+using Core.Models;
+using System.IO;
 
 namespace Core.Managers
 {
@@ -8,6 +11,11 @@ namespace Core.Managers
         private static readonly Lazy<UISettingsManager> _instance = new(() => new UISettingsManager());
         public static UISettingsManager Instance => _instance.Value;
         public event PropertyChangedEventHandler? PropertyChanged;
+        private static readonly string _settingsFilePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector", "Settings.json");
+        private static readonly JsonSerializerOptions _jsonOptions = new()
+        {
+            WriteIndented = true
+        };
 
         // === SETTINGS PROPERTIES ===
         private bool _startWithWindows;
@@ -67,12 +75,55 @@ namespace Core.Managers
 
         private void LoadSettings()
         {
-            // Load settings logic here
+            if (!File.Exists(_settingsFilePath))
+                return; // First run — use defaults
+
+            try
+            {
+                string json = File.ReadAllText(_settingsFilePath);
+                SettingsModel? settings = JsonSerializer.Deserialize<SettingsModel>(json, _jsonOptions);
+
+                if (settings != null)
+                {
+                    StartWithWindows = settings.StartWithWindows;
+                    MinimizeToTrayOnStartup = settings.MinimizeToTrayOnStartup;
+                    Theme = settings.Theme ?? "System";
+                    AutoClaimRewards = settings.AutoClaimRewards;
+                    NotifyOnDropUnlocked = settings.NotifyOnDropUnlocked;
+                    NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
+                    NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
+                }
+            }
+            catch (Exception ex) when (ex is JsonException || ex is IOException || ex is UnauthorizedAccessException)
+            {
+
+            }
         }
 
         public void SaveSettings()
         {
-            // Save settings logic here
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_settingsFilePath)!);
+
+                SettingsModel settings = new SettingsModel
+                {
+                    StartWithWindows = _startWithWindows,
+                    MinimizeToTrayOnStartup = _minimizeToTrayOnStartup,
+                    Theme = _theme,
+                    AutoClaimRewards = _autoClaimRewards,
+                    NotifyOnDropUnlocked = _notifyOnDropUnlocked,
+                    NotifyOnReadyToClaim = _notifyOnReadyToClaim,
+                    NotifyOnAutoClaimed = _notifyOnAutoClaimed
+                };
+
+                string json = JsonSerializer.Serialize(settings, _jsonOptions);
+                File.WriteAllText(_settingsFilePath, json);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+
+            }
         }
 
         private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -87,6 +138,10 @@ namespace Core.Managers
 
             field = value;
             OnPropertyChanged(propertyName);
+
+            // Auto-save whenever a setting changes (lightweight & convenient)
+            Task.Run(SaveSettings); // Fire-and-forget on background thread
+
             return true;
         }
     }

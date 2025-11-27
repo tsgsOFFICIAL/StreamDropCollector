@@ -71,8 +71,6 @@ namespace UI.Views
             _settingsManager.NotifyOnDropUnlocked = NotifyOnDropUnlockedCheckBox.IsChecked == true;
             _settingsManager.NotifyOnReadyToClaim = NotifyOnReadyToClaimCheckBox.IsChecked == true;
             _settingsManager.NotifyOnAutoClaimed = NotifyOnAutoClaimedCheckBox.IsChecked == true;
-
-            _settingsManager.SaveSettings();
         }
 
         private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
