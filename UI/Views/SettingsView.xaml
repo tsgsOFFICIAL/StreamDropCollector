@@ -155,7 +155,7 @@
                                     </Border>
 
                                     <ControlTemplate.Triggers>
-                                        <!-- Normal hover + keyboard focus = use your global hover -->
+                                        <!-- Normal hover + keyboard focus = use global hover -->
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
                                         </Trigger>

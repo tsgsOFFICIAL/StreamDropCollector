@@ -48,7 +48,7 @@ namespace UI.Views
             StartWithWindowsCheckBox.Unchecked += OnSettingChanged;
             MinimizeToTrayOnStartupCheckBox.Checked += OnSettingChanged;
             MinimizeToTrayOnStartupCheckBox.Unchecked += OnSettingChanged;
-            ThemeComboBox.SelectionChanged += ThemeComboBox_SelectionChanged;
+            ThemeComboBox.SelectionChanged += OnThemeChanged;
             AutoClaimRewardsCheckBox.Checked += OnSettingChanged;
             AutoClaimRewardsCheckBox.Unchecked += OnSettingChanged;
             NotifyOnDropUnlockedCheckBox.Checked += OnSettingChanged;
@@ -59,7 +59,7 @@ namespace UI.Views
             NotifyOnAutoClaimedCheckBox.Unchecked += OnSettingChanged;
 
             // === DANGER BUTTON ===
-            RemoveAllAccountsButton.Click += RemoveAllAccountsButton_Click;
+            RemoveAllAccountsButton.Click += OnRemoveAllAccountsButtonClick;
         }
 
         private void OnSettingChanged(object? sender, RoutedEventArgs e)
@@ -75,15 +75,13 @@ namespace UI.Views
             _settingsManager.SaveSettings();
         }
 
-        private void ThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
         {
             if (ThemeComboBox.SelectedItem is ComboBoxItem item && item.Content is string theme)
-            {
                 _settingsManager.Theme = theme;
-            }
         }
 
-        private void RemoveAllAccountsButton_Click(object sender, RoutedEventArgs e)
+        private void OnRemoveAllAccountsButtonClick(object sender, RoutedEventArgs e)
         {
             if (MessageBox.Show("NUKE ALL ACCOUNTS AND RESTART?", "DANGER", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
