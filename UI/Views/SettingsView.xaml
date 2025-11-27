@@ -147,75 +147,44 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ComboBoxItem">
-                                    <!-- Hidden brush that we animate -->
                                     <Border x:Name="Bd"
-                                Background="{DynamicResource CardBackgroundBrush}"
+                                Background="Transparent"
                                 Padding="{TemplateBinding Padding}"
                                 CornerRadius="6">
-                                        <Border x:Name="HoverLayer"
-                                    Background="Transparent"
-                                    Opacity="0"/>
                                         <ContentPresenter />
                                     </Border>
 
-                                    <VisualStateManager.VisualStateGroups>
-                                        <VisualStateGroup x:Name="CommonStates">
-                                            <VisualState x:Name="Normal"/>
-                                            <VisualState x:Name="MouseOver">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="HoverLayer"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="1" Duration="0:0:0.15"/>
-                                                </Storyboard>
-                                            </VisualState>
-                                            <VisualState x:Name="Disabled">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.4" Duration="0"/>
-                                                </Storyboard>
-                                            </VisualState>
-                                        </VisualStateGroup>
-
-                                        <VisualStateGroup x:Name="SelectionStates">
-                                            <VisualState x:Name="Unselected"/>
-                                            <VisualState x:Name="Selected">
-                                                <Storyboard>
-                                                    <ColorAnimation Storyboard.TargetName="HoverLayer"
-                                                        Storyboard.TargetProperty="Background.Color"
-                                                        To="#003322" Duration="0"/>
-                                                    <DoubleAnimation Storyboard.TargetName="HoverLayer"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="1" Duration="0"/>
-                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Foreground">
-                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{DynamicResource AccentBrush}"/>
-                                                    </ObjectAnimationUsingKeyFrames>
-                                                </Storyboard>
-                                            </VisualState>
-                                        </VisualStateGroup>
-                                    </VisualStateManager.VisualStateGroups>
-
-                                    <!-- This is the magic: a transparent overlay that we colorize -->
-                                    <ControlTemplate.Resources>
-                                        <SolidColorBrush x:Key="HoverColorBrush" Color="{DynamicResource HoverBrush.Color}"/>
-                                    </ControlTemplate.Resources>
                                     <ControlTemplate.Triggers>
+                                        <!-- Normal hover + keyboard focus = use your global hover -->
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="HoverLayer" Property="Background" Value="{DynamicResource HoverBrush}"/>
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
+                                        </Trigger>
+
+                                        <!-- Selected (no hover) -->
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ComboBoxItem.SelectedBackground}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource ComboBoxItem.SelectedForeground}"/>
+                                        </Trigger>
+
+                                        <!-- Selected + Hover = special state -->
+                                        <MultiTrigger>
+                                            <MultiTrigger.Conditions>
+                                                <Condition Property="IsSelected" Value="True"/>
+                                                <Condition Property="IsMouseOver" Value="True"/>
+                                            </MultiTrigger.Conditions>
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ComboBoxItem.SelectedHoverBackground}"/>
+                                        </MultiTrigger>
+
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Opacity" Value="0.4"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
                         </Setter>
-
-                        <!-- Fallback for hover if VSM somehow fails (it won't) -->
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource HoverBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="#003322"/>
-                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-                            </Trigger>
-                        </Style.Triggers>
                     </Style>
                 </Setter.Value>
             </Setter>

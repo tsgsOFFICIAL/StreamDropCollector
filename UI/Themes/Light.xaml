@@ -6,17 +6,20 @@
     </ResourceDictionary.MergedDictionaries>
 
     <!-- CLEAN MODERN LIGHT — NOT EYE-BLEEDING -->
-    <SolidColorBrush x:Key="MainBackgroundBrush"      Color="#FAFAFA"/>
-    <SolidColorBrush x:Key="CardBackgroundBrush"      Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="HeaderBackgroundBrush"    Color="#F0F0F0"/>
-    <SolidColorBrush x:Key="TextPrimaryBrush"         Color="#121212"/>
-    <SolidColorBrush x:Key="TextSecondaryBrush"       Color="#424242"/>
-    <SolidColorBrush x:Key="TextMutedBrush"           Color="#666666"/>
-    <SolidColorBrush x:Key="BorderBrush"              Color="#E0E0E0"/>
-    <SolidColorBrush x:Key="HoverBrush"               Color="#00C878"/>
-    <SolidColorBrush x:Key="PressedBrush"             Color="#D4D4D4"/>
-    <SolidColorBrush x:Key="SidebarHoverBrush"        Color="#E0E0E0"/>
-    <SolidColorBrush x:Key="TitleBarButtonHoverBrush" Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="MainBackgroundBrush"                      Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="CardBackgroundBrush"                      Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="HeaderBackgroundBrush"                    Color="#F0F0F0"/>
+    <SolidColorBrush x:Key="TextPrimaryBrush"                         Color="#121212"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush"                       Color="#424242"/>
+    <SolidColorBrush x:Key="TextMutedBrush"                           Color="#666666"/>
+    <SolidColorBrush x:Key="BorderBrush"                              Color="#E0E0E0"/>
+    <SolidColorBrush x:Key="HoverBrush"                               Color="#CCE8DD"/>
+    <SolidColorBrush x:Key="PressedBrush"                             Color="#D4D4D4"/>
+    <SolidColorBrush x:Key="SidebarHoverBrush"                        Color="#E0E0E0"/>
+    <SolidColorBrush x:Key="TitleBarButtonHoverBrush"                 Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="ComboBoxItem.SelectedBackground"          Color="#00C878"/>
+    <SolidColorBrush x:Key="ComboBoxItem.SelectedForeground"          Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ComboBoxItem.SelectedHoverBackground"     Color="#00B86A"/>
 
     <Color x:Key="AccentColor">#00C878</Color>
     <SolidColorBrush x:Key="AccentBrush"              Color="#00C878"/>
