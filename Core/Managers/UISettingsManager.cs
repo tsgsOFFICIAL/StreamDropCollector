@@ -12,7 +12,7 @@ namespace Core.Managers
         // === SETTINGS PROPERTIES ===
         private bool _startWithWindows;
         private bool _minimizeToTrayOnStartup;
-        private string _theme = "Dark";
+        private string _theme = "System";
         private bool _autoClaimRewards = true;
         private bool _notifyOnDropUnlocked;
         private bool _notifyOnReadyToClaim;

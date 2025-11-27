@@ -6,7 +6,7 @@
              xmlns:local="clr-namespace:UI.Views"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800"
-             Background="#1E1E1E">
+             Background="{DynamicResource MainBackgroundBrush}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -17,7 +17,7 @@
         <!-- TITLE -->
         <TextBlock Text="Inventory"
                    FontSize="30"
-                   Foreground="White"
+                   Foreground="{DynamicResource TextPrimaryBrush}"
                    FontWeight="Bold"
                    Margin="0,0,0,20"/>
     </Grid>

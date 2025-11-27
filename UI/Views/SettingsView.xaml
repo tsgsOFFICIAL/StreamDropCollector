@@ -5,16 +5,12 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
              d:DesignHeight="900" d:DesignWidth="800"
-             Background="#1E1E1E">
+             Background="{DynamicResource MainBackgroundBrush}">
 
-    <!-- ============================================= -->
-    <!-- ULTIMATE CUSTOM STYLES — THE HOLY GRAIL -->
-    <!-- ============================================= -->
     <UserControl.Resources>
-
-        <!-- MODERN CHECKBOX -->
+        <!-- MODERN CHECKBOX — NOW FULLY THEMED -->
         <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -25,18 +21,17 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-
                             <Border x:Name="CheckBoxBorder"
                                     Width="20" Height="20"
                                     CornerRadius="6"
                                     BorderThickness="2"
-                                    BorderBrush="#555555"
-                                    Background="#2D2D2D"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    Background="{DynamicResource CardBackgroundBrush}"
                                     Margin="0,0,12,0"
                                     VerticalAlignment="Center">
                                 <Path x:Name="CheckMark"
                                       Data="M 4,10 L 8,14 L 16,6"
-                                      Stroke="#00FF9D"
+                                      Stroke="{DynamicResource AccentBrush}"
                                       StrokeThickness="3"
                                       StrokeEndLineCap="Round"
                                       StrokeStartLineCap="Round"
@@ -44,20 +39,18 @@
                                       Stretch="Fill"
                                       Width="12" Height="12"/>
                             </Border>
-
                             <ContentPresenter Grid.Column="1"
                                               VerticalAlignment="Center"
                                               TextBlock.Foreground="{TemplateBinding Foreground}"/>
                         </Grid>
-
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#00FF9D"/>
+                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                 <Setter TargetName="CheckBoxBorder" Property="Background" Value="#003322"/>
                                 <Setter TargetName="CheckMark" Property="Opacity" Value="1"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#00FF9D"/>
+                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4"/>
@@ -68,18 +61,11 @@
             </Setter>
         </Style>
 
-        <!-- NEON FLAT COMBOBOX — ACTUALLY FINAL THIS TIME (no blue anything, ever) -->
-        <SolidColorBrush x:Key="ComboBox.Border.Normal"     Color="#404040"/>
-        <SolidColorBrush x:Key="ComboBox.Border.Hover"      Color="#00FF9D"/>
-        <SolidColorBrush x:Key="ComboBox.Background.Normal" Color="#2D2D2D"/>
-        <SolidColorBrush x:Key="ComboBox.Background.Hover"  Color="#333333"/>
-        <SolidColorBrush x:Key="ComboBox.Item.Hover"        Color="#3A3A3A"/>
-        <SolidColorBrush x:Key="ComboBox.Item.Selected"     Color="#003322"/>
-
+        <!-- NEON FLAT COMBOBOX — NOW USING DYNAMIC RESOURCES -->
         <Style x:Key="NeonFlatComboBoxStyle" TargetType="ComboBox">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="{StaticResource ComboBox.Background.Normal}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource ComboBox.Border.Normal}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="2"/>
             <Setter Property="Padding" Value="10,0,30,0"/>
             <Setter Property="Height" Value="40"/>
@@ -90,80 +76,62 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
-                            <!-- Our visible border -->
                             <Border x:Name="MainBorder"
-                    Background="{TemplateBinding Background}"
-                    BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="8"/>
-
-                            <!-- Invisible ToggleButton that only handles clicks — NO visuals, NO focus rectangle -->
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="8"/>
                             <ToggleButton x:Name="ToggleButton"
-                          Background="Transparent"
-                          BorderBrush="Transparent"
-                          BorderThickness="0"
-                          Focusable="False"
-                          IsHitTestVisible="True"
-                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                          Background="Transparent"
+                                          BorderBrush="Transparent"
+                                          BorderThickness="0"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
                                 <ToggleButton.Template>
                                     <ControlTemplate>
                                         <Border Background="Transparent"/>
                                     </ControlTemplate>
                                 </ToggleButton.Template>
                             </ToggleButton>
-
-                            <!-- Selected text -->
                             <ContentPresenter x:Name="ContentSite"
-                              Margin="{TemplateBinding Padding}"
-                              VerticalAlignment="Center"
-                              HorizontalAlignment="Left"
-                              Content="{TemplateBinding SelectionBoxItem}"
-                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
-
-                            <!-- Arrow -->
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"
+                                              Content="{TemplateBinding SelectionBoxItem}"/>
                             <Path x:Name="Arrow"
-                  Data="M 0,0 L 6,6 L 12,0 Z"
-                  Fill="#AAAAAA"
-                  Width="10" Height="6"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Center"
-                  Margin="0,0,14,0"/>
-
-                            <!-- Popup -->
+                                  Data="M 0,0 L 6,6 L 12,0 Z"
+                                  Fill="{DynamicResource TextMutedBrush}"
+                                  Width="10" Height="6"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,14,0"/>
                             <Popup x:Name="Popup"
-                   Placement="Bottom"
-                   IsOpen="{TemplateBinding IsDropDownOpen}"
-                   AllowsTransparency="True"
-                   Focusable="False"
-                   PopupAnimation="Slide">
-                                <Border Background="#2D2D2D"
-                        BorderBrush="#404040"
-                        BorderThickness="2"
-                        CornerRadius="8"
-                        MinWidth="{TemplateBinding ActualWidth}"
-                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="{DynamicResource CardBackgroundBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="2"
+                                        CornerRadius="8"
+                                        MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <ScrollViewer Padding="4" BorderThickness="0">
                                         <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
                                     </ScrollViewer>
                                 </Border>
                             </Popup>
                         </Grid>
-
                         <ControlTemplate.Triggers>
-                            <!-- Hover -->
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="MainBorder" Property="Background" Value="{StaticResource ComboBox.Background.Hover}"/>
-                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{StaticResource ComboBox.Border.Hover}"/>
-                                <Setter TargetName="Arrow" Property="Fill" Value="#00FF9D"/>
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource AccentBrush}"/>
                             </Trigger>
-
-                            <!-- Open -->
                             <Trigger Property="IsDropDownOpen" Value="True">
-                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#00FF9D"/>
-                                <Setter TargetName="Arrow" Property="Fill" Value="#00FF9D"/>
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource AccentBrush}"/>
                             </Trigger>
-
-                            <!-- Disabled -->
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4"/>
                             </Trigger>
@@ -171,41 +139,91 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-
-            <!-- Beautiful items inside the dropdown -->
             <Setter Property="ItemContainerStyle">
                 <Setter.Value>
                     <Style TargetType="ComboBoxItem">
                         <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ComboBoxItem">
+                                    <!-- Hidden brush that we animate -->
                                     <Border x:Name="Bd"
-                            Background="Transparent"
-                            Padding="{TemplateBinding Padding}"
-                            CornerRadius="6">
+                                Background="{DynamicResource CardBackgroundBrush}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6">
+                                        <Border x:Name="HoverLayer"
+                                    Background="Transparent"
+                                    Opacity="0"/>
                                         <ContentPresenter />
                                     </Border>
+
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal"/>
+                                            <VisualState x:Name="MouseOver">
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="HoverLayer"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Disabled">
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.4" Duration="0"/>
+                                                </Storyboard>
+                                            </VisualState>
+                                        </VisualStateGroup>
+
+                                        <VisualStateGroup x:Name="SelectionStates">
+                                            <VisualState x:Name="Unselected"/>
+                                            <VisualState x:Name="Selected">
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="HoverLayer"
+                                                        Storyboard.TargetProperty="Background.Color"
+                                                        To="#003322" Duration="0"/>
+                                                    <DoubleAnimation Storyboard.TargetName="HoverLayer"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0"/>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Foreground">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{DynamicResource AccentBrush}"/>
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateManager.VisualStateGroups>
+
+                                    <!-- This is the magic: a transparent overlay that we colorize -->
+                                    <ControlTemplate.Resources>
+                                        <SolidColorBrush x:Key="HoverColorBrush" Color="{DynamicResource HoverBrush.Color}"/>
+                                    </ControlTemplate.Resources>
                                     <ControlTemplate.Triggers>
-                                        <Trigger Property="IsHighlighted" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource ComboBox.Item.Hover}"/>
-                                        </Trigger>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource ComboBox.Item.Selected}"/>
-                                            <Setter Property="Foreground" Value="#00FF9D"/>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="HoverLayer" Property="Background" Value="{DynamicResource HoverBrush}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
                         </Setter>
+
+                        <!-- Fallback for hover if VSM somehow fails (it won't) -->
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#003322"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
                     </Style>
                 </Setter.Value>
             </Setter>
         </Style>
 
-        <!-- ACCENT BUTTON -->
+        <!-- ACCENT BUTTON — NOW-branded, stays green -->
         <Style x:Key="AccentButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#00FF9D"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="Foreground" Value="Black"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="16,8"/>
@@ -220,23 +238,18 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#00FF85"/>
+                                <Setter Property="Background" Value="#00FFAA"/>
                             </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Background" Value="#333333"/>
-                                <Setter Property="Foreground" Value="#666666"/>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#00CC77"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-
     </UserControl.Resources>
 
-    <!-- ============================================= -->
-    <!-- MAIN LAYOUT — PURE PERFECTION -->
-    <!-- ============================================= -->
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -245,23 +258,25 @@
 
         <TextBlock Text="Settings"
                    FontSize="30"
-                   Foreground="White"
                    FontWeight="Bold"
+                   Foreground="{DynamicResource TextPrimaryBrush}"
                    Margin="0,0,0,20"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
                 <!-- GENERAL -->
-                <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="General" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-
+                        <TextBlock Text="General"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                         <CheckBox x:Name="StartWithWindowsCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Start with Windows"
                                   Margin="0,0,0,12"/>
-
                         <CheckBox x:Name="MinimizeToTrayOnStartupCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Minimize to system tray on startup"
@@ -270,11 +285,17 @@
                 </Border>
 
                 <!-- APPEARANCE -->
-                <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Appearance" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                        <TextBlock Text="Appearance"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <TextBlock Text="Theme" Foreground="#AAAAAA" Width="140" VerticalAlignment="Center"/>
+                            <TextBlock Text="Theme"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Width="140" VerticalAlignment="Center"/>
                             <ComboBox x:Name="ThemeComboBox"
                                       Width="200"
                                       Style="{StaticResource NeonFlatComboBoxStyle}"
@@ -288,9 +309,13 @@
                 </Border>
 
                 <!-- DROPS BEHAVIOR -->
-                <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Drops Behavior" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                        <TextBlock Text="Drops Behavior"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                         <CheckBox x:Name="AutoClaimRewardsCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Auto-claim rewards when ready"/>
@@ -298,21 +323,22 @@
                 </Border>
 
                 <!-- NOTIFICATIONS -->
-                <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Notifications" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-
+                        <TextBlock Text="Notifications"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                         <CheckBox x:Name="NotifyOnDropUnlockedCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="New drop unlocked"
                                   Margin="0,0,0,12"/>
-
                         <CheckBox x:Name="NotifyOnReadyToClaimCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop ready to claim (only if auto-claim is off)"
                                   Margin="0,0,0,12"
-                                  IsEnabled="{Binding ElementName=AutoClaimRewardsCheckBox, Path=IsChecked}"/>
-
+                                  IsEnabled="{Binding ElementName=AutoClaimRewardsCheckBox, Path=IsChecked, Converter={StaticResource InverseBooleanConverter}}"/>
                         <CheckBox x:Name="NotifyOnAutoClaimedCheckBox"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop successfully auto-claimed"
@@ -321,13 +347,17 @@
                 </Border>
 
                 <!-- DANGER ZONE -->
-                <Border Background="#252526" CornerRadius="10" Padding="24" Margin="0,0,0,24">
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
+                        BorderBrush="#FF5555" BorderThickness="2">
                     <StackPanel>
-                        <TextBlock Text="Accounts" Foreground="#CCCCCC" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <TextBlock Text="DANGER ZONE" Foreground="#FF5555" FontSize="16" FontWeight="Bold" Margin="0,8,0,4"/>
+                        <TextBlock Text="Accounts"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                        <TextBlock Text="DANGER ZONE"
+                                   Foreground="#FF5555" FontSize="16" FontWeight="Bold" Margin="0,8,0,4"/>
                         <TextBlock Text="Permanently delete ALL logged-in accounts from this device"
                                    Foreground="#FFAAAA" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
-
                         <Button x:Name="RemoveAllAccountsButton"
                                 Content="Remove ALL Accounts"
                                 Background="#B33A3A"
@@ -353,13 +383,18 @@
                 </Border>
 
                 <!-- COMING SOON -->
-                <Border Background="#252526" CornerRadius="10" Padding="24" Opacity="0.5">
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="10" Padding="24" Opacity="0.5"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Your ideas could be here! (coming soon)" Foreground="#888888" FontSize="16" FontStyle="Italic" Margin="0,0,0,8"/>
-                        <TextBlock Text="Drop your suggestions, to have them implemented here" Foreground="#666666" FontSize="13"/>
+                        <TextBlock Text="Your ideas could be here! (coming soon)"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   FontSize="16" FontStyle="Italic" Margin="0,0,0,8"/>
+                        <TextBlock Text="Drop your suggestions, to have them implemented here"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   FontSize="13"/>
                     </StackPanel>
                 </Border>
-
             </StackPanel>
         </ScrollViewer>
     </Grid>

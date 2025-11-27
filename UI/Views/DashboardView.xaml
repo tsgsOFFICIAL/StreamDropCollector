@@ -1,12 +1,11 @@
 ﻿<UserControl x:Class="UI.Views.DashboardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-             xmlns:local="clr-namespace:UI.Views"
-             mc:Ignorable="d" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800"
-             Background="#1E1E1E">
+             Background="{DynamicResource MainBackgroundBrush}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -15,17 +14,13 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- ==========================================================
-             HEADER
-        ========================================================== -->
+        <!-- HEADER -->
         <TextBlock Text="Dashboard"
                    FontSize="30"
-                   Foreground="White"
-                   FontWeight="Bold"/>
+                   FontWeight="Bold"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
 
-        <!-- ==========================================================
-             MAIN CONTENT
-        ========================================================== -->
+        <!-- MAIN CONTENT -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*"/>
@@ -37,77 +32,108 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- ======================================================
-                 MINER STATUS CARD
-            ====================================================== -->
-            <Border Grid.Row="0" Grid.Column="0" Margin="0,0,20,20" Background="#252526" Padding="20" CornerRadius="8">
+            <!-- MINER STATUS CARD -->
+            <Border Grid.Row="0" Grid.Column="0"
+                    Margin="0,0,20,20"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    Padding="20"
+                    CornerRadius="8"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1">
                 <StackPanel>
-                    <TextBlock Text="Miner Status" Foreground="#CCCCCC" FontSize="16"/>
-                    <TextBlock x:Name="MinerStatusText" Text="{Binding MinerStatus}" Foreground="Orange" FontSize="28" Margin="0,10,0,0" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="MinerStatusDetails" Text="Waiting for next drop window..." Foreground="#AAAAAA" FontSize="12"/>
+                    <TextBlock Text="Miner Status"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="16"/>
+                    <TextBlock x:Name="MinerStatusText"
+                               Text="{Binding MinerStatus, FallbackValue=Active}"
+                               Foreground="Orange"
+                               FontSize="28"
+                               Margin="0,10,0,0"
+                               FontWeight="SemiBold"/>
+                    <TextBlock x:Name="MinerStatusDetails"
+                               Text="Waiting for next drop window..."
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               FontSize="12"/>
                 </StackPanel>
             </Border>
 
-            <!-- ======================================================
-                 CAMPAIGN PROGRESS CARD
-            ====================================================== -->
-            <Border Grid.Row="0" Grid.Column="1" Margin="0,0,0,20" Background="#252526" Padding="20" CornerRadius="8">
+            <!-- CAMPAIGN PROGRESS CARD -->
+            <Border Grid.Row="0" Grid.Column="1"
+                    Margin="0,0,0,20"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    Padding="20"
+                    CornerRadius="8"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1">
                 <StackPanel>
-                    <TextBlock Text="Campaign Progress" Foreground="#CCCCCC" FontSize="16"/>
-                    <ProgressBar x:Name="CampaignProgressBar" Height="20" Margin="0,10,0,5" Minimum="0" Maximum="100" Value="0"/>
-                    <TextBlock x:Name="CampaignProgressText" Text="0% Completed" Foreground="#AAAAAA" FontSize="12"/>
+                    <TextBlock Text="Campaign Progress"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="16"/>
+                    <ProgressBar x:Name="CampaignProgressBar"
+                                 Height="20"
+                                 Margin="0,10,0,5"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Value="0"/>
+                    <TextBlock x:Name="CampaignProgressText"
+                               Text="0% Completed"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               FontSize="12"/>
                 </StackPanel>
             </Border>
 
-            <!-- ======================================================
-                 LOGIN STATUS CARD
-            ====================================================== -->
-            <Border Grid.Row="1" Grid.Column="0" Margin="0,0,20,0" Background="#252526" Padding="20" CornerRadius="8">
+            <!-- LOGIN STATUS CARD -->
+            <Border Grid.Row="1" Grid.Column="0"
+                    Margin="0,0,20,0"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    Padding="20"
+                    CornerRadius="8"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1">
                 <StackPanel>
-                    <TextBlock Text="Connection Status" Foreground="#CCCCCC" FontSize="16"/>
+                    <TextBlock Text="Connection Status"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="16"/>
 
-                    <!-- Each status line uses Margin for spacing -->
                     <StackPanel Margin="0,10,0,0">
                         <!-- Twitch Status -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Ellipse Width="10" Height="10" Fill="{Binding TwitchConnectionColor}" VerticalAlignment="Center"/>
+                            <Ellipse Width="10" Height="10" Fill="{Binding TwitchConnectionColor, FallbackValue=Red}" VerticalAlignment="Center"/>
                             <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
-                                <Run Text="Twitch" FontWeight="Bold" Foreground="#A666FF"/>
-                                <Run Text=" : " Foreground="White"/>
-                                <Run Text="{Binding TwitchConnectionStatus}" FontWeight="SemiBold" Foreground="White"/>
+                                <Run Text="Twitch" FontWeight="Bold" Foreground="{DynamicResource TwitchBrush}"/>
+                                <Run Text=" : " Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <Run Text="{Binding TwitchConnectionStatus, FallbackValue=Disconnected}" 
+                                     FontWeight="SemiBold" 
+                                     Foreground="{DynamicResource TextPrimaryBrush}"/>
                             </TextBlock>
                         </StackPanel>
 
                         <!-- Kick Status -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Ellipse Width="10" Height="10" Fill="{Binding KickConnectionColor}" VerticalAlignment="Center"/>
+                            <Ellipse Width="10" Height="10" Fill="{Binding KickConnectionColor, FallbackValue=Red}" VerticalAlignment="Center"/>
                             <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
-                                <Run Text="Kick" FontWeight="Bold" Foreground="#5FF41C"/>
-                                <Run Text=" : " Foreground="White"/>
-                                <Run Text="{Binding KickConnectionStatus}" FontWeight="SemiBold" Foreground="White"/>
+                                <Run Text="Kick" FontWeight="Bold" Foreground="{DynamicResource KickBrush}"/>
+                                <Run Text=" : " Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <Run Text="{Binding KickConnectionStatus, FallbackValue=Disconnected}" 
+                                     FontWeight="SemiBold" 
+                                     Foreground="{DynamicResource TextPrimaryBrush}"/>
                             </TextBlock>
                         </StackPanel>
 
-                        <!-- ===========================
-                             LOGIN BUTTONS
-                        =========================== -->
+                        <!-- LOGIN BUTTONS — BRANDED, HARD-CODED (THEY'RE ICONIC) -->
                         <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
-
-                            <!-- Kick Login Button -->
                             <Button x:Name="KickLoginButton"
-                                Content="Login Kick"
-                                Width="120" Height="36"
-                                Margin="0,0,10,0"
-                                FontWeight="SemiBold"
-                                Cursor="Hand"
-                                Click="OnKickLoginClick"
-                                IsEnabled="False">
+                                    Content="Login Kick"
+                                    Width="120" Height="36"
+                                    Margin="0,0,10,0"
+                                    FontWeight="SemiBold"
+                                    Cursor="Hand"
+                                    Click="OnKickLoginClick"
+                                    IsEnabled="{Binding IsKickLoginEnabled, FallbackValue=False}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="border" 
-                                            Background="#2D9D78" 
-                                            CornerRadius="6">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Border x:Name="border" Background="#2D9D78" CornerRadius="6">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.Foreground="White"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
@@ -122,38 +148,25 @@
                                                 <Setter TargetName="border" Property="Background" Value="#257A63"/>
                                             </Trigger>
                                             <Trigger Property="IsEnabled" Value="False">
-                                                <Setter TargetName="border" Property="Background" Value="#2A2A2A"/>
-                                                <Setter Property="Foreground" Value="#888"/>
+                                                <Setter TargetName="border" Property="Background" Value="#333333"/>
+                                                <Setter Property="Foreground" Value="#888888"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
-                                <Button.Style>
-                                    <Style TargetType="Button">
-                                        <Setter Property="Foreground" Value="White"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsEnabled" Value="False">
-                                                <Setter Property="Foreground" Value="#888"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
                             </Button>
 
-                            <!-- Twitch Login Button -->
                             <Button x:Name="TwitchLoginButton"
-                                Content="Login Twitch"
-                                Width="120" Height="36"
-                                FontWeight="SemiBold"
-                                Cursor="Hand"
-                                Click="OnTwitchLoginClick"
-                                IsEnabled="False">
+                                    Content="Login Twitch"
+                                    Width="120" Height="36"
+                                    FontWeight="SemiBold"
+                                    Cursor="Hand"
+                                    Click="OnTwitchLoginClick"
+                                    IsEnabled="{Binding IsTwitchLoginEnabled, FallbackValue=False}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="border" 
-                                            Background="#9146FF" 
-                                            CornerRadius="6">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Border x:Name="border" Background="#9146FF" CornerRadius="6">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.Foreground="White"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
@@ -168,42 +181,48 @@
                                                 <Setter TargetName="border" Property="Background" Value="#772CE8"/>
                                             </Trigger>
                                             <Trigger Property="IsEnabled" Value="False">
-                                                <Setter TargetName="border" Property="Background" Value="#2A2A2A"/>
-                                                <Setter Property="Foreground" Value="#888"/>
+                                                <Setter TargetName="border" Property="Background" Value="#333333"/>
+                                                <Setter Property="Foreground" Value="#888888"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
-                                <Button.Style>
-                                    <Style TargetType="Button">
-                                        <Setter Property="Foreground" Value="White"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsEnabled" Value="False">
-                                                <Setter Property="Foreground" Value="#888"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
                             </Button>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </Border>
 
-            <!-- ======================================================
-                 STREAMERS LIST
-            ====================================================== -->
-            <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" Background="#252526" Padding="20" CornerRadius="8">
+            <!-- STREAMERS LIST -->
+            <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="2"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    Padding="20"
+                    CornerRadius="8"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1">
                 <StackPanel>
-                    <TextBlock Text="Available Streamers" Foreground="#CCCCCC" FontSize="16" Margin="0,0,0,10"/>
+                    <TextBlock Text="Available Streamers"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="16"
+                               Margin="0,0,0,10"/>
 
-                    <ListView x:Name="StreamerList" Background="#1E1E1E" BorderThickness="0" Foreground="White" Height="260">
+                    <ListView x:Name="StreamerList"
+                              Background="{DynamicResource MainBackgroundBrush}"
+                              Foreground="{DynamicResource TextPrimaryBrush}"
+                              BorderThickness="0"
+                              Height="260"
+                              ItemsSource="{Binding Streamers}">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Margin="4,4,4,4">
+                                <StackPanel Orientation="Horizontal" Margin="4,6">
                                     <Ellipse Width="10" Height="10" Fill="{Binding StatusColor}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Name}" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding DropInfo}" Foreground="#AAAAAA" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Name}"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                               Margin="10,0,0,0"
+                                               FontWeight="Medium"/>
+                                    <TextBlock Text="{Binding DropInfo}"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               Margin="12,0,0,0"/>
                                 </StackPanel>
                             </DataTemplate>
                         </ListView.ItemTemplate>

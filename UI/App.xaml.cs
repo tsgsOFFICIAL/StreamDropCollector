@@ -1,4 +1,6 @@
-﻿using System.IO;
+﻿using Core.Managers;
+using Microsoft.Win32;
+using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Windows;
 using System.Windows.Threading;
@@ -10,6 +12,9 @@ namespace UI
     /// </summary>
     public partial class App : System.Windows.Application
     {
+        private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+        private const string RegistryValueName = "AppsUseLightTheme";
+
         public App()
         {
             // Handle UI thread exceptions
@@ -63,6 +68,88 @@ namespace UI
 
             // Run the WPF application
             base.OnStartup(e);
+
+            // Load Colors first
+            Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri("/Themes/Colors.xaml", UriKind.Relative)
+            });
+
+            // Load initial theme
+            ApplyTheme("System");
+
+            // Subscribe to settings
+            UISettingsManager.Instance.PropertyChanged += (sender, args) =>
+            {
+                if (args.PropertyName == nameof(UISettingsManager.Theme))
+                {
+                    ApplyTheme(UISettingsManager.Instance.Theme);
+                }
+            };
+
+            // REACT TO WINDOWS THEME CHANGE IN REAL TIME
+            SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+
+            // Show window
+            new MainWindow().Show();
+        }
+
+        private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+        {
+            if (e.Category == UserPreferenceCategory.General)
+            {
+                // Only refresh if current setting is "System"
+                if (UISettingsManager.Instance.Theme == "System")
+                {
+                    Dispatcher.Invoke(() => ApplyTheme("System"));
+                }
+            }
+        }
+
+        private void ApplyTheme(string requestedTheme)
+        {
+            string actualTheme = requestedTheme;
+
+            if (requestedTheme == "System")
+            {
+                actualTheme = IsSystemInDarkMode() ? "Dark" : "Light";
+            }
+
+            Uri uri = actualTheme == "Light"
+                ? new Uri("/Themes/Light.xaml", UriKind.Relative)
+                : new Uri("/Themes/Dark.xaml", UriKind.Relative);
+
+            // Remove old theme dict
+            ResourceDictionary? old = Resources.MergedDictionaries
+                .FirstOrDefault(d => d.Source?.OriginalString.Contains("Light.xaml") == true ||
+                                     d.Source?.OriginalString.Contains("Dark.xaml") == true);
+
+            if (old != null)
+                Resources.MergedDictionaries.Remove(old);
+
+            // Add new
+            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = uri });
+        }
+
+        private static bool IsSystemInDarkMode()
+        {
+            try
+            {
+                using RegistryKey? key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath);
+                object? value = key?.GetValue(RegistryValueName);
+                return value is int i && i == 0; // 0 = Dark mode
+            }
+            catch
+            {
+                return true; // fallback to dark
+            }
+        }
+
+        // Clean up event when app closes
+        protected override void OnExit(ExitEventArgs e)
+        {
+            SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+            base.OnExit(e);
         }
 
         private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
