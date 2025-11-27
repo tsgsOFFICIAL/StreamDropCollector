@@ -75,8 +75,8 @@ namespace UI
                 Source = new Uri("/Themes/Colors.xaml", UriKind.Relative)
             });
 
-            // Load initial theme
-            ApplyTheme("System");
+            // Load theme
+            ApplyTheme(UISettingsManager.Instance.Theme);
 
             // Subscribe to settings
             UISettingsManager.Instance.PropertyChanged += (sender, args) =>
