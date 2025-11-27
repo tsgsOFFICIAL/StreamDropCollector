@@ -6,7 +6,7 @@ using System.IO;
 
 namespace Core.Managers
 {
-    public sealed class UISettingsManager
+    public sealed class UISettingsManager : INotifyPropertyChanged
     {
         private static readonly Lazy<UISettingsManager> _instance = new(() => new UISettingsManager());
         public static UISettingsManager Instance => _instance.Value;
@@ -29,13 +29,32 @@ namespace Core.Managers
         public bool StartWithWindows
         {
             get => _startWithWindows;
-            set => SetField(ref _startWithWindows, value);
+            set
+            {
+                if (SetField(ref _startWithWindows, value))
+                {
+                    if (!value && MinimizeToTrayOnStartup)
+                        MinimizeToTrayOnStartup = false;
+                }
+            }
         }
 
         public bool MinimizeToTrayOnStartup
         {
             get => _minimizeToTrayOnStartup;
-            set => SetField(ref _minimizeToTrayOnStartup, value);
+            set
+            {
+                // Prevent enabling if StartWithWindows is false
+                if (!StartWithWindows)
+                {
+                    if (_minimizeToTrayOnStartup != false)
+                        SetField(ref _minimizeToTrayOnStartup, false);
+
+                    return;
+                }
+                else
+                    SetField(ref _minimizeToTrayOnStartup, value);
+            }
         }
 
         public string Theme
@@ -98,6 +117,8 @@ namespace Core.Managers
             {
 
             }
+
+            UpdateStartupRegistry();
         }
 
         public void SaveSettings()
@@ -139,10 +160,48 @@ namespace Core.Managers
             field = value;
             OnPropertyChanged(propertyName);
 
+            // Handle special cases
+            if (propertyName is nameof(StartWithWindows) or nameof(MinimizeToTrayOnStartup))
+                UpdateStartupRegistry();
+
             // Auto-save whenever a setting changes (lightweight & convenient)
             Task.Run(SaveSettings); // Fire-and-forget on background thread
 
             return true;
+        }
+
+        private void UpdateStartupRegistry()
+        {
+            string keyName = "StreamDropCollector";
+            string exePath = Utility.GetExePath();
+
+            try
+            {
+                if (!StartWithWindows)
+                {
+                    // Just remove it — clean and simple
+                    Utility.RemoveFromRegistry(keyName);
+                    return;
+                }
+
+                // StartWithWindows = true → we MUST have a registry entry
+                if (MinimizeToTrayOnStartup)
+                {
+                    // Launch minimized
+                    Utility.WriteToRegistry(keyName, exePath, ["--minimize"]);
+                }
+                else
+                {
+                    // Launch normally
+                    Utility.WriteToRegistry(keyName, exePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Never let registry errors crash settings flow
+                System.Diagnostics.Debug.WriteLine($"[Startup Registry] Failed: {ex.Message}");
+                // Optional: show non-blocking toast later if you want
+            }
         }
     }
 }

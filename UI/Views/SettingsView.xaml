@@ -239,17 +239,16 @@
                         CornerRadius="10" Padding="24" Margin="0,0,0,24"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="General"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"
-                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <CheckBox x:Name="StartWithWindowsCheckBox"
+                        <TextBlock Text="General" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                        <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Start with Windows"
                                   Margin="0,0,0,12"/>
-                        <CheckBox x:Name="MinimizeToTrayOnStartupCheckBox"
+
+                        <CheckBox IsChecked="{Binding MinimizeToTrayOnStartup, Mode=TwoWay}"
+                                  IsEnabled="{Binding StartWithWindows}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
-                                  Content="Minimize to system tray on startup"
-                                  IsEnabled="{Binding ElementName=StartWithWindowsCheckBox, Path=IsChecked}"/>
+                                  Content="Minimize to system tray on startup"/>
                     </StackPanel>
                 </Border>
 
@@ -258,16 +257,15 @@
                         CornerRadius="10" Padding="24" Margin="0,0,0,24"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Appearance"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                        <TextBlock Text="Appearance" Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <TextBlock Text="Theme"
-                                       Foreground="{DynamicResource TextMutedBrush}"
+                            <TextBlock Text="Theme" Foreground="{DynamicResource TextMutedBrush}"
                                        Width="140" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="ThemeComboBox"
-                                      Width="200"
+                            <ComboBox Width="200"
                                       Style="{StaticResource NeonFlatComboBoxStyle}"
+                                      SelectedValue="{Binding Theme, Mode=TwoWay}"
                                       SelectedValuePath="Content">
                                 <ComboBoxItem Content="Dark"/>
                                 <ComboBoxItem Content="Light"/>
@@ -282,10 +280,10 @@
                         CornerRadius="10" Padding="24" Margin="0,0,0,24"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Drops Behavior"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                        <TextBlock Text="Drops Behavior" Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <CheckBox x:Name="AutoClaimRewardsCheckBox"
+
+                        <CheckBox IsChecked="{Binding AutoClaimRewards, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Auto-claim rewards when ready"/>
                     </StackPanel>
@@ -296,19 +294,21 @@
                         CornerRadius="10" Padding="24" Margin="0,0,0,24"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Notifications"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                        <TextBlock Text="Notifications" Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <CheckBox x:Name="NotifyOnDropUnlockedCheckBox"
+
+                        <CheckBox IsChecked="{Binding NotifyOnDropUnlocked, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="New drop unlocked"
                                   Margin="0,0,0,12"/>
-                        <CheckBox x:Name="NotifyOnReadyToClaimCheckBox"
+
+                        <CheckBox IsChecked="{Binding NotifyOnReadyToClaim, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop ready to claim (only if auto-claim is off)"
                                   Margin="0,0,0,12"
-                                  IsEnabled="{Binding ElementName=AutoClaimRewardsCheckBox, Path=IsChecked, Converter={StaticResource InverseBooleanConverter}}"/>
-                        <CheckBox x:Name="NotifyOnAutoClaimedCheckBox"
+                                  IsEnabled="{Binding AutoClaimRewards, Converter={StaticResource InverseBooleanConverter}}"/>
+
+                        <CheckBox IsChecked="{Binding NotifyOnAutoClaimed, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop successfully auto-claimed"
                                   Margin="0,0,0,16"/>
@@ -327,14 +327,14 @@
                                    Foreground="#FF5555" FontSize="16" FontWeight="Bold" Margin="0,8,0,4"/>
                         <TextBlock Text="Permanently delete ALL logged-in accounts from this device"
                                    Foreground="#FFAAAA" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                        <Button x:Name="RemoveAllAccountsButton"
-                                Content="Remove ALL Accounts"
+                        <Button Content="Remove ALL Accounts"
                                 Background="#B33A3A"
                                 Foreground="White"
                                 FontWeight="SemiBold"
                                 Padding="28,14"
                                 HorizontalAlignment="Left"
-                                Cursor="Hand">
+                                Cursor="Hand"
+                                Click="OnRemoveAllAccountsButtonClick">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">

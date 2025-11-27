@@ -1,5 +1,4 @@
 ﻿using MessageBox = System.Windows.MessageBox;
-using System.Windows.Controls;
 using System.Diagnostics;
 using System.Windows;
 using Core.Managers;
@@ -15,68 +14,10 @@ namespace UI.Views
         private static readonly Lazy<SettingsView> _instance = new(() => new SettingsView());
         public static SettingsView Instance => _instance.Value;
 
-        private readonly UISettingsManager _settingsManager = UISettingsManager.Instance;
         private SettingsView()
         {
             InitializeComponent();
-            Loaded += OnSettingsViewLoaded;
-        }
-
-        private void OnSettingsViewLoaded(object sender, RoutedEventArgs e)
-        {
-            // === BIND ALL THE THINGS ===
-            StartWithWindowsCheckBox.IsChecked = _settingsManager.StartWithWindows;
-            MinimizeToTrayOnStartupCheckBox.IsChecked = _settingsManager.MinimizeToTrayOnStartup;
-
-            // ComboBox — manually set selected item
-            foreach (ComboBoxItem item in ThemeComboBox.Items)
-            {
-                if (item.Content?.ToString() == _settingsManager.Theme)
-                {
-                    ThemeComboBox.SelectedItem = item;
-                    break;
-                }
-            }
-
-            AutoClaimRewardsCheckBox.IsChecked = _settingsManager.AutoClaimRewards;
-            NotifyOnDropUnlockedCheckBox.IsChecked = _settingsManager.NotifyOnDropUnlocked;
-            NotifyOnReadyToClaimCheckBox.IsChecked = _settingsManager.NotifyOnReadyToClaim;
-            NotifyOnAutoClaimedCheckBox.IsChecked = _settingsManager.NotifyOnAutoClaimed;
-
-            // === SUBSCRIBE TO CHANGES ===
-            StartWithWindowsCheckBox.Checked += OnSettingChanged;
-            StartWithWindowsCheckBox.Unchecked += OnSettingChanged;
-            MinimizeToTrayOnStartupCheckBox.Checked += OnSettingChanged;
-            MinimizeToTrayOnStartupCheckBox.Unchecked += OnSettingChanged;
-            ThemeComboBox.SelectionChanged += OnThemeChanged;
-            AutoClaimRewardsCheckBox.Checked += OnSettingChanged;
-            AutoClaimRewardsCheckBox.Unchecked += OnSettingChanged;
-            NotifyOnDropUnlockedCheckBox.Checked += OnSettingChanged;
-            NotifyOnDropUnlockedCheckBox.Unchecked += OnSettingChanged;
-            NotifyOnReadyToClaimCheckBox.Checked += OnSettingChanged;
-            NotifyOnReadyToClaimCheckBox.Unchecked += OnSettingChanged;
-            NotifyOnAutoClaimedCheckBox.Checked += OnSettingChanged;
-            NotifyOnAutoClaimedCheckBox.Unchecked += OnSettingChanged;
-
-            // === DANGER BUTTON ===
-            RemoveAllAccountsButton.Click += OnRemoveAllAccountsButtonClick;
-        }
-
-        private void OnSettingChanged(object? sender, RoutedEventArgs e)
-        {
-            // Update singleton
-            _settingsManager.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
-            _settingsManager.MinimizeToTrayOnStartup = MinimizeToTrayOnStartupCheckBox.IsChecked == true;
-            _settingsManager.AutoClaimRewards = AutoClaimRewardsCheckBox.IsChecked == true;
-            _settingsManager.NotifyOnDropUnlocked = NotifyOnDropUnlockedCheckBox.IsChecked == true;
-            _settingsManager.NotifyOnReadyToClaim = NotifyOnReadyToClaimCheckBox.IsChecked == true;
-            _settingsManager.NotifyOnAutoClaimed = NotifyOnAutoClaimedCheckBox.IsChecked == true;
-        }
-
-        private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (ThemeComboBox.SelectedItem is ComboBoxItem item && item.Content is string theme)
-                _settingsManager.Theme = theme;
+            DataContext = UISettingsManager.Instance;
         }
 
         private void OnRemoveAllAccountsButtonClick(object sender, RoutedEventArgs e)
