@@ -17,7 +17,7 @@
                         <Grid x:Name="Root">
 
                             <!-- Track -->
-                            <Border CornerRadius="7" Background="{DynamicResource TextPrimaryBrush}" BorderBrush="#333333" BorderThickness="1">
+                            <Border CornerRadius="7" Background="{DynamicResource TextMutedBrush}" BorderBrush="#333333" BorderThickness="1">
                                 <Border.Effect>
                                     <DropShadowEffect Color="{DynamicResource TextPrimaryColor}" BlurRadius="12" Opacity="0.35"/>
                                 </Border.Effect>
