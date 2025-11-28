@@ -7,6 +7,107 @@
              d:DesignHeight="450" d:DesignWidth="800"
              Background="{DynamicResource MainBackgroundBrush}">
 
+    <UserControl.Resources>
+        <Style TargetType="ProgressBar">
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid x:Name="Root">
+
+                            <!-- Track -->
+                            <Border CornerRadius="7" Background="{DynamicResource TextPrimaryBrush}" BorderBrush="#333333" BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="{DynamicResource TextPrimaryColor}" BlurRadius="12" Opacity="0.35"/>
+                                </Border.Effect>
+                            </Border>
+
+                            <!-- Fill container -->
+                            <Border CornerRadius="7" ClipToBounds="True" Margin="1">
+                                <Grid>
+                                    <!-- Main fill rectangle (driven by Value) -->
+                                    <Rectangle x:Name="PART_Indicator"
+                                           HorizontalAlignment="Left"
+                                           Fill="{TemplateBinding Foreground}"
+                                           RadiusX="6" RadiusY="6"/>
+
+                                    <!-- Glow overlay (same width as fill) -->
+                                    <Rectangle HorizontalAlignment="Left"
+                                           RadiusX="6" RadiusY="6">
+                                        <Rectangle.Fill>
+                                            <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                                                <GradientStop Offset="0"   Color="#AA00FF9D"/>
+                                                <GradientStop Offset="0.4" Color="#FF00FF9D"/>
+                                                <GradientStop Offset="1"   Color="#6600FF9D"/>
+                                            </LinearGradientBrush>
+                                        </Rectangle.Fill>
+                                    </Rectangle>
+
+                                    <!-- Moving shine -->
+                                    <Rectangle Width="80" Opacity="0.7">
+                                        <Rectangle.Fill>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Offset="0"   Color="#00FFFFFF"/>
+                                                <GradientStop Offset="0.4" Color="#99FFFFFF"/>
+                                                <GradientStop Offset="0.5" Color="#FFFFFF"/>
+                                                <GradientStop Offset="0.6" Color="#99FFFFFF"/>
+                                                <GradientStop Offset="1"   Color="#00FFFFFF"/>
+                                            </LinearGradientBrush>
+                                        </Rectangle.Fill>
+                                        <Rectangle.RenderTransform>
+                                            <TranslateTransform x:Name="Shine" X="-100"/>
+                                        </Rectangle.RenderTransform>
+                                    </Rectangle>
+                                </Grid>
+                            </Border>
+
+                            <!-- Outer glow -->
+                            <Border CornerRadius="8" Margin="-3">
+                                <Border.BorderBrush>
+                                    <SolidColorBrush Color="{DynamicResource AccentColor}" Opacity="0.7"/>
+                                </Border.BorderBrush>
+                                <Border.BorderThickness>3</Border.BorderThickness>
+                                <Border.Effect>
+                                    <BlurEffect Radius="10"/>
+                                </Border.Effect>
+                            </Border>
+
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <!-- Determinate: Width = Value % of parent -->
+                            <Trigger Property="IsIndeterminate" Value="False">
+                                <Setter TargetName="PART_Indicator" Property="Width">
+                                    <Setter.Value>
+                                        <MultiBinding Converter="{StaticResource PercentToWidthMultiConverter}">
+                                            <Binding Path="Value" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                            <Binding Path="ActualWidth" ElementName="Root"/>
+                                        </MultiBinding>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+
+                            <!-- Indeterminate: full width + shine animation -->
+                            <Trigger Property="IsIndeterminate" Value="True">
+                                <Setter TargetName="PART_Indicator" Property="Width" Value="{Binding ActualWidth, ElementName=Root}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetName="Shine"
+                                                         Storyboard.TargetProperty="X"
+                                                         From="-100" To="500" Duration="0:0:3"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -69,12 +170,20 @@
                     <TextBlock Text="Campaign Progress"
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                FontSize="16"/>
+
                     <ProgressBar x:Name="CampaignProgressBar"
-                                 Height="20"
-                                 Margin="0,10,0,5"
-                                 Minimum="0"
-                                 Maximum="100"
-                                 Value="0"/>
+                               Height="20"
+                               Margin="0,10,0,5"
+                               Minimum="0"
+                               Maximum="100"
+                               Value="50"
+                               IsIndeterminate="True"/>
+
+                    <ProgressBar Value="40" Height="20"
+                                Margin="0,10,0,5"
+                                Minimum="0"
+                                Maximum="100"/>
+                    
                     <TextBlock x:Name="CampaignProgressText"
                                Text="0% Completed"
                                Foreground="{DynamicResource TextMutedBrush}"
