@@ -5,6 +5,6 @@
              xmlns:converters="clr-namespace:UI.Converters">
     <Application.Resources>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
-        <converters:PercentToWidthMultiConverter x:Key="PercentToWidthMultiConverter"/>
+        <converters:PercentToWidthConverter x:Key="PercentToWidthConverter"/>
     </Application.Resources>
 </Application>
