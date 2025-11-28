@@ -44,7 +44,7 @@ namespace Core.Managers
             get => _minimizeToTrayOnStartup;
             set
             {
-                // Prevent enabling if StartWithWindows is false
+                // Prevent enabling if StartWithWindows is off
                 if (!StartWithWindows)
                 {
                     if (_minimizeToTrayOnStartup != false)
@@ -66,7 +66,17 @@ namespace Core.Managers
         public bool AutoClaimRewards
         {
             get => _autoClaimRewards;
-            set => SetField(ref _autoClaimRewards, value);
+            set
+            {
+                if (SetField(ref _autoClaimRewards, value))
+                {
+                    if (value && NotifyOnReadyToClaim)
+                        NotifyOnReadyToClaim = false;
+
+                    if (!value && NotifyOnAutoClaimed)
+                        NotifyOnAutoClaimed = false;
+                }
+            }
         }
 
         public bool NotifyOnDropUnlocked
@@ -78,13 +88,37 @@ namespace Core.Managers
         public bool NotifyOnReadyToClaim
         {
             get => _notifyOnReadyToClaim;
-            set => SetField(ref _notifyOnReadyToClaim, value);
+            set
+            {
+                // Prevent enabling if AutoClaimRewards is on
+                if (AutoClaimRewards)
+                {
+                    if (_notifyOnReadyToClaim != false)
+                        SetField(ref _notifyOnReadyToClaim, false);
+
+                    return;
+                }
+                else
+                    SetField(ref _notifyOnReadyToClaim, value);
+            }
         }
 
         public bool NotifyOnAutoClaimed
         {
             get => _notifyOnAutoClaimed;
-            set => SetField(ref _notifyOnAutoClaimed, value);
+            set
+            {
+                // Prevent enabling if AutoClaimRewards is off
+                if (!AutoClaimRewards)
+                {
+                    if (_notifyOnAutoClaimed != false)
+                        SetField(ref _notifyOnAutoClaimed, false);
+
+                    return;
+                }
+                else
+                    SetField(ref _notifyOnAutoClaimed, value);
+            }
         }
 
         private UISettingsManager()
