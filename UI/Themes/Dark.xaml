@@ -23,5 +23,7 @@
 
     <Color x:Key="AccentColor">#00FF9D</Color>
     <Color x:Key="TextPrimaryColor">#FFFFFF</Color>
+    <Color x:Key="CardBackgroundColor">#1A1A1A</Color>
+    
     <SolidColorBrush x:Key="AccentBrush"              Color="#00FF9D"/>
 </ResourceDictionary>

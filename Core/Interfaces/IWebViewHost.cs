@@ -1,6 +1,4 @@
-﻿using Microsoft.Web.WebView2.Core;
-
-namespace Core.Interfaces
+﻿namespace Core.Interfaces
 {
     public interface IWebViewHost
     {
@@ -54,5 +52,12 @@ namespace Core.Interfaces
         /// </summary>
         /// <returns>A task that represents the asynchronous wait operation. The task completes when the navigation has finished.</returns>
         Task WaitForNavigationAsync();
+        /// <summary>
+        /// Asynchronously retrieves the image data from the specified URL as a byte array.
+        /// </summary>
+        /// <param name="imageUrl">The URL of the image to download. Must be a valid, absolute URI pointing to an accessible image resource.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains a byte array with the image
+        /// data. Returns an empty array if the image cannot be retrieved.</returns>
+        Task<byte[]?> FetchImageBytesAsync(string imageUrl, int timeoutMs = 10000);
     }
 }

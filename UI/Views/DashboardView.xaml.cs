@@ -1,8 +1,11 @@
 ﻿using UserControl = System.Windows.Controls.UserControl;
 using System.Runtime.CompilerServices;
 using System.Collections.ObjectModel;
+using System.Windows.Threading;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
+using Core.Managers;
 using Core.Services;
 using Core.Models;
 using Core.Enums;
@@ -16,9 +19,15 @@ namespace UI.Views
     {
         private readonly System.Timers.Timer _refreshTimer = new(TimeSpan.FromHours(1).TotalMilliseconds);
 
+        private readonly SemaphoreSlim _loadDropsSemaphore = new(1, 1);
+        private CancellationTokenSource? _currentLoadCts;
+        private readonly object _loadTriggerLock = new();
+        private bool _loadScheduled = false;
+
         private HiddenWebViewHost _twitchWebView = new();
         private HiddenWebViewHost _kickWebView = new();
 
+        private static bool _initialValidationCompleted = false;
         private static bool _isInitialized = false;
 
         private static readonly Lazy<DashboardView> _instance = new(() => new DashboardView());
@@ -86,6 +95,16 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
+        private string _minerStatusDetails = "Waiting";
+        public string MinerStatusDetails
+        {
+            get => _minerStatusDetails;
+            set
+            {
+                _minerStatusDetails = value;
+                OnPropertyChanged();
+            }
+        }
 
         /// <summary>
         /// Occurs when a property value changes.
@@ -117,6 +136,7 @@ namespace UI.Views
             DataContext = this;
 
             MinerStatus = "Initializing";
+            MinerStatusDetails = "Please wait...";
 
             _twitchService = new TwitchLoginService();
             _kickService = new KickLoginService();
@@ -137,35 +157,104 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous refresh operation.</returns>
         public async Task StartAutoRefreshDropsAsync()
         {
-            await LoadDropsAsync();
+            ScheduleDropsLoad();
 
-            _refreshTimer.Elapsed += async (s, e) => await Dispatcher.InvokeAsync(async () => await LoadDropsAsync());
+            _refreshTimer.Elapsed += async (s, e) => await Dispatcher.InvokeAsync(() => ScheduleDropsLoad());
             _refreshTimer.AutoReset = true; // Run forever
             _refreshTimer.Start();
         }
         /// <summary>
-        /// Asynchronously loads the list of active drops campaigns and updates the internal campaign collection.
+        /// Schedules a debounced background load of drops, ensuring that rapid consecutive triggers result in a single
+        /// load operation after a delay.
         /// </summary>
-        /// <returns>A task that represents the asynchronous load operation.</returns>
-        private async Task LoadDropsAsync()
+        /// <remarks>This method prevents multiple load operations from being scheduled in quick
+        /// succession by introducing a 2-second debounce period. It is thread-safe and intended to be called when a
+        /// load should be triggered, but only after a period of inactivity. The actual load is performed asynchronously
+        /// on the background dispatcher priority.</remarks>
+        private void ScheduleDropsLoad()
         {
-            if (_twitchService.Status != ConnectionStatus.Connected && _kickService.Status != ConnectionStatus.Connected)
-            {
-                MinerStatus = "Idle";
+            // Block all loads until initial validation is done.
+            if (!_initialValidationCompleted)
                 return;
+
+            lock (_loadTriggerLock)
+            {
+                if (_loadScheduled) return; // already scheduled
+                _loadScheduled = true;
             }
 
-            MinerStatus = "Loading Campaigns";
+            // Fire once, after 300ms of calm (debounced)
+            Dispatcher.InvokeAsync(async () =>
+            {
+                await Task.Delay(300); // absorb any rapid-fire triggers
 
-            _activeCampaigns.Clear();
-            IReadOnlyList<DropsCampaign> allCampaigns;
+                lock (_loadTriggerLock)
+                {
+                    _loadScheduled = false;
+                }
 
-            allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _twitchWebView);
+                _ = LoadDropsAsync(); // safe — semaphore still protects concurrency
+            }, DispatcherPriority.Background);
+        }
+        /// <summary>
+        /// Asynchronously loads the list of active drops campaigns and updates the miner status properties to reflect
+        /// the current loading state.
+        /// </summary>
+        /// <remarks>If a previous load operation is in progress, it will be canceled before starting a
+        /// new one. The method updates status properties to indicate progress and results, including error messages if
+        /// loading fails. This method should be called when the application needs to refresh the list of available
+        /// campaigns.</remarks>
+        /// <returns>A task that represents the asynchronous operation of loading active drops campaigns.</returns>
+        private async Task LoadDropsAsync()
+        {
+            // Cancel any previous in-flight load
+            _currentLoadCts?.Cancel();
 
-            foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
-                _activeCampaigns.Add(c);
+            // Wait if another load is already running
+            await _loadDropsSemaphore.WaitAsync();
+            try
+            {
+                using CancellationTokenSource cts = new CancellationTokenSource();
+                _currentLoadCts = cts;
 
-            MinerStatus = "Idle";
+                if (_kickService.Status != ConnectionStatus.Connected && _twitchService.Status != ConnectionStatus.Connected)
+                {
+                    MinerStatus = "Need login";
+                    MinerStatusDetails = "Please login to Twitch and/or Kick to load campaigns.";
+                    return;
+                }
+
+                MinerStatus = "Loading Campaigns";
+                MinerStatusDetails = "Fetching latest drops...";
+
+                _activeCampaigns.Clear();
+
+                IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _kickService.Status, _twitchWebView, _twitchService.Status, cts.Token);
+
+                foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
+                    _activeCampaigns.Add(c);
+
+                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns);
+
+                MinerStatus = "Idle";
+                MinerStatusDetails = $"{_activeCampaigns.Count} active campaigns loaded";
+            }
+            catch (OperationCanceledException) when (_currentLoadCts?.IsCancellationRequested == true)
+            {
+                // Expected when a new load cancels the old one
+                return;
+            }
+            catch (Exception ex)
+            {
+                MinerStatus = "Failed to load campaigns";
+                MinerStatusDetails = ex.Message;
+                Debug.WriteLine($"[Drops] Load failed: {ex}");
+            }
+            finally
+            {
+                _loadDropsSemaphore.Release();
+                _currentLoadCts = null;
+            }
         }
         /// <summary>
         /// Asynchronously validates the current Twitch credentials using the associated web view and service.
@@ -173,7 +262,6 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous validation operation.</returns>
         private async Task ValidateTwitchCredentialsAsync()
         {
-            MinerStatus = "Validating Twitch";
             await _twitchService.ValidateCredentialsAsync(_twitchWebView);
         }
         /// <summary>
@@ -182,7 +270,6 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous validation operation.</returns>
         private async Task ValidateKickCredentialsAsync()
         {
-            MinerStatus = "Validating Kick";
             await _kickService.ValidateCredentialsAsync(_kickWebView);
         }
         private async Task ValidateCredentialsAsync()
@@ -192,8 +279,6 @@ namespace UI.Views
 
             if (_kickService.Status != ConnectionStatus.Connected)
                 await ValidateKickCredentialsAsync();
-
-            MinerStatus = "Idle";
         }
 
         #region Event Handlers
@@ -211,6 +296,9 @@ namespace UI.Views
                 _isInitialized = true;
 
                 await ValidateCredentialsAsync();
+
+                _initialValidationCompleted = true;
+                DropsInventoryManager.Instance.InitializeWebViews(_twitchWebView, _kickWebView);
 
                 // Load campaigns / drops
                 await StartAutoRefreshDropsAsync();
@@ -243,6 +331,7 @@ namespace UI.Views
                     KickConnectionStatus = "Connected";
                     KickConnectionColor = "Lime";
                     KickLoginButton.IsEnabled = false; // disable when already logged in
+                    ScheduleDropsLoad();
                     break;
                 case ConnectionStatus.Connecting:
                     KickConnectionStatus = "Connecting...";
@@ -277,6 +366,7 @@ namespace UI.Views
                     TwitchConnectionStatus = "Connected";
                     TwitchConnectionColor = "Lime";
                     TwitchLoginButton.IsEnabled = false; // disable when already logged in
+                    ScheduleDropsLoad();
                     break;
                 case ConnectionStatus.Connecting:
                     TwitchConnectionStatus = "Connecting...";

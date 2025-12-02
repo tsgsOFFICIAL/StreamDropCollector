@@ -11,6 +11,7 @@ namespace UI.Views
     {
         public WebView2 WebView => WebViewControl;
         private WebView2 WebViewControl => WebViewElement;
+
         /// <summary>
         /// Initializes a new instance of the HiddenWebViewHost class with a fully hidden and non-interactive window.
         /// </summary>
@@ -45,9 +46,12 @@ namespace UI.Views
             if (!IsVisible)
                 Show();
 
+            Owner = System.Windows.Application.Current.MainWindow;
+
             // Ensure CoreWebView2 environment is ready
             await WebView.EnsureCoreWebView2Async();
         }
+
         /// <summary>
         /// Captures the response body of the Twitch Viewer Drops Dashboard network request from the embedded web view
         /// asynchronously.
@@ -334,7 +338,59 @@ namespace UI.Views
             WebView.CoreWebView2.NavigationCompleted += handler;
             return tcs.Task;
         }
+        /// <summary>
+        /// Asynchronously retrieves the raw byte data of the first image found at the specified URL.
+        /// </summary>
+        /// <remarks>This method searches for the first <img> element on the page and extracts its pixel
+        /// data as a PNG image. If no image is found or the image cannot be processed, the method returns <c>null</c>.
+        /// The operation may fail if the page does not load within the specified timeout or if the image is not
+        /// accessible.</remarks>
+        /// <param name="imageUrl">The URL of the web page containing the image to fetch. Must be a valid, accessible URL.</param>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for the operation to complete. The default is 15,000
+        /// milliseconds.</param>
+        /// <returns>A byte array containing the PNG-encoded image data if an image is found and successfully processed;
+        /// otherwise, <c>null</c>.</returns>
+        public async Task<byte[]?> FetchImageBytesAsync(string imageUrl, int timeoutMs = 15000)
+        {
+            await EnsureInitializedAsync();
 
+            await NavigateAsync(imageUrl);
+
+            // Grab the Base64 data from the img element
+            string script = @"
+            const img = document.querySelector('img');
+            if (!img) 
+                ''
+            else (function() {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                return canvas.toDataURL('image/png').split(',')[1];
+            })()";
+
+            string result = await ExecuteScriptAsync(script);
+
+            if (string.IsNullOrWhiteSpace(result) || result == "null" || result == "\"\"")
+                return null;
+
+            try
+            {
+                string base64 = result.Trim('"');
+                return Convert.FromBase64String(base64);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        /// <summary>
+        /// Releases all resources used by the current instance and performs necessary cleanup.
+        /// </summary>
+        /// <remarks>Call this method when you are finished using the object to free unmanaged resources
+        /// and perform additional shutdown operations. After calling <see cref="Dispose"/>, the object should not be
+        /// used.</remarks>
         public void Dispose()
         {
             WebView.Dispose();

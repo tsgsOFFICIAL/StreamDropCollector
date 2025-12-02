@@ -1,4 +1,6 @@
-﻿namespace UI.Views
+﻿using Core.Managers;
+
+namespace UI.Views
 {
     /// <summary>
     /// Interaction logic for InventoryView.xaml
@@ -11,6 +13,7 @@
         private InventoryView()
         {
             InitializeComponent();
+            DataContext = DropsInventoryManager.Instance;
         }
     }
 }
