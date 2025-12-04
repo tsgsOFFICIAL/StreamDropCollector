@@ -3,12 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:enums="clr-namespace:Core.Enums;assembly=Core"
              mc:Ignorable="d"
              d:DesignHeight="900" d:DesignWidth="800"
              Background="{DynamicResource MainBackgroundBrush}">
 
     <UserControl.Resources>
-        <!-- MODERN CHECKBOX — NOW FULLY THEMED -->
+        <!-- MODERN CHECKBOX - NOW FULLY THEMED -->
         <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="FontSize" Value="14"/>
@@ -61,7 +62,7 @@
             </Setter>
         </Style>
 
-        <!-- NEON FLAT COMBOBOX — NOW USING DYNAMIC RESOURCES -->
+        <!-- NEON FLAT COMBOBOX - NOW USING DYNAMIC RESOURCES -->
         <Style x:Key="NeonFlatComboBoxStyle" TargetType="ComboBox">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
@@ -190,7 +191,7 @@
             </Setter>
         </Style>
 
-        <!-- ACCENT BUTTON — NOW-branded, stays green -->
+        <!-- ACCENT BUTTON - NOW-branded, stays green -->
         <Style x:Key="AccentButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="Foreground" Value="Black"/>
@@ -232,7 +233,7 @@
                    Margin="0,0,0,20"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
+            <StackPanel Margin="0,0,20,0">
 
                 <!-- GENERAL -->
                 <Border Background="{DynamicResource CardBackgroundBrush}"
@@ -256,6 +257,7 @@
                 <Border Background="{DynamicResource CardBackgroundBrush}"
                         CornerRadius="10" Padding="24" Margin="0,0,0,24"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+
                     <StackPanel>
                         <TextBlock Text="Appearance" Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
@@ -272,6 +274,60 @@
                                 <ComboBoxItem Content="System"/>
                             </ComboBox>
                         </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- UPDATES SECTION -->
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                    CornerRadius="10"
+                    Padding="24"
+                    Margin="0,0,0,24"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1">
+                    <StackPanel>
+                        <!-- Header -->
+                        <TextBlock Text="Updates"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,16"/>
+
+                        <!-- Frequency -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBlock Text="Check for updates automatically"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,20,0"/>
+                            <ComboBox Width="240"
+                                 Height="40"
+                                 Style="{StaticResource NeonFlatComboBoxStyle}"
+                                 SelectedValue="{Binding UpdateFrequency, Mode=TwoWay}"
+                                 SelectedValuePath="Tag">
+                                
+                                <ComboBoxItem Content="Every time the app starts" Tag="{x:Static enums:UpdateFrequency.OnLaunch}"/>
+                                <ComboBoxItem Content="Daily" Tag="{x:Static enums:UpdateFrequency.Daily}"/>
+                                <ComboBoxItem Content="Weekly" Tag="{x:Static enums:UpdateFrequency.Weekly}"/>
+                                <ComboBoxItem Content="Never (manual only)" Tag="{x:Static enums:UpdateFrequency.Never}"/>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <!-- Status text - hidden when no update -->
+                        <TextBlock Text="A new update is available, update now to experience the newest features!"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           FontSize="12"
+                           Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                        <!-- Big accent button - hidden when no update -->
+                        <Button Height="44"
+                            MinWidth="240"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Content="Update Now"
+                            Foreground="Black"
+                            FontWeight="Bold"
+                            FontSize="13"
+                            Click="OnUpdateButtonClick"
+                            Margin="0,12,0,0"
+                            Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     </StackPanel>
                 </Border>
 

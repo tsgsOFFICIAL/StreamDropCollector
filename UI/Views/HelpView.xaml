@@ -8,7 +8,7 @@
              Background="{DynamicResource MainBackgroundBrush}">
 
     <UserControl.Resources>
-        <!-- NEON HYPERLINK — THE ACCENT IS NOW DYNAMIC -->
+        <!-- NEON HYPERLINK - THE ACCENT IS NOW DYNAMIC -->
         <Style x:Key="NeonHyperlink" TargetType="Hyperlink">
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="TextDecorations" Value="None"/>
@@ -19,7 +19,7 @@
             </Style.Triggers>
         </Style>
 
-        <!-- SECTION TITLE — ACCENT GLOW -->
+        <!-- SECTION TITLE - ACCENT GLOW -->
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -27,7 +27,7 @@
             <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
 
-        <!-- BODY TEXT — CLEAN & READABLE -->
+        <!-- BODY TEXT - CLEAN & READABLE -->
         <Style x:Key="BodyText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
@@ -80,7 +80,7 @@
                         <TextBlock Text="Inventory Tracking" Style="{StaticResource SectionTitle}"/>
                         <TextBlock Style="{StaticResource BodyText}">
                             All active campaigns and collected drops are displayed here with live progress per streamer.<LineBreak/>
-                            Make sure your accounts are linked — rewards update automatically when claimed.
+                            Make sure your accounts are linked - rewards update automatically when claimed.
                         </TextBlock>
                     </StackPanel>
                 </Border>
@@ -93,7 +93,7 @@
                         <TextBlock Text="Settings" Style="{StaticResource SectionTitle}"/>
                         <TextBlock Style="{StaticResource BodyText}">
                             Customize auto-claim, notifications, theme, and more.<LineBreak/>
-                            All changes are saved instantly — no "Apply" button needed.
+                            All changes are saved instantly - no "Apply" button needed.
                         </TextBlock>
                     </StackPanel>
                 </Border>
@@ -109,7 +109,7 @@
                                    Margin="0,0,0,16"
                                    TextWrapping="Wrap">
                             Found a bug? Need help? Want to flex your drops?<LineBreak/>
-                            Join the community — we're all farmers here.
+                            Join the community - we're all farmers here.
                         </TextBlock>
 
                         <!-- DISCORD -->
@@ -148,7 +148,7 @@
                            Margin="0,60,0,0"
                            FontStyle="Italic"/>
 
-                <!-- DONATION — ABSOLUTE DOMINATION -->
+                <!-- DONATION - ABSOLUTE DOMINATION -->
                 <Border Background="{DynamicResource CardBackgroundBrush}"
                         CornerRadius="16" Padding="32" Margin="0,60,0,40"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
@@ -173,7 +173,7 @@
                                    LineHeight="24"
                                    Margin="0,0,0,24"/>
 
-                        <!-- COFFEE BUTTON — STILL LEGENDARY, NOW THEMED -->
+                        <!-- COFFEE BUTTON - STILL LEGENDARY, NOW THEMED -->
                         <Button x:Name="BuyMeCoffeeButton"
                                 Width="380"
                                 Height="70"

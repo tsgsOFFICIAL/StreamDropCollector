@@ -5,7 +5,7 @@
         <ResourceDictionary Source="/Themes/Colors.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 
-    <!-- TRUE DARK — PURE SEX -->
+    <!-- TRUE DARK - PURE SEX -->
     <SolidColorBrush x:Key="MainBackgroundBrush"                      Color="#111111"/>
     <SolidColorBrush x:Key="CardBackgroundBrush"                      Color="#1A1A1A"/>
     <SolidColorBrush x:Key="HeaderBackgroundBrush"                    Color="#161616"/>

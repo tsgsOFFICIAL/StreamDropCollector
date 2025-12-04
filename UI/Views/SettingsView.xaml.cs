@@ -20,6 +20,11 @@ namespace UI.Views
             DataContext = UISettingsManager.Instance;
         }
 
+        private void OnUpdateButtonClick(object sender, RoutedEventArgs e)
+        {
+
+        }
+
         private void OnRemoveAllAccountsButtonClick(object sender, RoutedEventArgs e)
         {
             if (MessageBox.Show("NUKE ALL ACCOUNTS AND RESTART?", "DANGER", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
@@ -34,7 +39,7 @@ namespace UI.Views
                 return;
             }
 
-            // PURE CODE — NO EXTERNAL EXE, NO DLL, NO BULLSHIT
+            // PURE CODE - NO EXTERNAL EXE, NO DLL, NO BULLSHIT
             ProcessStartInfo psi = new ProcessStartInfo
             {
                 FileName = "cmd.exe",

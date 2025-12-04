@@ -234,7 +234,7 @@ namespace UI.Views
                     string? requestId = payload.GetProperty("requestId").GetString();
                     if (requestId == null) return;
 
-                    // MUST RUN ON UI THREAD — THIS IS THE FIX
+                    // MUST RUN ON UI THREAD - THIS IS THE FIX
                     Dispatcher.InvokeAsync(async () =>
                     {
                         try
@@ -248,7 +248,7 @@ namespace UI.Views
 
                             if (body.Contains("claimed") || body.Contains("progress_units") || body.Contains("rewards"))
                             {
-                                Debug.WriteLine($"[Kick Progress] SUCCESS — REAL RESPONSE CAPTURED ({body.Length} chars)");
+                                Debug.WriteLine($"[Kick Progress] SUCCESS - REAL RESPONSE CAPTURED ({body.Length} chars)");
                                 responseReceived.DevToolsProtocolEventReceived -= Handler;
                                 tcs.TrySetResult(body);
                             }

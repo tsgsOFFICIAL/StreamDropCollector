@@ -5,7 +5,7 @@
         <ResourceDictionary Source="/Themes/Colors.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 
-    <!-- CLEAN MODERN LIGHT — NOT EYE-BLEEDING -->
+    <!-- CLEAN MODERN LIGHT - NOT EYE-BLEEDING -->
     <SolidColorBrush x:Key="MainBackgroundBrush"                      Color="#FAFAFA"/>
     <SolidColorBrush x:Key="CardBackgroundBrush"                      Color="#FFFFFF"/>
     <SolidColorBrush x:Key="HeaderBackgroundBrush"                    Color="#F0F0F0"/>

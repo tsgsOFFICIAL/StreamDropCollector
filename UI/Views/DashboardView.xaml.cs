@@ -193,7 +193,7 @@ namespace UI.Views
                     _loadScheduled = false;
                 }
 
-                _ = LoadDropsAsync(); // safe — semaphore still protects concurrency
+                _ = LoadDropsAsync(); // safe - semaphore still protects concurrency
             }, DispatcherPriority.Background);
         }
         /// <summary>

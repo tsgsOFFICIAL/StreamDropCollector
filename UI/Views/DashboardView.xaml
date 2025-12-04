@@ -154,7 +154,7 @@
                             </TextBlock>
                         </StackPanel>
 
-                        <!-- LOGIN BUTTONS — BRANDED, HARD-CODED (THEY'RE ICONIC) -->
+                        <!-- LOGIN BUTTONS - BRANDED, HARD-CODED (THEY'RE ICONIC) -->
                         <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
                             <Button x:Name="KickLoginButton"
                                     Content="Login Kick"

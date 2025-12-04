@@ -18,9 +18,9 @@
         <WindowChrome GlassFrameThickness="1" ResizeBorderThickness="5" CaptionHeight="0"/>
     </WindowChrome.WindowChrome>
 
-    <!-- YOUR STYLES — ONLY COLORS ARE NOW THEME-AWARE -->
+    <!-- YOUR STYLES - ONLY COLORS ARE NOW THEME-AWARE -->
     <Window.Resources>
-        <!-- Sidebar Nav Button — YOUR EXACT #3A3A3A HOVER PRESERVED -->
+        <!-- Sidebar Nav Button - YOUR EXACT #3A3A3A HOVER PRESERVED -->
         <Style x:Key="NavButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
@@ -47,7 +47,7 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Titlebar Min/Max Button — Clean hover, theme-aware -->
+        <!-- Titlebar Min/Max Button - Clean hover, theme-aware -->
         <Style x:Key="TitleBarMinMaxButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
@@ -69,7 +69,7 @@
             </Setter>
         </Style>
 
-        <!-- Close Button — Red hover, always -->
+        <!-- Close Button - Red hover, always -->
         <Style x:Key="CloseBtn" TargetType="Button" BasedOn="{StaticResource TitleBarMinMaxButton}">
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
@@ -91,7 +91,7 @@
                 <RowDefinition Height="93*"/>
             </Grid.RowDefinitions>
 
-            <!-- SIDEBAR — YOUR SOUL, NOW THEMED -->
+            <!-- SIDEBAR - YOUR SOUL, NOW THEMED -->
             <Border Background="{DynamicResource CardBackgroundBrush}" Grid.Row="1">
                 <StackPanel Margin="0,20,0,0">
                     <TextBlock Text="StreamDropCollector"
@@ -107,7 +107,7 @@
                 </StackPanel>
             </Border>
 
-            <!-- HEADER — YOUR EXACT VIEWBOXES + TEXT -->
+            <!-- HEADER - YOUR EXACT VIEWBOXES + TEXT -->
             <StackPanel x:Name="customApplicationHeader" 
                         Background="{DynamicResource HeaderBackgroundBrush}" 
                         MouseLeftButtonDown="OnWindowHeaderMouseDown" 
@@ -125,14 +125,14 @@
                 </Viewbox>
             </StackPanel>
 
-            <!-- YOUR ICONS — PERFECT HOVER, NO HARD CODED COLORS -->
+            <!-- YOUR ICONS - PERFECT HOVER, NO HARD CODED COLORS -->
             <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Name="Min_Button"       Content="&#x1F5D5;"   Click="OnMinimizeButtonClicked"   Style="{StaticResource TitleBarMinMaxButton}" ToolTip="Minimize"/>
                 <Button x:Name="Maximize_Button" Content="&#x1F5D6;" Click="OnMaximizeButtonClicked" Style="{StaticResource TitleBarMinMaxButton}" ToolTip="Maximize"/>
                 <Button Name="Close_Button"     Content="&#10006;"      Click="OnCloseButtonClicked"      Style="{StaticResource CloseBtn}"              ToolTip="Close"/>
             </StackPanel>
 
-            <!-- MAIN CONTENT — EXACTLY AS YOU WROTE IT -->
+            <!-- MAIN CONTENT - EXACTLY AS YOU WROTE IT -->
             <Border Grid.Column="1" Grid.Row="1" Background="{DynamicResource MainBackgroundBrush}">
                 <ContentControl x:Name="MainContent"/>
             </Border>

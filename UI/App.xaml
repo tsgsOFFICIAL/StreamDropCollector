@@ -6,5 +6,6 @@
     <Application.Resources>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <converters:PercentToWidthConverter x:Key="PercentToWidthConverter"/>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     </Application.Resources>
 </Application>

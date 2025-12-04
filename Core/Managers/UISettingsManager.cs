@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Core.Models;
+using Core.Enums;
 using System.IO;
 
 namespace Core.Managers
@@ -21,10 +22,12 @@ namespace Core.Managers
         private bool _startWithWindows;
         private bool _minimizeToTrayOnStartup;
         private string _theme = "System";
+        private UpdateFrequency _updateFrequency = UpdateFrequency.Daily;
         private bool _autoClaimRewards = true;
         private bool _notifyOnDropUnlocked;
         private bool _notifyOnReadyToClaim;
         private bool _notifyOnAutoClaimed = true;
+        private bool _updateAvailable = true;
 
         public bool StartWithWindows
         {
@@ -61,6 +64,12 @@ namespace Core.Managers
         {
             get => _theme;
             set => SetField(ref _theme, value);
+        }
+
+        public UpdateFrequency UpdateFrequency
+        {
+            get => _updateFrequency;
+            set => SetField(ref _updateFrequency, value);
         }
 
         public bool AutoClaimRewards
@@ -121,6 +130,12 @@ namespace Core.Managers
             }
         }
 
+        public bool UpdateAvailable
+        {
+            get => _updateAvailable;
+            set => SetField(ref _updateAvailable, value);
+        }
+
         private UISettingsManager()
         {
             LoadSettings();
@@ -141,6 +156,7 @@ namespace Core.Managers
                     StartWithWindows = settings.StartWithWindows;
                     MinimizeToTrayOnStartup = settings.MinimizeToTrayOnStartup;
                     Theme = settings.Theme ?? "System";
+                    UpdateFrequency = settings.UpdateFrequency;
                     AutoClaimRewards = settings.AutoClaimRewards;
                     NotifyOnDropUnlocked = settings.NotifyOnDropUnlocked;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
@@ -148,9 +164,7 @@ namespace Core.Managers
                 }
             }
             catch (Exception ex) when (ex is JsonException || ex is IOException || ex is UnauthorizedAccessException)
-            {
-
-            }
+            { }
 
             UpdateStartupRegistry();
         }
@@ -163,13 +177,14 @@ namespace Core.Managers
 
                 SettingsModel settings = new SettingsModel
                 {
-                    StartWithWindows = _startWithWindows,
-                    MinimizeToTrayOnStartup = _minimizeToTrayOnStartup,
-                    Theme = _theme,
-                    AutoClaimRewards = _autoClaimRewards,
-                    NotifyOnDropUnlocked = _notifyOnDropUnlocked,
-                    NotifyOnReadyToClaim = _notifyOnReadyToClaim,
-                    NotifyOnAutoClaimed = _notifyOnAutoClaimed
+                    StartWithWindows = StartWithWindows,
+                    MinimizeToTrayOnStartup = MinimizeToTrayOnStartup,
+                    Theme = Theme,
+                    UpdateFrequency = UpdateFrequency,
+                    AutoClaimRewards = AutoClaimRewards,
+                    NotifyOnDropUnlocked = NotifyOnDropUnlocked,
+                    NotifyOnReadyToClaim = NotifyOnReadyToClaim,
+                    NotifyOnAutoClaimed = NotifyOnAutoClaimed
                 };
 
                 string json = JsonSerializer.Serialize(settings, _jsonOptions);

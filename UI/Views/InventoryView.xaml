@@ -68,7 +68,7 @@
 
                                     <!-- Platform Badge + End Time -->
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <!-- Platform Badge — Kick = default (green), Twitch = purple -->
+                                        <!-- Platform Badge - Kick = default (green), Twitch = purple -->
                                         <Border CornerRadius="6" Padding="10,4">
                                             <Border.Background>
                                                 <SolidColorBrush Color="{DynamicResource KickGreen}"/>
@@ -176,7 +176,7 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
 
-                <!-- EMPTY STATE — 100% SAFE -->
+                <!-- EMPTY STATE - 100% SAFE -->
                 <ItemsControl.Style>
                     <Style TargetType="ItemsControl">
                         <Setter Property="Template">
