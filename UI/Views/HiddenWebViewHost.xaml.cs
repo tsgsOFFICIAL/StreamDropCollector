@@ -497,9 +497,6 @@ namespace UI.Views
             // Start everything
             await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
 
-            requestWillBeSent.DevToolsProtocolEventReceived += OnRequestWillBeSent;
-            loadingFinished.DevToolsProtocolEventReceived += OnLoadingFinished;
-
             Task completed = await Task.WhenAny(tcs.Task, timeoutTask);
             Cleanup();
 
