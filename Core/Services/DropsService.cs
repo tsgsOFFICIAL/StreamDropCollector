@@ -12,7 +12,7 @@ namespace Core.Services
     public class DropsService
     {
         private readonly KickDropsProvider _kickProvider = new();
-        private readonly TwitchDropsProvider _twitchProvider = new();
+        private TwitchDropsProvider? _twitchProvider;
 
         /// <summary>
         /// Retrieves all active drops campaigns from connected Kick and Twitch hosts asynchronously.
@@ -38,7 +38,12 @@ namespace Core.Services
                 tasks.Add(_kickProvider.GetActiveCampaignsAsync(kickHost, ct));
 
             if (twitchStatus == ConnectionStatus.Connected)
+            {
+                TwitchGqlService gqlService = new TwitchGqlService(twitchHost);
+                _twitchProvider = new TwitchDropsProvider(gqlService);
+
                 tasks.Add(_twitchProvider.GetActiveCampaignsAsync(twitchHost, ct));
+            }
 
             // If nothing to do → return fast
             if (tasks.Count == 0)
