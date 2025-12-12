@@ -3,33 +3,35 @@
 namespace Core.Models
 {
     /// <summary>
-    /// Represents a reward that can be earned by watching a stream for a specified number of minutes.
+    /// Represents a reward available through a drops campaign, including progress and claim status information.
     /// </summary>
     /// <param name="Id">The unique identifier for the reward.</param>
     /// <param name="Name">The display name of the reward.</param>
-    /// <param name="ImageUrl">The URL of the image representing the reward, or <see langword="null"/> if no image is available.</param>
-    /// <param name="RequiredMinutes">The number of minutes a viewer must watch to earn the reward. Must be non-negative.</param>
+    /// <param name="ImageUrl">The URL of the image representing the reward, or null if no image is available.</param>
+    /// <param name="RequiredMinutes">The total number of minutes required to earn the reward.</param>
+    /// <param name="ProgressMinutes">The number of minutes of progress accumulated toward earning the reward. Defaults to 0.</param>
+    /// <param name="IsClaimed">true if the reward has been claimed; otherwise, false. Defaults to false.</param>
+    /// <param name="DropInstanceId">The identifier of the specific drop instance associated with this reward, or null if not applicable.</param>
     public record DropsReward(
         string Id,
         string Name,
         string? ImageUrl,
         int RequiredMinutes,
         int ProgressMinutes = 0,
-        bool IsClaimed = false);
+        bool IsClaimed = false,
+        string? DropInstanceId = null);
     /// <summary>
-    /// Represents a campaign for in-game item drops, including details about the associated game, rewards, and
-    /// platform.
+    /// Represents a campaign that offers in-game rewards through a drops program for a specific game and platform.
     /// </summary>
     /// <param name="Id">The unique identifier for the drops campaign.</param>
     /// <param name="Name">The display name of the drops campaign.</param>
     /// <param name="GameName">The name of the game associated with the campaign.</param>
     /// <param name="GameImageUrl">The URL of the image representing the game. Can be null if no image is available.</param>
-    /// <param name="StartsAt">The date and time when the campaign begins, in UTC.</param>
+    /// <param name="StartsAt">The date and time when the campaign becomes active, in UTC.</param>
     /// <param name="EndsAt">The date and time when the campaign ends, in UTC.</param>
-    /// <param name="Rewards">A read-only list of rewards available in the campaign. Cannot be null.</param>
+    /// <param name="Rewards">A read-only list of rewards available in this campaign. Cannot be null or empty.</param>
     /// <param name="Platform">The platform on which the campaign is available.</param>
-    /// <param name="ConnectUrl">An optional URL for users to connect their accounts or learn more about the campaign. Can be null if not
-    /// applicable.</param>
+    /// <param name="ConnectUrls">A read-only list of URLs that users can use to connect their accounts for eligibility. Cannot be null.</param>
     public record DropsCampaign(
         string Id,
         string Name,
