@@ -31,12 +31,6 @@ namespace Core.Services
             JsonArray? campaigns = dash["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
             string? channelLogin = dash["data"]?["currentUser"]?["id"]?.GetValue<string>();
 
-            string rawDashJsonText = dash.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-            // Save it on desktop for debugging
-            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            string filePath = System.IO.Path.Combine(desktopPath, $"twitch_drops_dashboard_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.json");
-            await System.IO.File.WriteAllTextAsync(filePath, rawDashJsonText, ct);
-
             if (campaigns == null || campaigns.Count == 0)
                 return [];
 
@@ -60,11 +54,6 @@ namespace Core.Services
                 if (!detailedCampaigns.TryGetValue(dropID, out JsonObject? data)) continue;
                 result.Add(ParseCampaignFromDetails(data));
             }
-
-            // Save detailed campaigns on desktop for debugging
-            string detailedFilePath = System.IO.Path.Combine(desktopPath, $"twitch_drops_detailed_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.json");
-            string detailedRawJsonText = JsonSerializer.Serialize(detailedCampaigns, new JsonSerializerOptions { WriteIndented = true });
-            await System.IO.File.WriteAllTextAsync(detailedFilePath, detailedRawJsonText, ct);
 
             return result.AsReadOnly();
         }

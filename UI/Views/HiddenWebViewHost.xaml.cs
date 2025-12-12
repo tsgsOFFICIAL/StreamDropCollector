@@ -422,7 +422,6 @@ namespace UI.Views
             TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
 
             HashSet<string> gqlRequestIds = new HashSet<string>();
-            int checkedCount = 0;
 
             // 1. Collect all GQL POST requestIds
             CoreWebView2DevToolsProtocolEventReceiver requestWillBeSent = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.requestWillBeSent");
@@ -456,8 +455,6 @@ namespace UI.Views
                     string? requestId = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement.GetProperty("requestId").GetString();
                     if (requestId == null || !gqlRequestIds.Contains(requestId))
                         return;
-
-                    checkedCount++;
 
                     string result = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.getRequestPostData", JsonSerializer.Serialize(new { requestId }));
 

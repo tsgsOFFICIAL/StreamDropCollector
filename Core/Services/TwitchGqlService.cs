@@ -1,10 +1,10 @@
-﻿using Core.Interfaces;
-using System.Diagnostics;
-using System.Net;
-using System.Net.Http;
+﻿using System.Text.Json.Nodes;
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Net.Http;
+using Core.Interfaces;
+using System.Net;
 
 namespace Core.Services
 {
@@ -83,9 +83,13 @@ namespace Core.Services
         /// <returns>A task that represents the asynchronous operation. The task result contains the SHA-256 hash of the
         /// persisted query associated with the specified operation name.</returns>
         /// <exception cref="InvalidOperationException">Thrown if a persisted query hash cannot be found for the specified operation name.</exception>
-        private async Task<string> GetPersistedQueryHashAsync(string operationName, CancellationToken ct = default)
+        private async Task<string> GetPersistedQueryHashAsync(string operationName, CancellationToken ct = default, string? urlOverride = null)
         {
-            await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
+            if (!string.IsNullOrEmpty(urlOverride))
+                await _host.NavigateAsync($"{urlOverride}?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
+            else
+                await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
+
             string payload = await _host.CaptureGqlRequestBodyContainingAsync(operationName, 8000, ct);
 
             using JsonDocument document = JsonDocument.Parse(payload);
@@ -128,6 +132,7 @@ namespace Core.Services
                 await RefreshHeadersAsync(ct);
 
             string hash = await GetPersistedQueryHashAsync(operationName, ct);
+            string inventoryHash = await GetPersistedQueryHashAsync("Inventory", ct, "https://www.twitch.tv/drops/inventory");
 
             JsonObject payload = new JsonObject
             {
@@ -171,10 +176,19 @@ namespace Core.Services
             JsonNode? node = JsonNode.Parse(jsonText);
             return node!.AsObject();
         }
-        
-        public async Task<Dictionary<string, JsonObject>> QueryDropCampaignDetailsBatchAsync(
-            IReadOnlyList<(string dropID, string channelLogin)> requests,
-            CancellationToken ct = default)
+        /// <summary>
+        /// Retrieves detailed information for multiple Twitch drop campaigns in a single batch operation.
+        /// </summary>
+        /// <remarks>The method processes requests in batches to optimize network usage. If authentication
+        /// headers are invalid or expired, they are refreshed automatically. The returned dictionary may contain fewer
+        /// entries than requested if some campaigns are not found or accessible.</remarks>
+        /// <param name="requests">A read-only list of tuples, each containing a drop campaign ID and the associated channel login for which to
+        /// retrieve details.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains a dictionary mapping each drop
+        /// campaign ID to its corresponding details as a JsonObject. If a campaign is not found, it will not be
+        /// included in the dictionary.</returns>
+        public async Task<Dictionary<string, JsonObject>> QueryDropCampaignDetailsBatchAsync(IReadOnlyList<(string dropID, string channelLogin)> requests, CancellationToken ct = default)
         {
             if (_clientId == null || _integrityToken == null)
                 await RefreshHeadersAsync(ct);
@@ -206,7 +220,7 @@ namespace Core.Services
                             ["persistedQuery"] = new JsonObject
                             {
                                 ["version"] = 1,
-                                ["sha256Hash"] = liveHash 
+                                ["sha256Hash"] = liveHash
                             }
                         }
                     });
