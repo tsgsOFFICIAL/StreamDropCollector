@@ -5,15 +5,21 @@ namespace Core.Interfaces
     public interface IGqlService : IDisposable
     {
         /// <summary>
-        /// Executes an asynchronous query operation with the specified operation name and variables.
+        /// Executes an asynchronous query using the specified payload and returns the result as a JSON object.
         /// </summary>
-        /// <param name="operationName">The name of the operation to execute. This value identifies the query to be performed and cannot be null or
-        /// empty.</param>
-        /// <param name="variables">An object containing the variables to be passed to the operation, or null if no variables are required.</param>
+        /// <param name="payload">The payload to be sent with the query. This object contains the data or parameters required for the query
+        /// operation. Cannot be null.</param>
         /// <param name="ct">A cancellation token that can be used to cancel the query operation.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains a JsonObject with the query
-        /// result data.</returns>
-        Task<JsonObject> QueryAsync(string operationName, object? variables = null, CancellationToken ct = default);
+        /// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="JsonObject"/>
+        /// representing the query response.</returns>
+        Task<JsonNode> QueryAsync(object payload, CancellationToken ct = default);
+        /// <summary>
+        /// Asynchronously retrieves the complete data set for the drops dashboard.
+        /// </summary>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains a JsonObject with the full
+        /// dashboard data.</returns>
+        Task<JsonObject> QueryFullDropsDashboardAsync(CancellationToken ct = default);
         /// <summary>
         /// Asynchronously retrieves details for multiple drop campaigns in a single batch operation.
         /// </summary>

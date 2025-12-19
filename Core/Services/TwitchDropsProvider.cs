@@ -24,33 +24,18 @@ namespace Core.Services
         {
             await host.EnsureInitializedAsync();
 
-            // 1. Get dashboard
-            JsonObject dash = await gql.QueryAsync("ViewerDropsDashboard", new { fetchRewardCampaigns = true }, ct);
-            JsonArray? campaigns = dash["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
-            string? channelLogin = dash["data"]?["currentUser"]?["id"]?.GetValue<string>();
+            // ONE LINE — FULL DATA
+            JsonObject dashboard = await gql.QueryFullDropsDashboardAsync(ct);
+
+            JsonArray? campaigns = dashboard["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
 
             if (campaigns == null || campaigns.Count == 0)
                 return [];
 
-            // 2. Extract (dropID, channelLogin) pairs
-            List<(string dropID, string channelLogin)> requests = new List<(string dropID, string channelLogin)>();
+            List<DropsCampaign> result = new List<DropsCampaign>();
             foreach (JsonObject camp in campaigns.OfType<JsonObject>())
             {
-                string dropID = camp["id"]?.GetValue<string>() ?? "";
-
-                if (!string.IsNullOrEmpty(channelLogin))
-                    requests.Add((dropID, channelLogin));
-            }
-
-            // 3. Batch fetch full details
-            Dictionary<string, JsonObject> detailedCampaigns = await gql.QueryDropCampaignDetailsBatchAsync(requests, ct);
-
-            // 4. Parse (now with real minutes, progress, claim status)
-            List<DropsCampaign> result = new List<DropsCampaign>();
-            foreach ((string? dropID, string _) in requests)
-            {
-                if (!detailedCampaigns.TryGetValue(dropID, out JsonObject? data)) continue;
-                result.Add(ParseCampaignFromDetails(data));
+                result.Add(ParseCampaignFromDetails(camp));
             }
 
             return result.AsReadOnly();
@@ -75,7 +60,7 @@ namespace Core.Services
 
             JsonObject? game = detailedData["game"]?.AsObject();
             string gameName = game?["displayName"]?.GetValue<string>() ?? "Unknown Game";
-            string? gameImage = detailedData?["imageURL"]?.GetValue<string>();
+            string? gameImage = game?["boxArtURL"]?.GetValue<string>();
 
             DateTimeOffset startsAt = DateTimeOffset.Parse(detailedData?["startAt"]?.GetValue<string>() ?? DateTimeOffset.UtcNow.ToString("o"));
             DateTimeOffset endsAt = DateTimeOffset.Parse(detailedData?["endAt"]?.GetValue<string>() ?? startsAt.AddDays(7).ToString("o"));

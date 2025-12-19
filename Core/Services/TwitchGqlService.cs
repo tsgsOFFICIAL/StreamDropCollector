@@ -116,36 +116,145 @@ namespace Core.Services
             throw new InvalidOperationException($"Persisted query hash not found for operation: {operationName}");
         }
         /// <summary>
-        /// Executes a persisted GraphQL query asynchronously using the specified operation name and variables.
+        /// Sends an asynchronous GraphQL query or batch request to the Twitch API and returns the parsed JSON response.
         /// </summary>
-        /// <remarks>If the request fails due to expired or invalid headers, the method automatically
-        /// refreshes authentication headers and retries the request. The returned JsonObject contains the full response
-        /// from the server, including any data or errors.</remarks>
-        /// <param name="operationName">The name of the GraphQL operation to execute. Must correspond to a persisted query known to the server.</param>
-        /// <param name="variables">An object containing the variables to pass to the GraphQL operation, or null to use no variables.</param>
+        /// <remarks>If the response contains errors or an unsuccessful status code, the method will
+        /// automatically refresh authentication headers and retry the request once. The caller is responsible for
+        /// interpreting the returned JSON structure according to the expected GraphQL response format.</remarks>
+        /// <param name="payload">The query payload to send. This can be an operation name string, a tuple of operation name and variables, a
+        /// pre-built JsonObject for a single request, or a JsonArray for batched requests.</param>
         /// <param name="ct">A cancellation token that can be used to cancel the request.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains a JsonObject representing the
-        /// response from the GraphQL server.</returns>
-        public async Task<JsonObject> QueryAsync(string operationName, object? variables = null, CancellationToken ct = default)
+        /// <returns>A JsonNode containing the parsed response from the Twitch GraphQL API. Returns a JsonObject for single
+        /// requests or a JsonArray for batched requests.</returns>
+        /// <exception cref="ArgumentException">Thrown if the payload is not a supported type: string, (string, object) tuple, JsonObject, or JsonArray.</exception>
+        public async Task<JsonNode> QueryAsync(object payload, CancellationToken ct = default)
         {
             if (_clientId == null || _integrityToken == null)
                 await RefreshHeadersAsync(ct);
 
-            string hash = await GetPersistedQueryHashAsync(operationName, ct);
-            string inventoryHash = await GetPersistedQueryHashAsync("Inventory", ct, "https://www.twitch.tv/drops/inventory");
+            JsonNode payloadNode;
 
-            JsonObject payload = new JsonObject
+            if (payload is string operationName)
             {
-                ["operationName"] = operationName,
-                ["variables"] = JsonSerializer.SerializeToNode(variables ?? new { })
+                object variables = new { };
+
+                if (payload is ValueTuple<string, object> tuple)
+                {
+                    operationName = tuple.Item1;
+                    variables = tuple.Item2 ?? new { };
+                }
+
+                string hash = await GetPersistedQueryHashAsync(operationName, ct);
+
+                payloadNode = new JsonObject
+                {
+                    ["operationName"] = operationName,
+                    ["variables"] = JsonSerializer.SerializeToNode(variables),
+                    ["extensions"] = new JsonObject
+                    {
+                        ["persistedQuery"] = new JsonObject
+                        {
+                            ["version"] = 1,
+                            ["sha256Hash"] = hash
+                        }
+                    }
+                };
+            }
+            else if (payload is JsonArray arrayPayload)
+            {
+                string json = arrayPayload.ToJsonString();
+                payloadNode = JsonNode.Parse(json)!;
+            }
+            else if (payload is JsonObject singlePayload)
+            {
+                string json = singlePayload.ToJsonString();
+                payloadNode = JsonNode.Parse(json)!;
+            }
+            else
+            {
+                throw new ArgumentException("Payload must be operationName string, (string, object) tuple, JsonObject, or JsonArray");
+            }
+
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "https://gql.twitch.tv/gql")
+            {
+                Content = JsonContent.Create(payloadNode)
             };
 
-            payload["extensions"] = new JsonObject
+            request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+            request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+            request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+            if (!string.IsNullOrEmpty(_deviceId))
+                request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+            HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
+            string jsonText = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
             {
-                ["persistedQuery"] = new JsonObject
+                await RefreshHeadersAsync(ct);
+
+                request.Headers.Remove("Client-Integrity");
+                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+                response = await _httpClient.SendAsync(request, ct);
+                jsonText = await response.Content.ReadAsStringAsync(ct);
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            JsonNode? result = JsonNode.Parse(jsonText);
+
+            if (payloadNode is JsonArray)
+                return result!.AsArray();
+
+            return result!.AsObject();
+        }
+        /// <summary>
+        /// Queries the Twitch Drops dashboard and returns the full dashboard data as a JSON object.
+        /// </summary>
+        /// <remarks>This method performs multiple GraphQL queries to retrieve both inventory and
+        /// dashboard information in a single request. The returned JSON object corresponds to the
+        /// 'ViewerDropsDashboard' response. If authentication headers are invalid or expired, the method automatically
+        /// refreshes them and retries the request.</remarks>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A JSON object containing the data from the Twitch Drops dashboard. The object includes information about the
+        /// user's drops campaigns and inventory.</returns>
+        public async Task<JsonObject> QueryFullDropsDashboardAsync(CancellationToken ct = default)
+        {
+            if (_clientId == null || _integrityToken == null)
+                await RefreshHeadersAsync(ct);
+
+            // Fetch hashes
+            string dashboardHash = await GetPersistedQueryHashAsync("ViewerDropsDashboard", ct);
+            string inventoryHash = await GetPersistedQueryHashAsync("Inventory", ct, "https://www.twitch.tv/drops/inventory");
+
+            JsonArray payload = new JsonArray
+            {
+                new JsonObject
                 {
-                    ["version"] = 1,
-                    ["sha256Hash"] = hash
+                    ["operationName"] = "Inventory",
+                    ["variables"] = new JsonObject { ["fetchRewardCampaigns"] = true },
+                    ["extensions"] = new JsonObject
+                    {
+                        ["persistedQuery"] = new JsonObject
+                        {
+                            ["version"] = 1,
+                            ["sha256Hash"] = inventoryHash
+                        }
+                    }
+                },
+                new JsonObject
+                {
+                    ["operationName"] = "ViewerDropsDashboard",
+                    ["variables"] = new JsonObject { ["fetchRewardCampaigns"] = true },
+                    ["extensions"] = new JsonObject
+                    {
+                        ["persistedQuery"] = new JsonObject
+                        {
+                            ["version"] = 1,
+                            ["sha256Hash"] = dashboardHash
+                        }
+                    }
                 }
             };
 
@@ -157,6 +266,7 @@ namespace Core.Services
             request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
             request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
             request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
             if (!string.IsNullOrEmpty(_deviceId))
                 request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
 
@@ -166,6 +276,7 @@ namespace Core.Services
             if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
             {
                 await RefreshHeadersAsync(ct);
+
                 request.Headers.Remove("Client-Integrity");
                 request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
                 response = await _httpClient.SendAsync(request, ct);
@@ -173,8 +284,9 @@ namespace Core.Services
             }
 
             response.EnsureSuccessStatusCode();
-            JsonNode? node = JsonNode.Parse(jsonText);
-            return node!.AsObject();
+
+            JsonArray responseArray = JsonNode.Parse(jsonText)!.AsArray();
+            return responseArray[1]!.AsObject();
         }
         /// <summary>
         /// Retrieves detailed information for multiple Twitch drop campaigns in a single batch operation.

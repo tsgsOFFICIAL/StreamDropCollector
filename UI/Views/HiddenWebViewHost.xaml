@@ -6,8 +6,8 @@
         xmlns:local="clr-namespace:UI.Views"
         mc:Ignorable="d"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Title="HiddenWebViewHost" Width="1000" Height="700">
+        Title="HiddenWebViewHost" Width="0" Height="0" ShowInTaskbar="False" WindowStyle="None" AllowsTransparency="True" Visibility="Hidden">
     <Grid>
-        <wv2:WebView2 x:Name="WebViewElement"/>
+        <wv2:WebView2 x:Name="WebViewElement" Visibility="Hidden"/>
     </Grid>
 </Window>

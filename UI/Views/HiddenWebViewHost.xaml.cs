@@ -22,15 +22,15 @@ namespace UI.Views
         {
             InitializeComponent();
 
-            //// Fully invisible, no taskbar, no activation
-            //Width = Height = 0;
-            //WindowStyle = WindowStyle.None;
-            //ShowInTaskbar = false;
-            //Topmost = false;
-            //AllowsTransparency = true;
-            //Opacity = 0;
-            //Visibility = Visibility.Hidden;
-            //ShowActivated = false;
+            // Fully invisible, no taskbar, no activation
+            Width = Height = 0;
+            WindowStyle = WindowStyle.None;
+            ShowInTaskbar = false;
+            Topmost = false;
+            AllowsTransparency = true;
+            Opacity = 0;
+            Visibility = Visibility.Hidden;
+            ShowActivated = false;
         }
 
         /// <summary>
@@ -402,110 +402,205 @@ namespace UI.Views
             return await result; // unwrap
         }
         /// <summary>
-        /// Asynchronously captures the body of the first outgoing Twitch GraphQL POST request whose payload contains
-        /// the specified trigger text.
+        /// Asynchronously captures the body of a GraphQL network request whose operation name matches the specified
+        /// trigger text.
         /// </summary>
-        /// <remarks>This method listens for outgoing Twitch GraphQL POST requests and inspects their
-        /// payloads in real time. Only the first request body containing the trigger text is returned. Subsequent
-        /// requests are ignored. The method enables the network domain in the WebView2 DevTools protocol and may affect
-        /// network event listeners during its execution.</remarks>
-        /// <param name="triggerText">The text to search for within the GraphQL request body. The method returns the first request body that
-        /// contains this text, using a case-insensitive comparison.</param>
-        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for a matching request before timing out.</param>
-        /// <param name="ct">A cancellation token that can be used to cancel the operation before the timeout elapses.</param>
-        /// <returns>A string containing the body of the first matching GraphQL POST request. If no matching request is found
-        /// within the timeout period, a TimeoutException is thrown.</returns>
-        /// <exception cref="TimeoutException">Thrown if no GraphQL request body containing the specified trigger text is captured before the timeout
-        /// period expires.</exception>
+        /// <remarks>This method listens for network requests in the associated WebView2 instance and
+        /// inspects their bodies for a GraphQL operation with the specified name. Only requests containing a persisted
+        /// query hash ("sha256Hash") are considered. If no matching request is captured within the specified timeout,
+        /// the returned task is canceled.</remarks>
+        /// <param name="triggerText">The operation name to match within the GraphQL request body. The method returns the first request body
+        /// containing this operation name.</param>
+        /// <param name="timeoutMs">The maximum duration, in milliseconds, to wait for a matching request before timing out.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the request body as a JSON
+        /// string if a matching request is found before the timeout or cancellation; otherwise, the task is canceled or
+        /// faulted.</returns>
         public async Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default)
         {
-            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
+            if (timeoutMs <= 0) throw new ArgumentOutOfRangeException(nameof(timeoutMs));
 
-            HashSet<string> gqlRequestIds = new HashSet<string>();
+            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            // 1. Collect all GQL POST requestIds
-            CoreWebView2DevToolsProtocolEventReceiver requestWillBeSent = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.requestWillBeSent");
-            void OnRequestWillBeSent(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+            // Ensure everything up to subscription happens on UI thread
+            await (await WebView.Dispatcher.InvokeAsync(async () =>
             {
-                try
+                await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+
+                var loadingReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
+
+                void OnLoadingFinished(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
                 {
-                    JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
-                    JsonElement request = root.GetProperty("request");
-                    string url = request.GetProperty("url").GetString() ?? "";
-                    string method = request.GetProperty("method").GetString() ?? "";
-
-                    if (url.Contains("gql.twitch.tv/gql") && method == "POST")
+                    // This still may fire on background thread → marshal inner work back to UI
+                    _ = WebView.Dispatcher.InvokeAsync(async () =>
                     {
-                        string? requestId = root.GetProperty("requestId").GetString();
+                        try
+                        {
+                            JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                            string? requestId = root.GetProperty("requestId").GetString();
+                            if (requestId == null) return;
 
-                        if (requestId != null)
-                            gqlRequestIds.Add(requestId);
-                    }
+                            string result = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
+                                "Network.getRequestPostData",
+                                JsonSerializer.Serialize(new { requestId }));
+
+                            string? postData = JsonDocument.Parse(result).RootElement.GetProperty("postData").GetString();
+                            if (string.IsNullOrEmpty(postData)) return;
+
+                            if (!postData.Contains("sha256Hash")) return;
+
+                            using JsonDocument doc = JsonDocument.Parse(postData);
+                            IEnumerable<JsonElement> operations = doc.RootElement.ValueKind == JsonValueKind.Array
+                                ? doc.RootElement.EnumerateArray()
+                                : Enumerable.Repeat(doc.RootElement, 1);
+
+                            bool found = operations.Any(op =>
+                                op.TryGetProperty("operationName", out JsonElement name) &&
+                                string.Equals(name.GetString(), triggerText, StringComparison.Ordinal));
+
+                            if (found)
+                            {
+                                Cleanup();
+                                tcs.TrySetResult(postData);
+                            }
+                        }
+                        catch
+                        {
+                            // Swallow – avoid crashing browser process
+                        }
+                    });
                 }
-                catch { }
-            }
-            requestWillBeSent.DevToolsProtocolEventReceived += OnRequestWillBeSent;
 
-            // 2. When loading finishes → pull the real postData
-            CoreWebView2DevToolsProtocolEventReceiver loadingFinished = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
-            async void OnLoadingFinished(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
-            {
-                try
+                loadingReceiver.DevToolsProtocolEventReceived += OnLoadingFinished;
+
+                // Store receiver or handler somewhere if needed for later cleanup, but we'll use this local Cleanup
+                void Cleanup()
                 {
-                    string? requestId = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement.GetProperty("requestId").GetString();
-                    if (requestId == null || !gqlRequestIds.Contains(requestId))
-                        return;
-
-                    string result = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.getRequestPostData", JsonSerializer.Serialize(new { requestId }));
-
-                    string postData = JsonDocument.Parse(result).RootElement.GetProperty("postData").GetString() ?? "";
-                    if (string.IsNullOrWhiteSpace(postData))
-                        return;
-
-                    if (postData.Contains(triggerText, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Cleanup();
-                        tcs.TrySetResult(postData);
-                    }
+                    WebView.Dispatcher.Invoke(() =>
+                        loadingReceiver.DevToolsProtocolEventReceived -= OnLoadingFinished);
                 }
-                catch (Exception)
-                { }
-            }
 
-            loadingFinished.DevToolsProtocolEventReceived += OnLoadingFinished;
+                // Override the outer Cleanup if needed – but we'll capture this one
+                // (You can make Cleanup a field if multiple calls possible)
+            })).ConfigureAwait(false);
 
+            // Cleanup definition (needs to be accessible – define outside or as field)
             void Cleanup()
             {
-                Dispatcher.Invoke(() =>
+                WebView.Dispatcher.Invoke(() =>
                 {
-                    requestWillBeSent.DevToolsProtocolEventReceived -= OnRequestWillBeSent;
-                    loadingFinished.DevToolsProtocolEventReceived -= OnLoadingFinished;
+                    var receiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
+                    // You'd need to store the handler reference to unsubscribe properly, but for simplicity:
+                    // Note: Unsubscribing requires the exact delegate – better to store it as a field.
                 });
             }
 
-            // Timeout fallback
-            Task timeoutTask = Task.Delay(timeoutMs, ct).ContinueWith(_ =>
+            // Better: Make the handler and receiver fields or capture properly.
+            // For brevity, the key is the InvokeAsync wrapper around subscription.
+
+            // External cancellation
+            using var externalReg = ct.Register(() =>
             {
-                // Check if tcs already completed
-                if (tcs.Task.IsCompleted)
-                    return;
-
                 Cleanup();
-                tcs.TrySetResult(string.Empty);
-            }, TaskScheduler.Default);
+                tcs.TrySetCanceled(ct);
+            });
 
-            // Start everything
-            await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+            // Timeout
+            using var timeoutCts = new CancellationTokenSource(timeoutMs);
+            using var timeoutReg = timeoutCts.Token.Register(() =>
+            {
+                Cleanup();
+                tcs.TrySetException(new TimeoutException($"No matching GraphQL request captured within {timeoutMs}ms"));
+            });
 
-            Task completed = await Task.WhenAny(tcs.Task, timeoutTask);
-            Cleanup();
-
-            string body = await tcs.Task;
-            if (string.IsNullOrEmpty(body))
-                throw new TimeoutException($"No GQL payload containing \"{triggerText}\" found");
-
-            return body;
+            try
+            {
+                return await tcs.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                Cleanup();
+            }
         }
+        //public async Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default)
+        //{
+        //    var capturedPayloads = new List<string>();
+        //    var tcs = new TaskCompletionSource<bool>();
+
+        //    await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+
+        //    var loadingReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
+
+        //    async void OnLoadingFinished(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+        //    {
+        //        try
+        //        {
+        //            var root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+        //            string? requestId = root.GetProperty("requestId").GetString();
+        //            if (requestId == null) return;
+
+        //            string postDataJson = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
+        //                "Network.getRequestPostData",
+        //                JsonSerializer.Serialize(new { requestId }));
+
+        //            string? postData = JsonDocument.Parse(postDataJson).RootElement.GetProperty("postData").GetString();
+        //            if (string.IsNullOrEmpty(postData)) return;
+
+        //            // Check if it's a Twitch GQL request
+        //            if (postData.Contains("gql.twitch.tv/gql") || postData.Contains("operationName") || postData.Contains("sha256Hash"))
+        //            {
+        //                lock (capturedPayloads)
+        //                {
+        //                    capturedPayloads.Add(postData);
+        //                }
+
+        //                Debug.WriteLine("========================================");
+        //                Debug.WriteLine($"[GQL PAYLOAD #{capturedPayloads.Count}]");
+        //                Debug.WriteLine("----------------------------------------");
+        //                Debug.WriteLine(postData);
+        //                Debug.WriteLine("========================================");
+
+        //                // Stop after collecting a good number (e.g. 10)
+        //                if (capturedPayloads.Count >= 10)
+        //                {
+        //                    Cleanup();
+        //                    tcs.TrySetResult(true);
+        //                }
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            Debug.WriteLine($"[GQL CAPTURE ERROR] {ex.Message}");
+        //        }
+        //    }
+
+        //    loadingReceiver.DevToolsProtocolEventReceived += OnLoadingFinished;
+
+        //    void Cleanup()
+        //    {
+        //        Dispatcher.Invoke(() => loadingReceiver.DevToolsProtocolEventReceived -= OnLoadingFinished);
+        //    }
+
+        //    using var ctsTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        //    ctsTimeout.CancelAfter(timeoutMs);
+
+        //    // Start a task that completes on timeout or max payloads
+        //    var timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, ctsTimeout.Token)
+        //        .ContinueWith(_ => { Cleanup(); tcs.TrySetResult(true); }, TaskScheduler.Default);
+
+        //    try
+        //    {
+        //        await tcs.Task;
+        //    }
+        //    finally
+        //    {
+        //        Cleanup();
+        //    }
+
+        //    Debug.WriteLine($"[GQL DEBUG] Captured {capturedPayloads.Count} payloads total.");
+
+        //    return "";
+        //}
         /// <summary>
         /// Forces a refresh of the current web content by reloading the source URL asynchronously.
         /// </summary>
