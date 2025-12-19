@@ -20,8 +20,6 @@ namespace Core.Services
         /// </summary>
         public override Platform Platform => Platform.Twitch;
 
-        private readonly IGqlService _gql = gql;
-
         public override async Task<IReadOnlyList<DropsCampaign>> GetActiveCampaignsAsync(IWebViewHost host, CancellationToken ct = default)
         {
             await host.EnsureInitializedAsync();

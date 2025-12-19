@@ -506,7 +506,6 @@ namespace UI.Views
 
             return body;
         }
-        
         /// <summary>
         /// Forces a refresh of the current web content by reloading the source URL asynchronously.
         /// </summary>
