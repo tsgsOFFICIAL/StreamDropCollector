@@ -24,16 +24,71 @@ namespace Core.Services
         {
             await host.EnsureInitializedAsync();
 
-            // ONE LINE — FULL DATA
             JsonObject dashboard = await gql.QueryFullDropsDashboardAsync(ct);
 
             JsonArray? campaigns = dashboard["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
 
+            string userId = dashboard["data"]?["currentUser"]?["id"]?.GetValue<string>() ?? "";
+
+            campaigns?.RemoveAll(campaign =>
+            {
+                if (campaign is not JsonObject campaignObj)
+                    return true; // Remove
+
+                // Remove if status != "ACTIVE"
+                if (!campaignObj.TryGetPropertyValue("status", out JsonNode? statusNode) ||
+                    statusNode?.GetValue<string>() != "ACTIVE")
+                    return true;
+
+                // Remove if not connected
+                if (!campaignObj.TryGetPropertyValue("self", out JsonNode? selfNode) ||
+                    selfNode is not JsonObject selfObj ||
+                    !selfObj.TryGetPropertyValue("isAccountConnected", out JsonNode? connectedNode) ||
+                    connectedNode?.GetValue<bool>() != true)
+                    return true; // Remove
+
+                return false; // Keep
+            });
+
             if (campaigns == null || campaigns.Count == 0)
                 return [];
 
+            List<(string dropID, string channelLogin)> requests = new List<(string dropID, string channelLogin)>();
+
+            foreach (JsonNode? campaign in campaigns)
+            {
+                if (campaign is not JsonObject campObj)
+                    continue;
+
+                string? dropId = campObj.TryGetPropertyValue("id", out JsonNode? idNode) ? idNode?.GetValue<string>() : null;
+                if (string.IsNullOrEmpty(dropId))
+                    continue;
+
+                requests.Add((dropId, userId)); // Use your fetched channelLogin
+            }
+
+            if (requests.Count == 0)
+            {
+                Debug.WriteLine("[Drops] No valid dropIDs to query.");
+                return [];
+            }
+
+            // Fetch the full details in batches
+            Dictionary<string, JsonObject> campaignDetails = await gql.QueryDropCampaignDetailsBatchAsync(requests, ct);
+
+            Debug.WriteLine($"[Drops] Successfully fetched detailed data for {campaignDetails.Count} campaigns.");
+            foreach (KeyValuePair<string, JsonObject> kvp in campaignDetails)
+            {
+                string dropId = kvp.Key;
+                JsonObject details = kvp.Value;
+
+                // Example parsing of useful data
+                Debug.WriteLine($"Campaign {dropId}:");
+                // Add your specific extraction here (rewards, progress, etc.)
+            }
+
             List<DropsCampaign> result = new List<DropsCampaign>();
-            foreach (JsonObject camp in campaigns.OfType<JsonObject>())
+            foreach (JsonObject camp in campaignDetails.Values)
             {
                 result.Add(ParseCampaignFromDetails(camp));
             }
@@ -60,7 +115,7 @@ namespace Core.Services
 
             JsonObject? game = detailedData["game"]?.AsObject();
             string gameName = game?["displayName"]?.GetValue<string>() ?? "Unknown Game";
-            string? gameImage = game?["boxArtURL"]?.GetValue<string>();
+            string? gameImage = detailedData?["imageURL"]?.GetValue<string>();
 
             DateTimeOffset startsAt = DateTimeOffset.Parse(detailedData?["startAt"]?.GetValue<string>() ?? DateTimeOffset.UtcNow.ToString("o"));
             DateTimeOffset endsAt = DateTimeOffset.Parse(detailedData?["endAt"]?.GetValue<string>() ?? startsAt.AddDays(7).ToString("o"));
