@@ -22,15 +22,22 @@ namespace UI.Views
         {
             InitializeComponent();
 
-            //Fully invisible, no taskbar, no activation
-            Width = Height = 0;
+            // Position way off-screen (negative coordinates = invisible to user)
+            Left = -2000;
+            Top = -2000;
+
+            Width = 800;   // Reasonable size – player needs dimensions
+            Height = 600;
+
             WindowStyle = WindowStyle.None;
             ShowInTaskbar = false;
-            Topmost = false;
-            AllowsTransparency = true;
-            Opacity = 0;
-            Visibility = Visibility.Hidden;
             ShowActivated = false;
+
+            // Critical: must be Visible, not Hidden
+            Visibility = Visibility.Visible;
+
+            // Optional: keep it behind everything
+            Topmost = false;
         }
 
         /// <summary>

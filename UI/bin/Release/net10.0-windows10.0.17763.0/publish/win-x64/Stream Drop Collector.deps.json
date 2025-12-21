@@ -11,10 +11,10 @@
         "dependencies": {
           "Core": "1.0.0",
           "Hardcodet.NotifyIcon.Wpf": "2.0.1",
-          "Microsoft.Web.WebView2": "1.0.3595.46",
-          "Microsoft.Web.WebView2.Core": "1.0.3595.46",
-          "Microsoft.Web.WebView2.WinForms": "1.0.3595.46",
-          "Microsoft.Web.WebView2.Wpf": "1.0.3595.46",
+          "Microsoft.Web.WebView2": "1.0.3650.58",
+          "Microsoft.Web.WebView2.Core": "1.0.3650.58",
+          "Microsoft.Web.WebView2.WinForms": "1.0.3650.58",
+          "Microsoft.Web.WebView2.Wpf": "1.0.3650.58",
           "runtimepack.Microsoft.NETCore.App.Runtime.win-x64": "10.0.1",
           "runtimepack.Microsoft.WindowsDesktop.App.Runtime.win-x64": "10.0.1",
           "runtimepack.Microsoft.Windows.SDK.NET.Ref": "10.0.17763.57"
@@ -1031,17 +1031,17 @@
           }
         }
       },
-      "Microsoft.Web.WebView2/1.0.3595.46": {
+      "Microsoft.Web.WebView2/1.0.3650.58": {
         "native": {
           "runtimes/win-x64/native/WebView2Loader.dll": {
-            "fileVersion": "1.0.3595.46"
+            "fileVersion": "1.0.3650.58"
           }
         }
       },
       "Core/1.0.0": {
         "dependencies": {
           "Microsoft.Toolkit.Uwp.Notifications": "7.1.3",
-          "Microsoft.Web.WebView2": "1.0.3595.46"
+          "Microsoft.Web.WebView2": "1.0.3650.58"
         },
         "runtime": {
           "Core.dll": {
@@ -1050,27 +1050,27 @@
           }
         }
       },
-      "Microsoft.Web.WebView2.Core/1.0.3595.46": {
+      "Microsoft.Web.WebView2.Core/1.0.3650.58": {
         "runtime": {
           "Microsoft.Web.WebView2.Core.dll": {
-            "assemblyVersion": "1.0.3595.46",
-            "fileVersion": "1.0.3595.46"
+            "assemblyVersion": "1.0.3650.58",
+            "fileVersion": "1.0.3650.58"
           }
         }
       },
-      "Microsoft.Web.WebView2.WinForms/1.0.3595.46": {
+      "Microsoft.Web.WebView2.WinForms/1.0.3650.58": {
         "runtime": {
           "Microsoft.Web.WebView2.WinForms.dll": {
-            "assemblyVersion": "1.0.3595.46",
-            "fileVersion": "1.0.3595.46"
+            "assemblyVersion": "1.0.3650.58",
+            "fileVersion": "1.0.3650.58"
           }
         }
       },
-      "Microsoft.Web.WebView2.Wpf/1.0.3595.46": {
+      "Microsoft.Web.WebView2.Wpf/1.0.3650.58": {
         "runtime": {
           "Microsoft.Web.WebView2.Wpf.dll": {
-            "assemblyVersion": "1.0.3595.46",
-            "fileVersion": "1.0.3595.46"
+            "assemblyVersion": "1.0.3650.58",
+            "fileVersion": "1.0.3650.58"
           }
         }
       }
@@ -1111,29 +1111,29 @@
       "path": "microsoft.toolkit.uwp.notifications/7.1.3",
       "hashPath": "microsoft.toolkit.uwp.notifications.7.1.3.nupkg.sha512"
     },
-    "Microsoft.Web.WebView2/1.0.3595.46": {
+    "Microsoft.Web.WebView2/1.0.3650.58": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-j+yzqAKwC8Zn+3FL5XJxm6N0Rh5iDqTANBfFaYvnjyRpbpqt3qkpFcqMWLjqEBGiWEClh3zLCkJINwRUcr1KxQ==",
-      "path": "microsoft.web.webview2/1.0.3595.46",
-      "hashPath": "microsoft.web.webview2.1.0.3595.46.nupkg.sha512"
+      "sha512": "sha512-BrfpVqOuWtW8yA/it365aB6K6H6EYCXjqJkX730UiO7weVsSYjUyKPFVY5WGa+IfRHqknh619uXHMYTOR4WFRw==",
+      "path": "microsoft.web.webview2/1.0.3650.58",
+      "hashPath": "microsoft.web.webview2.1.0.3650.58.nupkg.sha512"
     },
     "Core/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.Web.WebView2.Core/1.0.3595.46": {
+    "Microsoft.Web.WebView2.Core/1.0.3650.58": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.Web.WebView2.WinForms/1.0.3595.46": {
+    "Microsoft.Web.WebView2.WinForms/1.0.3650.58": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.Web.WebView2.Wpf/1.0.3595.46": {
+    "Microsoft.Web.WebView2.Wpf/1.0.3650.58": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""

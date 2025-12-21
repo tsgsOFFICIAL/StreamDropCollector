@@ -1,9 +1,9 @@
-﻿using Core.Managers;
+﻿using System.Windows.Threading;
 using Microsoft.Win32;
-using System.IO;
-using System.IO.MemoryMappedFiles;
+using System.IO.Pipes;
 using System.Windows;
-using System.Windows.Threading;
+using Core.Managers;
+using System.IO;
 
 namespace UI
 {
@@ -15,6 +15,11 @@ namespace UI
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
         private const string RegistryValueName = "AppsUseLightTheme";
 
+        private const string MutexName = @"Global\StreamDropCollector_Instance";
+        internal const string PipeName = "StreamDropCollector_ActivationPipe";
+
+        private Mutex? _instanceMutex;
+
         public App()
         {
             // Handle UI thread exceptions
@@ -23,51 +28,24 @@ namespace UI
             // Handle background thread exceptions
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
         }
-        
+
         protected override void OnStartup(StartupEventArgs e)
         {
-            Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+            bool ignoreMutexRule = e.Args.Any(a => a.Equals("--updated", StringComparison.OrdinalIgnoreCase));
 
-            // Check if another instance of the app is already running
-            Mutex mutex = new Mutex(true, "StreamDropCollector by tsgsOFFICIAL", out bool createdNew);
-            string[] args = Environment.GetCommandLineArgs();
-            bool ignoreMutexRule = false; // This is true if the application is started as a replacement, for example when updating or when an error occurs.
+            _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
 
-            foreach (string arg in args)
-            {
-                // Application was ignoreMutexRule
-                if (arg.ToLower().Equals("--updated"))
-                {
-                    ignoreMutexRule = true;
-                    break;
-                }
-            }
-
-            // If another instance exists, trigger the event and exit
             if (!createdNew && !ignoreMutexRule)
             {
-                // Create a MemoryMappedFile to notify the other instance
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateOrOpen("StreamDropCollector_MMF", 1024))
-                using (MemoryMappedViewStream view = mmf.CreateViewStream())
-                {
-                    BinaryWriter writer = new BinaryWriter(view);
-                    EventWaitHandle signal = new EventWaitHandle(false, EventResetMode.AutoReset, "StreamDropCollector_Event");
-                    writer.Write("New instance started");
-                    signal.Set(); // Signal the other instance that it should come to the front
-                }
-
-                // Shutdown the second instance
-                Environment.Exit(-2);
-
-                // Ensure mutex is released only if it was created successfully
-                if (createdNew)
-                    mutex.ReleaseMutex();
-
+                // Notify existing instance
+                TryActivateExistingInstance();
+                Shutdown();
                 return;
             }
 
-            // Run the WPF application
             base.OnStartup(e);
+
+            Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
             // Load Colors first
             Resources.MergedDictionaries.Add(new ResourceDictionary
@@ -89,9 +67,26 @@ namespace UI
 
             // REACT TO WINDOWS THEME CHANGE IN REAL TIME
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        }
 
-            // Show window
-            new MainWindow().Show();
+        private static void TryActivateExistingInstance()
+        {
+            try
+            {
+                using NamedPipeClientStream client = new NamedPipeClientStream(
+                    ".",
+                    PipeName,
+                    PipeDirection.Out);
+
+                client.Connect(500);
+                using StreamWriter writer = new StreamWriter(client);
+                writer.WriteLine("ACTIVATE");
+                writer.Flush();
+            }
+            catch
+            {
+                // Existing instance not ready yet — safe to ignore
+            }
         }
 
         private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)

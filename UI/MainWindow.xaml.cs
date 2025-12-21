@@ -1,11 +1,13 @@
-﻿using UserControl = System.Windows.Controls.UserControl;
-using Button = System.Windows.Controls.Button;
-using System.Windows.Media.Animation;
+﻿using System.IO;
 using System.IO.MemoryMappedFiles;
-using System.Windows.Input;
+using System.IO.Pipes;
+using System.Reflection.Metadata;
 using System.Windows;
-using System.IO;
+using System.Windows.Input;
+using System.Windows.Media.Animation;
 using UI.Views;
+using Button = System.Windows.Controls.Button;
+using UserControl = System.Windows.Controls.UserControl;
 
 namespace UI
 {
@@ -35,8 +37,7 @@ namespace UI
         {
             InitializeComponent();
 
-            // Subscribe to th event of another instance trying to launch
-            Task.Run(() => OnAnotherInstanceStarted());
+            Loaded += (_, _) => StartActivationServer();
 
             // Initialize tray icon visibility
             IsTrayIconVisible = true;
@@ -158,43 +159,76 @@ namespace UI
                 Hide();
             }
         }
+        /// <summary>
+        /// Displays a notification with the specified title and message for a limited duration.
+        /// </summary>
+        /// <param name="title">The title text to display in the notification. Cannot be null or empty.</param>
+        /// <param name="message">The message content to display in the notification. Cannot be null or empty.</param>
+        /// <param name="timeoutSeconds">The duration, in seconds, for which the notification is visible. Must be greater than zero. The default is 1
+        /// second.</param>
         private static void ShowNotification(string title, string message, double timeoutSeconds = 1)
         {
             Core.Managers.NotificationManager.ShowNotification(title, message, timeoutSeconds);
         }
+        /// <summary>
+        /// Brings the window to the foreground, restoring it if minimized and ensuring it is visible and active.
+        /// </summary>
+        /// <remarks>This method restores the window from a minimized state if necessary, makes it
+        /// visible, and activates it. It also adjusts the window's Z-order to ensure it appears above other windows,
+        /// addressing platform-specific behavior on Windows.</remarks>
+        private void BringToFront()
+        {
+            // If hidden to tray
+            if (!IsVisible)
+            {
+                Show();
+                ShowInTaskbar = true;
+            }
+
+            if (WindowState == WindowState.Minimized)
+                WindowState = WindowState.Normal;
+
+            // This is essential
+            Activate();
+
+            // Windows focus-stealing workaround (safe & common)
+            Topmost = true;
+            Topmost = false;
+        }
+
         #region Event Handlers
         /// <summary>
-        /// Event handler for when another instance of the application is started
+        /// Starts an asynchronous server that listens for activation messages on a named pipe and brings the
+        /// application window to the foreground when an activation request is received.
         /// </summary>
-        private void OnAnotherInstanceStarted()
+        /// <remarks>This method runs the activation server in a background task and does not block the
+        /// calling thread. The server continuously waits for incoming connections and responds to activation messages.
+        /// This is typically used to allow external processes to activate the application window. The method should be
+        /// called once during application startup to enable activation functionality.</remarks>
+        private void StartActivationServer()
         {
-            using (MemoryMappedFile mmf = MemoryMappedFile.CreateOrOpen("StreamDropCollector_MMF", 1024))
-            using (MemoryMappedViewStream view = mmf.CreateViewStream())
+            Task.Run(async () =>
             {
-                BinaryReader reader = new BinaryReader(view);
-                EventWaitHandle signal = new EventWaitHandle(false, EventResetMode.AutoReset, "StreamDropCollector_Event");
-                Mutex mutex = new Mutex(false, "StreamDropCollector by tsgsOFFICIAL");
-
                 while (true)
                 {
-                    signal.WaitOne();
-                    mutex.WaitOne();
-                    reader.BaseStream.Position = 0;
-                    string message = reader.ReadString();
+                    using NamedPipeServerStream server = new NamedPipeServerStream(
+                        App.PipeName,
+                        PipeDirection.In,
+                        1,
+                        PipeTransmissionMode.Message,
+                        PipeOptions.Asynchronous);
 
-                    if (message == "New instance started")
+                    await server.WaitForConnectionAsync();
+
+                    using StreamReader reader = new StreamReader(server);
+                    string? message = await reader.ReadLineAsync();
+
+                    if (message == "ACTIVATE")
                     {
-                        Dispatcher.Invoke(() =>
-                        {
-                            Activate();
-                            Show();
-                            WindowState = WindowState.Normal;
-                        });
+                        Dispatcher.Invoke(BringToFront);
                     }
-
-                    mutex.ReleaseMutex();
                 }
-            }
+            });
         }
         /// <summary>
         /// Event handler for when the window header is clicked
@@ -282,9 +316,7 @@ namespace UI
         /// <param name="e">The event data associated with the double-click action.</param>
         private void OnTrayIconDoubleClick(object sender, RoutedEventArgs e)
         {
-            // Show the window and restore it to normal state
-            Show();
-            WindowState = WindowState.Normal;
+            BringToFront();
         }
         /// <summary>
         /// Handles changes to the window's state and updates the user interface and notification area accordingly.
@@ -312,12 +344,14 @@ namespace UI
                 string toolTipText = "Stream Drop Collector is minimized";
 
                 Hide();
+                ShowInTaskbar = false;
                 ShowNotification("Stream Drop Collector", toolTipText);
                 toggleMenuItem.Header = "Restore";
                 MyNotifyIcon.ToolTipText = toolTipText;
             }
             else
             {
+                ShowInTaskbar = true;
                 toggleMenuItem.Header = "Minimize";
                 MyNotifyIcon.ToolTipText = "Stream Drop Collector by tsgsOFFICIAL";
             }
