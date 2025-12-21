@@ -22,7 +22,7 @@ namespace UI.Views
         {
             InitializeComponent();
 
-            // Fully invisible, no taskbar, no activation
+            //Fully invisible, no taskbar, no activation
             Width = Height = 0;
             WindowStyle = WindowStyle.None;
             ShowInTaskbar = false;
@@ -418,20 +418,20 @@ namespace UI.Views
         /// faulted.</returns>
         public async Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default)
         {
-            if (timeoutMs <= 0) throw new ArgumentOutOfRangeException(nameof(timeoutMs));
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(timeoutMs);
 
-            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             // Ensure everything up to subscription happens on UI thread
             await (await WebView.Dispatcher.InvokeAsync(async () =>
             {
                 await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
 
-                var loadingReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
+                CoreWebView2DevToolsProtocolEventReceiver loadingReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
 
                 void OnLoadingFinished(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
                 {
-                    // This still may fire on background thread → marshal inner work back to UI
+                    // This still may fire on background thread -> marshal inner work back to UI
                     _ = WebView.Dispatcher.InvokeAsync(async () =>
                     {
                         try
@@ -476,38 +476,28 @@ namespace UI.Views
                 // Store receiver or handler somewhere if needed for later cleanup, but we'll use this local Cleanup
                 void Cleanup()
                 {
-                    WebView.Dispatcher.Invoke(() =>
-                        loadingReceiver.DevToolsProtocolEventReceived -= OnLoadingFinished);
+                    WebView.Dispatcher.Invoke(() => loadingReceiver.DevToolsProtocolEventReceived -= OnLoadingFinished);
                 }
-
-                // Override the outer Cleanup if needed – but we'll capture this one
-                // (You can make Cleanup a field if multiple calls possible)
             })).ConfigureAwait(false);
 
-            // Cleanup definition (needs to be accessible – define outside or as field)
             void Cleanup()
             {
                 WebView.Dispatcher.Invoke(() =>
                 {
-                    var receiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
-                    // You'd need to store the handler reference to unsubscribe properly, but for simplicity:
-                    // Note: Unsubscribing requires the exact delegate – better to store it as a field.
+                    CoreWebView2DevToolsProtocolEventReceiver receiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
                 });
             }
 
-            // Better: Make the handler and receiver fields or capture properly.
-            // For brevity, the key is the InvokeAsync wrapper around subscription.
-
             // External cancellation
-            using var externalReg = ct.Register(() =>
+            using CancellationTokenRegistration externalReg = ct.Register(() =>
             {
                 Cleanup();
                 tcs.TrySetCanceled(ct);
             });
 
             // Timeout
-            using var timeoutCts = new CancellationTokenSource(timeoutMs);
-            using var timeoutReg = timeoutCts.Token.Register(() =>
+            using CancellationTokenSource timeoutCts = new CancellationTokenSource(timeoutMs);
+            using CancellationTokenRegistration timeoutReg = timeoutCts.Token.Register(() =>
             {
                 Cleanup();
                 tcs.TrySetException(new TimeoutException($"No matching GraphQL request captured within {timeoutMs}ms"));
@@ -522,85 +512,61 @@ namespace UI.Views
                 Cleanup();
             }
         }
-        //public async Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default)
-        //{
-        //    var capturedPayloads = new List<string>();
-        //    var tcs = new TaskCompletionSource<bool>();
+        /// <summary>
+        /// Attempts to capture the body of a GraphQL request containing the specified trigger text, retrying the
+        /// operation if it times out or fails.
+        /// </summary>
+        /// <remarks>Each retry forces a fresh navigation to ensure a new request is made. If the
+        /// operation is canceled via the cancellation token, retries are not attempted. The delay between retries
+        /// increases with each attempt (exponential backoff).</remarks>
+        /// <param name="triggerText">The text to search for within the GraphQL request body. The method captures the first request body that
+        /// contains this text.</param>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for each attempt before timing out.</param>
+        /// <param name="maxRetries">The maximum number of times to retry the operation if it fails or times out. Must be greater than zero. The
+        /// default is 3.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A string containing the body of the first GraphQL request that includes the specified trigger text.</returns>
+        /// <exception cref="TimeoutException">Thrown if no matching GraphQL request body is captured within the allowed number of retries.</exception>
+        public async Task<string> CaptureGqlRequestBodyContainingAsyncWithRetry(string triggerText, int timeoutMs, int maxRetries = 3, string? preCaptureJs = null, CancellationToken ct = default)
+        {
+            Exception? lastException = null;
 
-        //    await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try
+                {
+                    // Fresh navigation each retry to force new request
+                    await ForceRefreshAsync();
 
-        //    var loadingReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
+                    // Run custom JS if provided
+                    if (!string.IsNullOrEmpty(preCaptureJs))
+                    {
+                        await ExecuteScriptAsync(preCaptureJs);
+                    }
 
-        //    async void OnLoadingFinished(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
-        //    {
-        //        try
-        //        {
-        //            var root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
-        //            string? requestId = root.GetProperty("requestId").GetString();
-        //            if (requestId == null) return;
+                    return await CaptureGqlRequestBodyContainingAsync(triggerText, timeoutMs, ct);
+                }
+                catch (TimeoutException ex)
+                {
+                    lastException = ex;
+                    Debug.WriteLine($"[GQL Capture] Attempt {attempt}/{maxRetries} timed out for '{triggerText}'");
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw; // User cancel — don't retry
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    Debug.WriteLine($"[GQL Capture] Attempt {attempt}/{maxRetries} failed: {ex.Message}");
+                }
 
-        //            string postDataJson = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
-        //                "Network.getRequestPostData",
-        //                JsonSerializer.Serialize(new { requestId }));
+                if (attempt < maxRetries)
+                    await Task.Delay(1000 * attempt, ct); // Exponential backoff: 1s, 2s, 3s
+            }
 
-        //            string? postData = JsonDocument.Parse(postDataJson).RootElement.GetProperty("postData").GetString();
-        //            if (string.IsNullOrEmpty(postData)) return;
-
-        //            // Check if it's a Twitch GQL request
-        //            if (postData.Contains("gql.twitch.tv/gql") || postData.Contains("operationName") || postData.Contains("sha256Hash"))
-        //            {
-        //                lock (capturedPayloads)
-        //                {
-        //                    capturedPayloads.Add(postData);
-        //                }
-
-        //                Debug.WriteLine("========================================");
-        //                Debug.WriteLine($"[GQL PAYLOAD #{capturedPayloads.Count}]");
-        //                Debug.WriteLine("----------------------------------------");
-        //                Debug.WriteLine(postData);
-        //                Debug.WriteLine("========================================");
-
-        //                // Stop after collecting a good number (e.g. 10)
-        //                if (capturedPayloads.Count >= 10)
-        //                {
-        //                    Cleanup();
-        //                    tcs.TrySetResult(true);
-        //                }
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            Debug.WriteLine($"[GQL CAPTURE ERROR] {ex.Message}");
-        //        }
-        //    }
-
-        //    loadingReceiver.DevToolsProtocolEventReceived += OnLoadingFinished;
-
-        //    void Cleanup()
-        //    {
-        //        Dispatcher.Invoke(() => loadingReceiver.DevToolsProtocolEventReceived -= OnLoadingFinished);
-        //    }
-
-        //    using var ctsTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        //    ctsTimeout.CancelAfter(timeoutMs);
-
-        //    // Start a task that completes on timeout or max payloads
-        //    var timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, ctsTimeout.Token)
-        //        .ContinueWith(_ => { Cleanup(); tcs.TrySetResult(true); }, TaskScheduler.Default);
-
-        //    try
-        //    {
-        //        await tcs.Task;
-        //    }
-        //    finally
-        //    {
-        //        Cleanup();
-        //    }
-
-        //    Debug.WriteLine($"[GQL DEBUG] Captured {capturedPayloads.Count} payloads total.");
-
-        //    return "";
-        //}
+            throw new TimeoutException($"Failed to capture GQL payload containing '{triggerText}' after {maxRetries} attempts", lastException);
+        }
         /// <summary>
         /// Forces a refresh of the current web content by reloading the source URL asynchronously.
         /// </summary>

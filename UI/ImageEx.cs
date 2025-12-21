@@ -29,7 +29,7 @@ namespace UI
             // ✔ Attempt normal fetch first
             byte[]? bytes = await TryHttpFetch(url);
 
-            // ❌ 403 or blocked → use WebView2
+            // ❌ 403 or blocked -> use WebView2
             if (bytes == null)
             {
                 HiddenWebViewHost webView = new HiddenWebViewHost();

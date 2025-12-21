@@ -105,6 +105,26 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
+        private byte _twitchCampaignProgress = 0;
+        public byte TwitchCampaignProgress
+        {
+            get => _twitchCampaignProgress;
+            set
+            {
+                _twitchCampaignProgress = value;
+                OnPropertyChanged();
+            }
+        }
+        private byte _kickCampaignProgress = 0;
+        public byte KickCampaignProgress
+        {
+            get => _kickCampaignProgress;
+            set
+            {
+                _kickCampaignProgress = value;
+                OnPropertyChanged();
+            }
+        }
 
         /// <summary>
         /// Occurs when a property value changes.
@@ -144,6 +164,23 @@ namespace UI.Views
             _dropsService = new DropsService();
 
             Loaded += async (s, e) => await OnLoadedAsync();
+
+            // Subscribe to progress updates ===
+            DropsInventoryManager.Instance.TwitchProgressChanged += progress =>
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    TwitchCampaignProgress = progress;
+                });
+            };
+
+            DropsInventoryManager.Instance.KickProgressChanged += progress =>
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    KickCampaignProgress = progress;
+                });
+            };
         }
 
         /// <summary>
@@ -272,6 +309,10 @@ namespace UI.Views
         {
             await _kickService.ValidateCredentialsAsync(_kickWebView);
         }
+        /// <summary>
+        /// Asynchronously validates the credentials for external services if they are not already connected.
+        /// </summary>
+        /// <returns>A task that represents the asynchronous validation operation.</returns>
         private async Task ValidateCredentialsAsync()
         {
             if (_twitchService.Status != ConnectionStatus.Connected)

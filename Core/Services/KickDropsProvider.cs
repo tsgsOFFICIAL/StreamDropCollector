@@ -83,11 +83,14 @@ namespace Core.Services
                     }
                 }
 
+                bool general = false;
+
                 // General drops = watch ANYONE in category
                 if (connectUrls.Count == 0)
                 {
                     string slug = category.GetProperty("slug").GetString()!;
-                    connectUrls.Add($"https://kick.com/category/{slug}");
+                    connectUrls.Add($"https://kick.com/category/{slug}/drops");
+                    general = true;
                 }
 
                 // Remove duplicates + sort by preference (optional)
@@ -102,7 +105,8 @@ namespace Core.Services
                     EndsAt: DateTimeOffset.Parse(campaign.GetProperty("ends_at").GetString()!),
                     Rewards: rewards,
                     Platform: Platform,
-                    ConnectUrls: connectUrls.AsReadOnly()
+                    ConnectUrls: connectUrls.AsReadOnly(),
+                    IsGeneralDrop: general
                 ));
             }
 

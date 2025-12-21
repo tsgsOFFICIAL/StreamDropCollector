@@ -233,7 +233,7 @@ namespace Core.Managers
                     return;
                 }
 
-                // StartWithWindows = true → we MUST have a registry entry
+                // StartWithWindows = true -> we MUST have a registry entry
                 if (MinimizeToTrayOnStartup)
                 {
                     // Launch minimized

@@ -68,7 +68,7 @@ namespace UI
             if (ReferenceEquals(_currentPage, newPage))
                 return;
 
-            // Animate out → in
+            // Animate out -> in
             if (_currentPage is not null)
             {
                 DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(120));

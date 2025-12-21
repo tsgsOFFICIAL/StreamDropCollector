@@ -88,6 +88,24 @@ namespace Core.Interfaces
         /// request as a string, or null if no matching request is captured within the timeout period.</returns>
         Task<string> CaptureGqlRequestBodyContainingAsync(string triggerText, int timeoutMs, CancellationToken ct = default);
         /// <summary>
+        /// Attempts to capture the body of a GraphQL request containing the specified trigger text, retrying the
+        /// operation if necessary until the request is found or the timeout is reached.
+        /// </summary>
+        /// <remarks>If the operation does not find a matching request within the specified timeout or
+        /// after the maximum number of retries, the method returns null. This method is typically used in testing or
+        /// diagnostic scenarios to capture specific GraphQL requests as they occur.</remarks>
+        /// <param name="triggerText">The text to search for within the GraphQL request body. The operation will succeed when a request containing
+        /// this text is detected.</param>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for a matching request before the operation times out. Must be
+        /// greater than zero. The default is 10,000 milliseconds.</param>
+        /// <param name="maxRetries">The maximum number of retry attempts to perform if a matching request is not immediately found. Must be zero
+        /// or greater. The default is 3.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the body of the first GraphQL
+        /// request that includes the specified trigger text, or null if no such request is found within the timeout
+        /// period.</returns>
+        Task<string> CaptureGqlRequestBodyContainingAsyncWithRetry(string triggerText, int timeoutMs, int maxRetries = 3, string? preCaptureJs = null, CancellationToken ct = default);
+        /// <summary>
         /// Initiates an asynchronous operation to force a refresh of the underlying data or cache.
         /// </summary>
         /// <returns>A task that represents the asynchronous refresh operation.</returns>

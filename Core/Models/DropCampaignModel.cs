@@ -41,5 +41,6 @@ namespace Core.Models
         DateTimeOffset EndsAt,
         IReadOnlyList<DropsReward> Rewards,
         Platform Platform,
-       IReadOnlyList<string> ConnectUrls);
+        IReadOnlyList<string> ConnectUrls,
+        bool IsGeneralDrop);
 }

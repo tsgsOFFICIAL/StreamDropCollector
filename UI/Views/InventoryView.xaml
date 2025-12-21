@@ -70,24 +70,32 @@
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <!-- Platform Badge - Kick = default (green), Twitch = purple -->
                                         <Border CornerRadius="6" Padding="10,4">
-                                            <Border.Background>
-                                                <SolidColorBrush Color="{DynamicResource KickGreen}"/>
-                                                <!-- #5FF41C -->
-                                            </Border.Background>
                                             <Border.Style>
                                                 <Style TargetType="Border">
+                                                    <!-- Default = Kick green -->
+                                                    <Setter Property="Background">
+                                                        <Setter.Value>
+                                                            <SolidColorBrush Color="{DynamicResource KickGreen}"/>
+                                                        </Setter.Value>
+                                                    </Setter>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Platform}" Value="Twitch">
-                                                            <Setter Property="Background" Value="{DynamicResource TwitchBrush}"/>
-                                                            <!-- #9146FF -->
+                                                            <Setter Property="Background">
+                                                                <Setter.Value>
+                                                                    <SolidColorBrush Color="{DynamicResource TwitchPurple}"/>
+                                                                </Setter.Value>
+                                                            </Setter>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
+
                                             <TextBlock Text="{Binding Platform}"
-                                                   FontWeight="Bold"
-                                                   Foreground="Black"
-                                                   FontSize="11"/>
+                                               FontWeight="UltraBold"
+                                               Foreground="Black"
+                                               FontSize="12"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
                                         </Border>
 
                                         <TextBlock Margin="15,0,0,0" Foreground="#FF6666">
@@ -159,7 +167,7 @@
                                                                 CornerRadius="6"
                                                                 Padding="8,4"
                                                                 Margin="10,0,0,0"
-                                                                Visibility="{Binding IsClaimed, Converter={StaticResource InverseBooleanConverter}}">
+                                                                Visibility="{Binding IsClaimed, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                             <TextBlock Text="CLAIMED"
                                                                        FontWeight="Bold"
                                                                        FontSize="10"

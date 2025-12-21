@@ -24,11 +24,14 @@ namespace Core.Services
         {
             await host.EnsureInitializedAsync();
 
-            JsonObject dashboard = await gql.QueryFullDropsDashboardAsync(ct);
+            JsonArray dashboard = await gql.QueryFullDropsDashboardAsync(ct);
 
-            JsonArray? campaigns = dashboard["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
+            JsonObject ongoingCampaigns = dashboard[0]!.AsObject();
+            JsonObject activeCampaigns = dashboard[1]!.AsObject();
 
-            string userId = dashboard["data"]?["currentUser"]?["id"]?.GetValue<string>() ?? "";
+            JsonArray? campaigns = activeCampaigns["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
+
+            string userId = activeCampaigns["data"]?["currentUser"]?["id"]?.GetValue<string>() ?? "";
 
             campaigns?.RemoveAll(campaign =>
             {
@@ -77,23 +80,75 @@ namespace Core.Services
             Dictionary<string, JsonObject> campaignDetails = await gql.QueryDropCampaignDetailsBatchAsync(requests, ct);
 
             Debug.WriteLine($"[Drops] Successfully fetched detailed data for {campaignDetails.Count} campaigns.");
-            foreach (KeyValuePair<string, JsonObject> kvp in campaignDetails)
-            {
-                string dropId = kvp.Key;
-                JsonObject details = kvp.Value;
-
-                // Example parsing of useful data
-                Debug.WriteLine($"Campaign {dropId}:");
-                // Add your specific extraction here (rewards, progress, etc.)
-            }
 
             List<DropsCampaign> result = new List<DropsCampaign>();
             foreach (JsonObject camp in campaignDetails.Values)
             {
-                result.Add(ParseCampaignFromDetails(camp));
+                DropsCampaign? dropCampaign = ParseCampaignFromDetails(camp);
+
+                if (dropCampaign != null)
+                    result.Add(dropCampaign);
             }
 
-            return result.AsReadOnly();
+            JsonArray dropCampaignsInProgress = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
+
+            // Create a new list with updated campaigns
+            List<DropsCampaign> updatedResult = new List<DropsCampaign>();
+
+            foreach (DropsCampaign dropCampaign in result)
+            {
+                // Find matching progress for this campaign
+                JsonObject? matchingProgress = dropCampaignsInProgress.OfType<JsonObject>().FirstOrDefault(c => c["id"]?.GetValue<string>() == dropCampaign.Id);
+
+                if (matchingProgress == null)
+                {
+                    updatedResult.Add(dropCampaign);
+                    continue;
+                }
+
+                JsonArray? timeBasedDropsProgress = matchingProgress["timeBasedDrops"]?.AsArray();
+                if (timeBasedDropsProgress == null)
+                {
+                    updatedResult.Add(dropCampaign);
+                    continue;
+                }
+
+                // Update rewards for THIS campaign only
+                List<DropsReward> updatedRewardsForThisCampaign = new List<DropsReward>();
+
+                foreach (DropsReward reward in dropCampaign.Rewards)
+                {
+                    JsonObject? matchingDropProgress = timeBasedDropsProgress.OfType<JsonObject>().FirstOrDefault(d => d["id"]?.GetValue<string>() == reward.Id);
+
+                    if (matchingDropProgress == null)
+                    {
+                        updatedRewardsForThisCampaign.Add(reward);
+                        continue;
+                    }
+
+                    int progressMinutes = matchingDropProgress["self"]?["currentMinutesWatched"]?.GetValue<int>() ?? reward.ProgressMinutes;
+                    bool isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? reward.IsClaimed;
+
+                    DropsReward updatedReward = reward with
+                    {
+                        ProgressMinutes = progressMinutes,
+                        IsClaimed = isClaimed
+                    };
+
+                    updatedRewardsForThisCampaign.Add(updatedReward);
+                }
+
+                // Create new campaign with updated rewards
+                DropsCampaign updatedCampaign = dropCampaign with
+                {
+                    Rewards = updatedRewardsForThisCampaign.AsReadOnly()
+                };
+
+                updatedResult.Add(updatedCampaign);
+            }
+
+            // Return the new list
+            return updatedResult.AsReadOnly();
         }
 
         /// <summary>
@@ -108,7 +163,7 @@ namespace Core.Services
         /// campaign details.</param>
         /// <returns>A DropsCampaign object populated with data parsed from the provided JSON object. The returned object
         /// contains campaign metadata, associated rewards, and relevant channel URLs.</returns>
-        private static DropsCampaign ParseCampaignFromDetails(JsonObject detailedData)
+        private static DropsCampaign? ParseCampaignFromDetails(JsonObject detailedData)
         {
             string id = detailedData["id"]?.GetValue<string>() ?? "";
             string name = detailedData["name"]?.GetValue<string>() ?? "Unknown Campaign";
@@ -125,6 +180,8 @@ namespace Core.Services
             JsonObject? allow = detailedData?["allow"]?.AsObject();
             JsonArray? channels = allow?["channels"]?.AsArray();
 
+            bool isGeneralDrop = false;
+
             if (channels != null)
             {
                 foreach (JsonObject channel in channels.OfType<JsonObject>())
@@ -135,6 +192,12 @@ namespace Core.Services
                     if (url != null)
                         connectUrls.Add(url);
                 }
+            }
+            else
+            {
+                string slug = game?["slug"]?.GetValue<string>() ?? "Unknown Game";
+                connectUrls.Add($"https://www.twitch.tv/directory/category/{slug}?filter=drops&sort=VIEWER_COUNT");
+                isGeneralDrop = true;
             }
 
             List<DropsReward> rewards = new List<DropsReward>();
@@ -171,20 +234,21 @@ namespace Core.Services
 
                         string rewardImage = benefit["imageAssetURL"]?.GetValue<string>() ?? "";
 
-                        rewards.Add(new DropsReward(
-                            Id: dropId,
-                            Name: rewardName,
-                            ImageUrl: rewardImage,
-                            RequiredMinutes: requiredMinutes,
-                            ProgressMinutes: currentMinutes,
-                            IsClaimed: isClaimed,
-                            DropInstanceId: benefitId
-                        ));
+                        if (requiredMinutes > 0)
+                            rewards.Add(new DropsReward(
+                                Id: dropId,
+                                Name: rewardName,
+                                ImageUrl: rewardImage,
+                                RequiredMinutes: requiredMinutes,
+                                ProgressMinutes: currentMinutes,
+                                IsClaimed: isClaimed,
+                                DropInstanceId: benefitId
+                            ));
                     }
                 }
             }
 
-            return new DropsCampaign(
+            DropsCampaign dropCampaign = new DropsCampaign(
                 Id: id,
                 Name: name,
                 GameName: gameName,
@@ -193,8 +257,15 @@ namespace Core.Services
                 EndsAt: endsAt,
                 Rewards: rewards.AsReadOnly(),
                 Platform: Platform.Twitch,
-                ConnectUrls: connectUrls
+                ConnectUrls: connectUrls,
+                IsGeneralDrop: isGeneralDrop
             );
+
+            // Return null if no rewards
+            if (dropCampaign.Rewards.Count == 0)
+                return null;
+
+            return dropCampaign;
         }
     }
 }

@@ -44,22 +44,65 @@ namespace Core.Services
         /// <exception cref="InvalidOperationException">Thrown if the Client-Integrity token cannot be captured from the HTTP headers.</exception>
         private async Task RefreshHeadersAsync(CancellationToken ct = default)
         {
-            await _host.NavigateAsync($"https://twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
+            const int maxAttempts = 10;
+            const int baseDelayMs = 5 * 1000; // Start with 5s delay on retry
 
-            Task<string> clientIdTask = _host.CaptureRequestHeaderAsync("Client-ID", "gql.twitch.tv", 8000, ct);
-            Task<string> integrityTask = _host.CaptureRequestHeaderAsync("Client-Integrity", "gql.twitch.tv", 8000, ct);
-            Task<string> deviceIdTask = _host.CaptureRequestHeaderAsync("X-Device-Id", "gql.twitch.tv", 8000, ct);
-            Task<string> authTokenTask = GetAuthTokenFromCookieAsync();
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    Debug.WriteLine($"[RefreshHeaders] Attempt {attempt}/{maxAttempts} – Navigating to drops/campaigns");
 
-            string[] results = await Task.WhenAll(clientIdTask, integrityTask, deviceIdTask, authTokenTask);
+                    // Fresh navigation every attempt (important for clean integrity token)
+                    await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
 
-            _clientId = results[0];
-            _integrityToken = results[1];
-            _deviceId = results[2];
-            _accessToken = results[3];
+                    // Give page time to load and fire GQL requests
+                    await Task.Delay(2000, ct);
 
-            if (string.IsNullOrEmpty(_integrityToken))
-                throw new InvalidOperationException("Failed to capture Client-Integrity token");
+                    // Parallel capture tasks
+                    Task<string> clientIdTask = _host.CaptureRequestHeaderAsync("Client-ID", "gql.twitch.tv", 10000, ct);
+                    Task<string> integrityTask = _host.CaptureRequestHeaderAsync("Client-Integrity", "gql.twitch.tv", 10000, ct);
+                    Task<string> deviceIdTask = _host.CaptureRequestHeaderAsync("X-Device-Id", "gql.twitch.tv", 10000, ct);
+                    Task<string> authTokenTask = GetAuthTokenFromCookieAsync();
+
+                    string[] results = await Task.WhenAll(clientIdTask, integrityTask, deviceIdTask, authTokenTask);
+
+                    string clientId = results[0];
+                    string integrityToken = results[1];
+                    string deviceId = results[2];
+                    string accessToken = results[3];
+
+                    // Basic validation
+                    if (string.IsNullOrEmpty(integrityToken))
+                    {
+                        throw new InvalidOperationException("Captured Client-Integrity token was null or empty");
+                    }
+
+                    if (string.IsNullOrEmpty(clientId))
+                    {
+                        throw new InvalidOperationException("Captured Client-ID was null or empty");
+                    }
+
+                    // Success! Assign and exit
+                    _clientId = clientId;
+                    _integrityToken = integrityToken;
+                    _deviceId = deviceId ?? _deviceId; // Device-ID is optional – keep old if missing
+                    _accessToken = accessToken;
+
+                    Debug.WriteLine($"[RefreshHeaders] Success on attempt {attempt} – Got fresh headers");
+                    return;
+                }
+                catch (Exception ex) when (attempt < maxAttempts)
+                {
+                    Debug.WriteLine($"[RefreshHeaders] Attempt {attempt} failed: {ex.Message}. Retrying in {baseDelayMs * attempt}ms...");
+
+                    // Exponential backoff: 5s -> 10s -> 15s
+                    await Task.Delay(baseDelayMs * attempt, ct);
+                }
+            }
+
+            // All attempts failed
+            throw new InvalidOperationException($"Failed to refresh headers after {maxAttempts} attempts. Last capture likely poisoned or page didn't trigger GQL requests.");
         }
         /// <summary>
         /// Retrieves the Twitch authentication token from the browser cookie asynchronously.
@@ -90,7 +133,7 @@ namespace Core.Services
             else
                 await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
 
-            string payload = await _host.CaptureGqlRequestBodyContainingAsync(operationName, 8000, ct);
+            string payload = await _host.CaptureGqlRequestBodyContainingAsyncWithRetry(operationName, 5000, 10, ct: ct);
 
             using JsonDocument document = JsonDocument.Parse(payload);
             JsonElement root = document.RootElement;
@@ -219,7 +262,7 @@ namespace Core.Services
         /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
         /// <returns>A JSON object containing the data from the Twitch Drops dashboard. The object includes information about the
         /// user's drops campaigns and inventory.</returns>
-        public async Task<JsonObject> QueryFullDropsDashboardAsync(CancellationToken ct = default)
+        public async Task<JsonArray> QueryFullDropsDashboardAsync(CancellationToken ct = default)
         {
             if (_clientId == null || _integrityToken == null)
                 await RefreshHeadersAsync(ct);
@@ -277,16 +320,29 @@ namespace Core.Services
             {
                 await RefreshHeadersAsync(ct);
 
-                request.Headers.Remove("Client-Integrity");
-                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
-                response = await _httpClient.SendAsync(request, ct);
+                using HttpRequestMessage newRequest = new HttpRequestMessage(HttpMethod.Post, "https://gql.twitch.tv/gql")
+                {
+                    Content = JsonContent.Create(payload)
+                };
+
+                newRequest.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+                newRequest.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+                newRequest.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+                if (!string.IsNullOrEmpty(_deviceId))
+                    newRequest.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+                response = await _httpClient.SendAsync(newRequest, ct);
                 jsonText = await response.Content.ReadAsStringAsync(ct);
+
+                if (jsonText.Contains("\"errors\""))
+                    throw new InvalidOperationException("Failed integrity, please wait a while and try again.");
             }
 
             response.EnsureSuccessStatusCode();
 
             JsonArray responseArray = JsonNode.Parse(jsonText)!.AsArray();
-            return responseArray[1]!.AsObject();
+            return responseArray;
         }
         /// <summary>
         /// Retrieves detailed information for multiple Twitch drop campaigns in a single batch operation.
@@ -396,10 +452,8 @@ namespace Core.Services
         {
             // 1. Go to drops page
             await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
-            await Task.Delay(5000, ct);
 
-            // 2. Click first campaign card → forces DropCampaignDetails request
-            await _host.ExecuteScriptAsync(@"
+            string clickScript = @"
                 (async () => {
                     // Wait a bit more for React to render
                     await new Promise(r => setTimeout(r, 3000));
@@ -422,10 +476,10 @@ namespace Core.Services
                         console.log('No button found in first container');
                     }
                 })();
-            ");
+            ";
 
             // 3. Capture the real payload
-            string payloadJson = await _host.CaptureGqlRequestBodyContainingAsync("DropCampaignDetails", 10000, ct);
+            string payloadJson = await _host.CaptureGqlRequestBodyContainingAsyncWithRetry("DropCampaignDetails", 5000, 10, clickScript, ct);
 
             // 4. Parse just the hash
             JsonArray payload = JsonNode.Parse(payloadJson)!.AsArray();

@@ -19,7 +19,7 @@ namespace Core.Interfaces
         /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
         /// <returns>A task that represents the asynchronous operation. The task result contains a JsonObject with the full
         /// dashboard data.</returns>
-        Task<JsonObject> QueryFullDropsDashboardAsync(CancellationToken ct = default);
+        Task<JsonArray> QueryFullDropsDashboardAsync(CancellationToken ct = default);
         /// <summary>
         /// Asynchronously retrieves details for multiple drop campaigns in a single batch operation.
         /// </summary>

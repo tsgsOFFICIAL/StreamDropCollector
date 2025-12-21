@@ -45,7 +45,7 @@ namespace Core.Services
                 tasks.Add(_twitchProvider.GetActiveCampaignsAsync(twitchHost, ct));
             }
 
-            // If nothing to do → return fast
+            // If nothing to do -> return fast
             if (tasks.Count == 0)
                 return Array.Empty<DropsCampaign>().AsReadOnly();
 
