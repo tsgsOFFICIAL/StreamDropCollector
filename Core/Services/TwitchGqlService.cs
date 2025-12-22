@@ -17,6 +17,12 @@ namespace Core.Services
         private string? _integrityToken;
         private string? _deviceId;
         private string? _accessToken;
+        private string? _userId;
+
+        public string UserId
+        {
+            set => _userId = value;
+        }
 
         public TwitchGqlService(IWebViewHost host, HttpClient? httpClient = null)
         {
@@ -55,9 +61,6 @@ namespace Core.Services
 
                     // Fresh navigation every attempt (important for clean integrity token)
                     await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
-
-                    // Give page time to load and fire GQL requests
-                    await Task.Delay(2000, ct);
 
                     // Parallel capture tasks
                     Task<string> clientIdTask = _host.CaptureRequestHeaderAsync("Client-ID", "gql.twitch.tv", 10000, ct);
@@ -159,40 +162,37 @@ namespace Core.Services
             throw new InvalidOperationException($"Persisted query hash not found for operation: {operationName}");
         }
         /// <summary>
-        /// Sends an asynchronous GraphQL query or batch request to the Twitch API and returns the parsed JSON response.
+        /// Attempts to claim a Twitch drop reward for the specified campaign and reward identifiers asynchronously.
         /// </summary>
-        /// <remarks>If the response contains errors or an unsuccessful status code, the method will
-        /// automatically refresh authentication headers and retry the request once. The caller is responsible for
-        /// interpreting the returned JSON structure according to the expected GraphQL response format.</remarks>
-        /// <param name="payload">The query payload to send. This can be an operation name string, a tuple of operation name and variables, a
-        /// pre-built JsonObject for a single request, or a JsonArray for batched requests.</param>
-        /// <param name="ct">A cancellation token that can be used to cancel the request.</param>
-        /// <returns>A JsonNode containing the parsed response from the Twitch GraphQL API. Returns a JsonObject for single
-        /// requests or a JsonArray for batched requests.</returns>
-        /// <exception cref="ArgumentException">Thrown if the payload is not a supported type: string, (string, object) tuple, JsonObject, or JsonArray.</exception>
-        public async Task<JsonNode> QueryAsync(object payload, CancellationToken ct = default)
+        /// <remarks>Returns <see langword="false"/> if the claim request fails or if the response
+        /// contains errors. This method requires valid authentication and may refresh headers automatically if
+        /// needed.</remarks>
+        /// <param name="campaignId">The unique identifier of the campaign associated with the drop reward to claim.</param>
+        /// <param name="rewardId">The unique identifier of the reward to be claimed within the specified campaign.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the drop
+        /// reward was successfully claimed; otherwise, <see langword="false"/>.</returns>
+        public async Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default)
         {
-            if (_clientId == null || _integrityToken == null)
-                await RefreshHeadersAsync(ct);
+            await RefreshHeadersAsync(ct);
 
-            JsonNode payloadNode;
+            // Step 1. Construct the payload, according to the above format
+            string operationName = "DropsPage_ClaimDropRewards";
+            string dropInstanceID = $"{_userId}#{campaignId}#{rewardId}";
+            string hash = "a455deea71bdc9015b78eb49f4acfbce8baa7ccbedd28e549bb025bd0f751930";
 
-            if (payload is string operationName)
+            JsonArray payload = new JsonArray
             {
-                object variables = new { };
-
-                if (payload is ValueTuple<string, object> tuple)
-                {
-                    operationName = tuple.Item1;
-                    variables = tuple.Item2 ?? new { };
-                }
-
-                string hash = await GetPersistedQueryHashAsync(operationName, ct);
-
-                payloadNode = new JsonObject
+                new JsonObject
                 {
                     ["operationName"] = operationName,
-                    ["variables"] = JsonSerializer.SerializeToNode(variables),
+                    ["variables"] = new JsonObject
+                    {
+                        ["input"] = new JsonObject
+                        {
+                            ["dropInstanceID"] = dropInstanceID
+                        }
+                    },
                     ["extensions"] = new JsonObject
                     {
                         ["persistedQuery"] = new JsonObject
@@ -201,28 +201,14 @@ namespace Core.Services
                             ["sha256Hash"] = hash
                         }
                     }
-                };
-            }
-            else if (payload is JsonArray arrayPayload)
-            {
-                string json = arrayPayload.ToJsonString();
-                payloadNode = JsonNode.Parse(json)!;
-            }
-            else if (payload is JsonObject singlePayload)
-            {
-                string json = singlePayload.ToJsonString();
-                payloadNode = JsonNode.Parse(json)!;
-            }
-            else
-            {
-                throw new ArgumentException("Payload must be operationName string, (string, object) tuple, JsonObject, or JsonArray");
-            }
-
-            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "https://gql.twitch.tv/gql")
-            {
-                Content = JsonContent.Create(payloadNode)
+                }
             };
 
+            // Step 2. Send the request
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "https://gql.twitch.tv/gql")
+            {
+                Content = JsonContent.Create(payload)
+            };
             request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
             request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
             request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
@@ -234,23 +220,12 @@ namespace Core.Services
             string jsonText = await response.Content.ReadAsStringAsync(ct);
 
             if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
-            {
-                await RefreshHeadersAsync(ct);
-
-                request.Headers.Remove("Client-Integrity");
-                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
-                response = await _httpClient.SendAsync(request, ct);
-                jsonText = await response.Content.ReadAsStringAsync(ct);
-            }
+                return false;
 
             response.EnsureSuccessStatusCode();
-
             JsonNode? result = JsonNode.Parse(jsonText);
 
-            if (payloadNode is JsonArray)
-                return result!.AsArray();
-
-            return result!.AsObject();
+            return result?["data"]?["claimDropRewards"]?["isUserAccountConnected"]?.GetValue<bool>() ?? false;
         }
         /// <summary>
         /// Queries the Twitch Drops dashboard and returns the full dashboard data as a JSON object.
@@ -264,8 +239,7 @@ namespace Core.Services
         /// user's drops campaigns and inventory.</returns>
         public async Task<JsonArray> QueryFullDropsDashboardAsync(CancellationToken ct = default)
         {
-            if (_clientId == null || _integrityToken == null)
-                await RefreshHeadersAsync(ct);
+            await RefreshHeadersAsync(ct);
 
             // Fetch hashes
             string dashboardHash = await GetPersistedQueryHashAsync("ViewerDropsDashboard", ct);

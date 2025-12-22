@@ -106,6 +106,14 @@ namespace Core.Interfaces
         /// period.</returns>
         Task<string> CaptureGqlRequestBodyContainingAsyncWithRetry(string triggerText, int timeoutMs, int maxRetries = 3, string? preCaptureJs = null, CancellationToken ct = default);
         /// <summary>
+        /// Attempts to claim a reward from a Kick drop campaign using the specified campaign and reward identifiers.
+        /// </summary>
+        /// <param name="campaignId">The unique identifier of the Kick drop campaign from which to claim the reward. Cannot be null or empty.</param>
+        /// <param name="rewardId">The unique identifier of the reward to claim within the specified campaign. Cannot be null or empty.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the reward
+        /// was successfully claimed; otherwise, <see langword="false"/>.</returns>
+        Task<bool> ClaimKickDropAsync(string campaignId, string rewardId);
+        /// <summary>
         /// Initiates an asynchronous operation to force a refresh of the underlying data or cache.
         /// </summary>
         /// <returns>A task that represents the asynchronous refresh operation.</returns>

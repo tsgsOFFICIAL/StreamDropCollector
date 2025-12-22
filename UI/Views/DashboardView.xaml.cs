@@ -26,6 +26,7 @@ namespace UI.Views
 
         private HiddenWebViewHost _twitchWebView = new();
         private HiddenWebViewHost _kickWebView = new();
+        private TwitchGqlService? _twitchGqlService;
 
         private static bool _initialValidationCompleted = false;
         private static bool _isInitialized = false;
@@ -125,6 +126,26 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
+        private string _twitchWatchedChannel = string.Empty;
+        public string TwitchWatchedChannel
+        {
+            get => _twitchWatchedChannel;
+            set
+            {
+                _twitchWatchedChannel = value;
+                OnPropertyChanged();
+            }
+        }
+        private string _kickWatchedChannel = string.Empty;
+        public string KickWatchedChannel
+        {
+            get => _kickWatchedChannel;
+            set
+            {
+                _kickWatchedChannel = value;
+                OnPropertyChanged();
+            }
+        }
 
         /// <summary>
         /// Occurs when a property value changes.
@@ -163,12 +184,14 @@ namespace UI.Views
 
             _dropsService = new DropsService();
 
+            _twitchGqlService = new TwitchGqlService(_twitchWebView);
+
             Loaded += async (s, e) => await OnLoadedAsync();
 
             // Subscribe to progress updates ===
             DropsInventoryManager.Instance.TwitchProgressChanged += progress =>
             {
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     TwitchCampaignProgress = progress;
                 });
@@ -176,9 +199,51 @@ namespace UI.Views
 
             DropsInventoryManager.Instance.KickProgressChanged += progress =>
             {
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     KickCampaignProgress = progress;
+                });
+            };
+
+            DropsInventoryManager.Instance.MinerStatusChanged += status =>
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    switch (status)
+                    {
+                        case "Idle":
+                            MinerStatus = "Idle";
+                            MinerStatusDetails = "Waiting for drops";
+                            break;
+                        case "Starting":
+                            MinerStatus = "Starting";
+                            MinerStatusDetails = "Finding stream(s) to watch";
+                            break;
+                        case "Evaluating":
+                            MinerStatus = "Evaluating";
+                            MinerStatusDetails = "Checking stream(s) for drops eligibility";
+                            break;
+                        case "Mining":
+                            MinerStatus = "Mining";
+                            MinerStatusDetails = "Watching stream(s) to earn drops";
+                            break;
+                    }
+                });
+            };
+
+            DropsInventoryManager.Instance.KickChannelChanged += channel => 
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    KickWatchedChannel = channel;
+                });
+            };
+
+            DropsInventoryManager.Instance.TwitchChannelChanged += channel =>
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    TwitchWatchedChannel = channel;
                 });
             };
         }
@@ -266,12 +331,12 @@ namespace UI.Views
 
                 _activeCampaigns.Clear();
 
-                IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _kickService.Status, _twitchWebView, _twitchService.Status, cts.Token);
+                IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _kickService.Status, _twitchWebView, _twitchService.Status, _twitchGqlService, cts.Token);
 
                 foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
                     _activeCampaigns.Add(c);
 
-                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns);
+                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns, _twitchGqlService);
 
                 MinerStatus = "Idle";
                 MinerStatusDetails = $"{_activeCampaigns.Count} active campaigns loaded";

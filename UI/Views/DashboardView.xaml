@@ -38,7 +38,7 @@
             </Setter>
         </Style>
     </UserControl.Resources>
-    
+
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -97,10 +97,10 @@
                 CornerRadius="8"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1">
-                
+
                 <StackPanel>
                     <TextBlock Text="Twitch Campaign Progress"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
                        FontSize="16"/>
 
                     <ProgressBar
@@ -114,6 +114,11 @@
                        Text="{Binding TwitchCampaignProgress, StringFormat='{}{0}% Complete'}"
                        Foreground="{DynamicResource TextMutedBrush}"
                        FontSize="12"/>
+
+                    <TextBlock Margin="0,5,0,0" Visibility="{Binding TwitchWatchedChannel, Converter={StaticResource StringToVisibilityConverter}}">
+                        <Run Text="Watching: " Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <Run Text="{Binding TwitchWatchedChannel}" FontWeight="SemiBold" Foreground="{DynamicResource TwitchBrush}"/>
+                    </TextBlock>
                 </StackPanel>
             </Border>
 
@@ -125,7 +130,7 @@
                 CornerRadius="8"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1">
-               
+
                 <StackPanel>
                     <TextBlock Text="Kick Campaign Progress"
                        Foreground="{DynamicResource TextSecondaryBrush}"
@@ -142,6 +147,11 @@
                        Text="{Binding KickCampaignProgress, StringFormat='{}{0}% Complete'}"
                        Foreground="{DynamicResource TextMutedBrush}"
                        FontSize="12"/>
+
+                    <TextBlock Margin="0,5,0,0" Visibility="{Binding KickWatchedChannel, Converter={StaticResource StringToVisibilityConverter}}">
+                        <Run Text="Watching: " Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <Run Text="{Binding KickWatchedChannel}" FontWeight="SemiBold" Foreground="{DynamicResource KickBrush}"/>
+                    </TextBlock>
                 </StackPanel>
             </Border>
 

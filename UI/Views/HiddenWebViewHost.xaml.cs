@@ -21,23 +21,6 @@ namespace UI.Views
         public HiddenWebViewHost()
         {
             InitializeComponent();
-
-            // Position way off-screen (negative coordinates = invisible to user)
-            Left = -2000;
-            Top = -2000;
-
-            Width = 800;   // Reasonable size – player needs dimensions
-            Height = 600;
-
-            WindowStyle = WindowStyle.None;
-            ShowInTaskbar = false;
-            ShowActivated = false;
-
-            // Critical: must be Visible, not Hidden
-            Visibility = Visibility.Visible;
-
-            // Optional: keep it behind everything
-            Topmost = false;
         }
 
         /// <summary>
@@ -57,6 +40,10 @@ namespace UI.Views
 
             // Ensure CoreWebView2 environment is ready
             await WebView.EnsureCoreWebView2Async();
+
+            WebView.CoreWebView2.IsMuted = true;
+            WebView.CoreWebView2.Settings.AreHostObjectsAllowed = true;
+            WebView.CoreWebView2.Settings.IsWebMessageEnabled = true;
         }
         /// <summary>
         /// Adds a new cookie or updates an existing cookie for the specified domain and path asynchronously.
@@ -445,25 +432,24 @@ namespace UI.Views
                         {
                             JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
                             string? requestId = root.GetProperty("requestId").GetString();
-                            if (requestId == null) return;
+                            if (requestId == null)
+                                return;
 
-                            string result = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
-                                "Network.getRequestPostData",
-                                JsonSerializer.Serialize(new { requestId }));
+                            string result = await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.getRequestPostData", JsonSerializer.Serialize(new { requestId }));
 
                             string? postData = JsonDocument.Parse(result).RootElement.GetProperty("postData").GetString();
-                            if (string.IsNullOrEmpty(postData)) return;
+                            if (string.IsNullOrEmpty(postData))
+                                return;
 
-                            if (!postData.Contains("sha256Hash")) return;
+                            if (!postData.Contains("sha256Hash"))
+                                return;
 
                             using JsonDocument doc = JsonDocument.Parse(postData);
                             IEnumerable<JsonElement> operations = doc.RootElement.ValueKind == JsonValueKind.Array
                                 ? doc.RootElement.EnumerateArray()
                                 : Enumerable.Repeat(doc.RootElement, 1);
 
-                            bool found = operations.Any(op =>
-                                op.TryGetProperty("operationName", out JsonElement name) &&
-                                string.Equals(name.GetString(), triggerText, StringComparison.Ordinal));
+                            bool found = operations.Any(op => op.TryGetProperty("operationName", out JsonElement name) && string.Equals(name.GetString(), triggerText, StringComparison.Ordinal));
 
                             if (found)
                             {
@@ -573,6 +559,117 @@ namespace UI.Views
             }
 
             throw new TimeoutException($"Failed to capture GQL payload containing '{triggerText}' after {maxRetries} attempts", lastException);
+        }
+        /// <summary>
+        /// Attempts to claim a reward drop for a specified campaign on Kick.com using the current session.
+        /// </summary>
+        /// <remarks>This method requires a valid Kick.com session token to be present in the browser's
+        /// cookies. If the session token is missing or invalid, the claim will not be attempted and the method returns
+        /// <see langword="false"/>. The method communicates with the Kick.com API via a web view and may take up to 15
+        /// seconds to complete due to network or API response times.</remarks>
+        /// <param name="campaignId">The unique identifier of the campaign for which the drop is being claimed.</param>
+        /// <param name="rewardId">The unique identifier of the reward drop to claim within the specified campaign.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the drop was
+        /// successfully claimed; otherwise, <see langword="false"/>.</returns>
+        public async Task<bool> ClaimKickDropAsync(string campaignId, string rewardId)
+        {
+            string? encodedToken = await GetCookieValueAsync("https://kick.com", "session_token");
+            if (string.IsNullOrEmpty(encodedToken))
+            {
+                Debug.WriteLine("[Kick] session_token cookie not found");
+                return false;
+            }
+
+            string bearerToken = Uri.UnescapeDataString(encodedToken); // Decode %7C -> |
+
+            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
+
+            // One-time handler for the result
+            void MessageReceivedHandler(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+            {
+                string message = e.TryGetWebMessageAsString() ?? "";
+                tcs.TrySetResult(message);
+                WebView.CoreWebView2.WebMessageReceived -= MessageReceivedHandler;
+            }
+
+            WebView.CoreWebView2.WebMessageReceived += MessageReceivedHandler;
+
+            try
+            {
+                string script = $@"
+                    (async () => {{
+                        try {{
+                            const response = await fetch('https://web.kick.com/api/v1/drops/claim', {{
+                                method: 'POST',
+                                credentials: 'include',
+                                headers: {{
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json'
+                                }},
+                                body: JSON.stringify({{
+                                    campaign_id: '{campaignId}',
+                                    reward_id: '{rewardId}'
+                                }})
+                            }});
+
+                            const data = await response.json();
+
+                            const result = {{
+                                success: response.ok && (data.message === 'Success' || data.success === true),
+                                data: data,
+                                error: response.ok ? null : (data.message || data.error || response.statusText)
+                            }};
+
+                            window.chrome.webview.postMessage(JSON.stringify(result));
+                        }} catch (err) {{
+                            window.chrome.webview.postMessage(JSON.stringify({{
+                                success: false,
+                                error: err.message || 'Unknown JS error'
+                            }}));
+                        }}
+                    }})();
+                ";
+
+                await WebView.CoreWebView2.ExecuteScriptAsync(script);
+
+                // Wait for the postMessage (with timeout)
+                string rawResult = await Task.WhenAny(tcs.Task, Task.Delay(15000)) == tcs.Task
+                    ? await tcs.Task
+                    : "{}";
+
+                if (rawResult == "{}" || string.IsNullOrWhiteSpace(rawResult))
+                {
+                    Debug.WriteLine("[Kick] Claim timed out or no response");
+                    return false;
+                }
+
+                using JsonDocument doc = JsonDocument.Parse(rawResult);
+                bool success = doc.RootElement.GetProperty("success").GetBoolean();
+
+                if (success)
+                {
+                    Debug.WriteLine($"[DropsInventoryManager] Successfully claimed Kick drop: {rewardId} (Campaign: {campaignId})");
+                }
+                else
+                {
+                    string? error = doc.RootElement.TryGetProperty("error", out JsonElement errElem)
+                        ? errElem.GetString()
+                        : "Unknown error";
+                    Debug.WriteLine($"[DropsInventoryManager] Kick claim failed: {error}");
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[DropsInventoryManager] Exception in ClaimKickDropAsync: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                // Clean up handler in case of exception/timeout
+                WebView.CoreWebView2.WebMessageReceived -= MessageReceivedHandler;
+            }
         }
         /// <summary>
         /// Forces a refresh of the current web content by reloading the source URL asynchronously.

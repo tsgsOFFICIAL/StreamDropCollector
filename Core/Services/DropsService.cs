@@ -17,20 +17,18 @@ namespace Core.Services
         /// <summary>
         /// Retrieves all active drops campaigns from connected Kick and Twitch hosts asynchronously.
         /// </summary>
-        /// <remarks>If neither Kick nor Twitch hosts are connected, the method returns an empty list
-        /// immediately. The returned campaigns are aggregated from all queried hosts.</remarks>
-        /// <param name="kickHost">The Kick web view host used to query active campaigns. Must not be null if <paramref name="kickStatus"/> is
-        /// <see cref="ConnectionStatus.Connected"/>.</param>
-        /// <param name="kickStatus">The connection status of the Kick host. Only hosts with <see cref="ConnectionStatus.Connected"/> are
-        /// queried.</param>
-        /// <param name="twitchHost">The Twitch web view host used to query active campaigns. Must not be null if <paramref name="twitchStatus"/>
-        /// is <see cref="ConnectionStatus.Connected"/>.</param>
-        /// <param name="twitchStatus">The connection status of the Twitch host. Only hosts with <see cref="ConnectionStatus.Connected"/> are
-        /// queried.</param>
+        /// <remarks>If both Kick and Twitch hosts are connected, campaigns from both sources are combined
+        /// into a single list. The method returns quickly with an empty list if neither host is connected.</remarks>
+        /// <param name="kickHost">The Kick web view host used to query active campaigns. Must not be null if Kick is connected.</param>
+        /// <param name="kickStatus">The connection status of the Kick host. If set to <see langword="Connected"/>, Kick campaigns will be
+        /// included.</param>
+        /// <param name="twitchHost">The Twitch web view host used to query active campaigns. Must not be null if Twitch is connected.</param>
+        /// <param name="twitchStatus">The connection status of the Twitch host. If set to <see langword="Connected"/>, Twitch campaigns will be
+        /// included.</param>
         /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation.</param>
-        /// <returns>A read-only list containing all active drops campaigns from the connected hosts. Returns an empty list if no
-        /// hosts are connected.</returns>
-        public async Task<IReadOnlyList<DropsCampaign>> GetAllActiveCampaignsAsync(IWebViewHost kickHost, ConnectionStatus? kickStatus, IWebViewHost twitchHost, ConnectionStatus? twitchStatus, CancellationToken ct = default)
+        /// <returns>A read-only list containing all active drops campaigns from the specified connected hosts. The list will be
+        /// empty if neither host is connected or no campaigns are found.</returns>
+        public async Task<IReadOnlyList<DropsCampaign>> GetAllActiveCampaignsAsync(IWebViewHost kickHost, ConnectionStatus? kickStatus, IWebViewHost twitchHost, ConnectionStatus? twitchStatus, IGqlService? gqlService, CancellationToken ct = default)
         {
             List<Task<IReadOnlyList<DropsCampaign>>> tasks = new List<Task<IReadOnlyList<DropsCampaign>>>();
 
@@ -39,8 +37,7 @@ namespace Core.Services
 
             if (twitchStatus == ConnectionStatus.Connected)
             {
-                TwitchGqlService gqlService = new TwitchGqlService(twitchHost);
-                _twitchProvider = new TwitchDropsProvider(gqlService);
+                _twitchProvider = new TwitchDropsProvider(gqlService!);
 
                 tasks.Add(_twitchProvider.GetActiveCampaignsAsync(twitchHost, ct));
             }

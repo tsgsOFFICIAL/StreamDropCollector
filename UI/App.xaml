@@ -8,5 +8,6 @@
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <converters:PercentToWidthConverter x:Key="PercentToWidthConverter"/>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
     </Application.Resources>
 </Application>

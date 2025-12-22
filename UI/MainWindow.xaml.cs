@@ -1,13 +1,12 @@
-﻿using System.IO;
-using System.IO.MemoryMappedFiles;
-using System.IO.Pipes;
-using System.Reflection.Metadata;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media.Animation;
-using UI.Views;
+﻿using UserControl = System.Windows.Controls.UserControl;
 using Button = System.Windows.Controls.Button;
-using UserControl = System.Windows.Controls.UserControl;
+using System.Windows.Media.Animation;
+using System.Runtime.InteropServices;
+using System.Windows.Input;
+using System.IO.Pipes;
+using System.Windows;
+using System.IO;
+using UI.Views;
 
 namespace UI
 {
@@ -32,6 +31,19 @@ namespace UI
             }
         }
         private UserControl? _currentPage;
+
+        private bool _isInTrayMode = false;
+        private double _savedLeft;
+        private double _savedTop;
+
+        private const int WS_EX_TOOLWINDOW = 0x00000080;
+        private const int GWL_EXSTYLE = -20;
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr hwnd, int index);
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
 
         public MainWindow()
         {
@@ -140,35 +152,70 @@ namespace UI
                 IsTrayIconVisible ? Visibility.Visible
                 : Visibility.Collapsed;
         }
-        /// <summary>
-        /// Toggles the window state between minimized and normal, showing or hiding the window as appropriate.
-        /// </summary>
-        /// <remarks>If the window is currently minimized, this method restores it to the normal state and
-        /// makes it visible. If the window is not minimized, it minimizes and hides the window. This method is
-        /// typically used to implement minimize-to-tray or similar window management behaviors.</remarks>
+
         private void ToggleWindowState()
         {
-            if (WindowState == WindowState.Minimized)
-            {
-                Show();
-                WindowState = WindowState.Normal;
-            }
+            if (_isInTrayMode)
+                ExitTrayMode();
             else
-            {
-                WindowState = WindowState.Minimized;
-                Hide();
-            }
+                EnterTrayMode();
         }
-        /// <summary>
-        /// Displays a notification with the specified title and message for a limited duration.
-        /// </summary>
-        /// <param name="title">The title text to display in the notification. Cannot be null or empty.</param>
-        /// <param name="message">The message content to display in the notification. Cannot be null or empty.</param>
-        /// <param name="timeoutSeconds">The duration, in seconds, for which the notification is visible. Must be greater than zero. The default is 1
-        /// second.</param>
-        private static void ShowNotification(string title, string message, double timeoutSeconds = 1)
+
+        private void EnterTrayMode()
         {
-            Core.Managers.NotificationManager.ShowNotification(title, message, timeoutSeconds);
+            if (_isInTrayMode)
+                return;
+
+            _isInTrayMode = true;
+
+            // Save current position (only if valid)
+            if (!double.IsNaN(Left) && !double.IsNaN(Top))
+            {
+                _savedLeft = Left;
+                _savedTop = Top;
+            }
+
+            ShowInTaskbar = false;
+
+            // Move off-screen, but keep Normal and visible to OS
+            Left = -32000;
+            Top = -32000;
+
+            // Hide from ALT+TAB
+            IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TOOLWINDOW);
+
+            Core.Managers.NotificationManager.ShowNotification("Stream Drop Collector", "Minimized to tray - drops still farming!");
+            MinimizeAndRestore.Header = "Restore";
+            MyNotifyIcon.ToolTipText = "Stream Drop Collector - Farming in background";
+        }
+
+        private void ExitTrayMode()
+        {
+            if (!_isInTrayMode)
+                return;
+
+            _isInTrayMode = false;
+
+            ShowInTaskbar = true;
+
+            // Restore position
+            Left = _savedLeft;
+            Top = _savedTop;
+
+            // Show in ALT+TAB again
+            IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle & ~WS_EX_TOOLWINDOW);
+
+            // Bring to front
+            Activate();
+            Topmost = true;
+            Topmost = false;
+
+            MinimizeAndRestore.Header = "Minimize";
+            MyNotifyIcon.ToolTipText = "Stream Drop Collector by tsgsOFFICIAL";
         }
         /// <summary>
         /// Brings the window to the foreground, restoring it if minimized and ensuring it is visible and active.
@@ -178,24 +225,31 @@ namespace UI
         /// addressing platform-specific behavior on Windows.</remarks>
         private void BringToFront()
         {
-            // If hidden to tray
-            if (!IsVisible)
+            // Exit tray mode if active
+            if (_isInTrayMode)
             {
-                Show();
+                _isInTrayMode = false;
+
                 ShowInTaskbar = true;
+
+                // Restore position
+                Left = _savedLeft;
+                Top = _savedTop;
+
+                MinimizeAndRestore.Header = "Minimize";
+                MyNotifyIcon.ToolTipText = "Stream Drop Collector by tsgsOFFICIAL";
             }
 
-            if (WindowState == WindowState.Minimized)
-                WindowState = WindowState.Normal;
+            // Always ensure visible and focused
+            if (!IsVisible)
+                Show();
 
-            // This is essential
+            WindowState = WindowState.Normal; // In case it was maximized/minimized
+
             Activate();
-
-            // Windows focus-stealing workaround (safe & common)
             Topmost = true;
-            Topmost = false;
+            Topmost = false; // Focus steal fix
         }
-
         #region Event Handlers
         /// <summary>
         /// Starts an asynchronous server that listens for activation messages on a named pipe and brings the
@@ -286,7 +340,7 @@ namespace UI
         /// <param name="e"></param>
         private void OnMinimizeButtonClicked(object sender, RoutedEventArgs e)
         {
-            WindowState = WindowState.Minimized;
+            EnterTrayMode();
         }
         /// <summary>
         /// Event handler for when the maximize button is clicked
@@ -316,45 +370,7 @@ namespace UI
         /// <param name="e">The event data associated with the double-click action.</param>
         private void OnTrayIconDoubleClick(object sender, RoutedEventArgs e)
         {
-            BringToFront();
-        }
-        /// <summary>
-        /// Handles changes to the window's state and updates the user interface and notification area accordingly.
-        /// </summary>
-        /// <remarks>This method updates the context menu and notification icon to reflect the current
-        /// window state. When the window is minimized, it hides the window and displays a notification. When restored
-        /// or maximized, it adjusts the window padding and restores the context menu text. Override this method to
-        /// customize window state change behavior in derived classes.</remarks>
-        /// <param name="e">An <see cref="System.EventArgs"/> that contains the event data.</param>
-        protected override void OnStateChanged(EventArgs e)
-        {
-            base.OnStateChanged(e);
-
-            // Find context menu items and update texts based on WindowState
-            System.Windows.Controls.ContextMenu menu = MyNotifyIcon.ContextMenu;
-            System.Windows.Controls.MenuItem toggleMenuItem = MinimizeAndRestore;
-
-            if (WindowState == WindowState.Maximized)
-                RootBorder.Padding = new Thickness(7); // Add safe padding (7px is deafult Windows border size)
-            else
-                RootBorder.Padding = new Thickness(0);
-
-            if (WindowState == WindowState.Minimized)
-            {
-                string toolTipText = "Stream Drop Collector is minimized";
-
-                Hide();
-                ShowInTaskbar = false;
-                ShowNotification("Stream Drop Collector", toolTipText);
-                toggleMenuItem.Header = "Restore";
-                MyNotifyIcon.ToolTipText = toolTipText;
-            }
-            else
-            {
-                ShowInTaskbar = true;
-                toggleMenuItem.Header = "Minimize";
-                MyNotifyIcon.ToolTipText = "Stream Drop Collector by tsgsOFFICIAL";
-            }
+            ExitTrayMode();
         }
         #endregion
     }

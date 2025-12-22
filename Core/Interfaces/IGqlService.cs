@@ -5,14 +5,14 @@ namespace Core.Interfaces
     public interface IGqlService : IDisposable
     {
         /// <summary>
-        /// Executes an asynchronous query using the specified payload and returns the result as a JSON object.
+        /// Attempts to claim a reward drop for the specified campaign asynchronously.
         /// </summary>
-        /// <param name="payload">The payload to be sent with the query. This object contains the data or parameters required for the query
-        /// operation. Cannot be null.</param>
-        /// <param name="ct">A cancellation token that can be used to cancel the query operation.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="JsonObject"/>
-        /// representing the query response.</returns>
-        Task<JsonNode> QueryAsync(object payload, CancellationToken ct = default);
+        /// <param name="campaignId">The unique identifier of the campaign from which to claim the drop. Cannot be null or empty.</param>
+        /// <param name="rewardId">The unique identifier of the reward to claim. Cannot be null or empty.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the drop was
+        /// successfully claimed; otherwise, <see langword="false"/>.</returns>
+        Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default);
         /// <summary>
         /// Asynchronously retrieves the complete data set for the drops dashboard.
         /// </summary>
@@ -37,5 +37,6 @@ namespace Core.Interfaces
         /// <returns>A task that represents the asynchronous operation. The task result contains a string hash of the current
         /// drop campaign details.</returns>
         Task<string> GetCurrentDropCampaignDetailsHashAsync(CancellationToken ct = default);
+        string UserId { set; }
     }
 }

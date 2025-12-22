@@ -1,9 +1,10 @@
-﻿using Core.Enums;
+﻿using System.Collections.ObjectModel;
+using System.Windows.Threading;
 using Core.Interfaces;
-using Core.Models;
-using System.Collections.ObjectModel;
-using System.Timers;
 using System.Windows;
+using System.Timers;
+using Core.Models;
+using Core.Enums;
 
 namespace Core.Managers
 {
@@ -19,10 +20,14 @@ namespace Core.Managers
 
         public event Action<byte>? TwitchProgressChanged;
         public event Action<byte>? KickProgressChanged;
+        public event Action<string>? MinerStatusChanged;
+        public event Action<string>? TwitchChannelChanged;
+        public event Action<string>? KickChannelChanged;
 
         // Currently watched campaigns
         private DropsCampaign? _currentTwitchCampaign;
         private DropsCampaign? _currentKickCampaign;
+        private IGqlService? _twitchGqlService;
 
         private int _twitchWatchedSeconds;
         private int _kickWatchedSeconds;
@@ -37,7 +42,7 @@ namespace Core.Managers
         {
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
             _liveProgressTimer.AutoReset = true;
-            
+
             // New: minute-by-minute progress for Inventory UI
             _liveMinuteTickTimer.Elapsed += OnLiveMinuteTick;
             _liveMinuteTickTimer.AutoReset = true;
@@ -71,15 +76,9 @@ namespace Core.Managers
 
                         foreach (DropsReward reward in campaign.Rewards)
                         {
-                            if (!reward.IsClaimed && reward.ProgressMinutes < reward.RequiredMinutes)
-                            {
-                                int newProgress = Math.Min(reward.ProgressMinutes + 1, reward.RequiredMinutes);
-                                updatedRewards.Add(reward with { ProgressMinutes = newProgress });
-                            }
-                            else
-                            {
-                                updatedRewards.Add(reward);
-                            }
+                            int newProgress = reward.ProgressMinutes + 1;
+                            updatedRewards.Add(reward with { ProgressMinutes = newProgress });
+
                         }
 
                         DropsCampaign updatedCampaign = campaign with { Rewards = updatedRewards };
@@ -145,8 +144,10 @@ namespace Core.Managers
         /// After updating, the method initiates stream watching for the active campaigns.</remarks>
         /// <param name="campaigns">A collection of <see cref="DropsCampaign"/> objects to evaluate and update as active campaigns. Only
         /// campaigns that have progress to make, have started, and have not yet ended are considered.</param>
-        public void UpdateCampaigns(IEnumerable<DropsCampaign> campaigns)
+        public void UpdateCampaigns(IEnumerable<DropsCampaign> campaigns, IGqlService? twitchGqlService)
         {
+            _twitchGqlService = twitchGqlService;
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 ActiveCampaigns.Clear();
@@ -189,8 +190,14 @@ namespace Core.Managers
         /// stopped. The method is safe to call repeatedly; any previous monitoring timers are stopped and disposed
         /// before starting new ones.</remarks>
         /// <returns>A task that represents the asynchronous operation of starting and managing stream monitoring.</returns>
-        public async Task StartWatchingStreams()
+        public async Task StartWatchingStreams(bool restartedInternally = false)
         {
+            System.Diagnostics.Debug.WriteLine("[DropsInventoryManager] Starting stream watching process...");
+            if (!restartedInternally)
+                MinerStatusChanged?.Invoke("Starting");
+            else
+                MinerStatusChanged?.Invoke("Evaluating");
+
             // Stop any existing timer
             _recheckTimer?.Stop();
             _streamHealthTimer?.Stop();
@@ -203,7 +210,49 @@ namespace Core.Managers
             if (!ActiveCampaigns.Any())
             {
                 System.Diagnostics.Debug.WriteLine("[DropsInventoryManager] No active campaigns with progress to make. Stopping stream watching.");
+                MinerStatusChanged?.Invoke("Idle");
                 return;
+            }
+
+            // Get a list of ready to claim rewards, this means the reward is unclaimed and progress >= required
+            List<DropsReward> readyToClaimRewards = [.. ActiveCampaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
+
+            // Claim all ready rewards
+            foreach (DropsReward item in readyToClaimRewards)
+            {
+                DropsCampaign? parentCampaign = ActiveCampaigns.FirstOrDefault(c => c.Rewards.Contains(item));
+
+                // If Twitch, use Gql.ClaimDropAsync()
+                if (parentCampaign == null)
+                    continue;
+
+                bool claimResult = false;
+                if (parentCampaign.Platform == Platform.Twitch && _twitchGqlService != null)
+                    claimResult = await _twitchGqlService.ClaimDropAsync(parentCampaign.Id, item.Id);
+                else if (parentCampaign.Platform == Platform.Kick)
+                    claimResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.ClaimKickDropAsync(parentCampaign.Id, item.Id));
+
+                if (claimResult)
+                {
+                    // Update ActiveCampaigns to mark reward as claimed
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        List<DropsReward> updatedRewards = new List<DropsReward>();
+                        foreach (DropsReward reward in parentCampaign.Rewards)
+                        {
+                            if (reward.Id == item.Id)
+                                updatedRewards.Add(reward with { IsClaimed = true });
+                            else
+                                updatedRewards.Add(reward);
+                        }
+
+                        DropsCampaign updatedCampaign = parentCampaign with { Rewards = updatedRewards };
+
+                        int index = ActiveCampaigns.IndexOf(parentCampaign);
+                        if (index >= 0)
+                            ActiveCampaigns[index] = updatedCampaign;
+                    });
+                }
             }
 
             // Group campaigns by platform
@@ -222,7 +271,8 @@ namespace Core.Managers
 
                 if (!string.IsNullOrWhiteSpace(twitchUrl))
                 {
-                    await TwitchWebView.NavigateAsync(twitchUrl);
+                    await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.NavigateAsync(twitchUrl));
+
                     await Task.Delay(1500);
 
                     // Dismiss mature content gate if present
@@ -230,7 +280,7 @@ namespace Core.Managers
 
                     // Set stream to lowest quality
                     await SetTwitchStreamToLowestQualityAsync();
-                    await TwitchWebView.ForceRefreshAsync();
+                    await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.ForceRefreshAsync());
 
                     // === CAPTURE CURRENT CAMPAIGN ===
                     _currentTwitchCampaign = bestTwitch;
@@ -238,7 +288,7 @@ namespace Core.Managers
                     // Reset local counter based on server's last known progress
                     _twitchWatchedSeconds = bestTwitch.Rewards
                         .Where(r => !r.IsClaimed)
-                        .Sum(r => r.ProgressMinutes * 60); // Total minutes watched so far → seconds
+                        .Sum(r => r.ProgressMinutes * 60); // Total minutes watched so far -> seconds
 
                     byte initialTwitchPct = CalculateLiveProgress(bestTwitch, _twitchWatchedSeconds);
                     TwitchProgressChanged?.Invoke(initialTwitchPct);
@@ -254,7 +304,7 @@ namespace Core.Managers
                     {
                         DateTime est = DateTime.Now.AddMinutes(soonestTwitch.RequiredMinutes - soonestTwitch.ProgressMinutes);
 
-                        if (est < nextCheckAt) 
+                        if (est < nextCheckAt)
                             nextCheckAt = est;
                     }
                 }
@@ -270,7 +320,7 @@ namespace Core.Managers
 
                 if (!string.IsNullOrWhiteSpace(kickUrl))
                 {
-                    await KickWebView.NavigateAsync(kickUrl);
+                    await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView.NavigateAsync(kickUrl));
                     await Task.Delay(1500);
 
                     // Dismiss mature content gate if present
@@ -278,7 +328,7 @@ namespace Core.Managers
 
                     // Set stream to lowest quality
                     await SetKickStreamToLowestQualityAsync();
-                    await KickWebView.ForceRefreshAsync();
+                    await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView.ForceRefreshAsync());
 
                     _currentKickCampaign = bestKick;
                     _kickWatchedSeconds = bestKick.Rewards
@@ -298,7 +348,7 @@ namespace Core.Managers
                     if (soonestKick != null)
                     {
                         DateTime est = DateTime.Now.AddMinutes(soonestKick.RequiredMinutes - soonestKick.ProgressMinutes);
-                        
+
                         if (est < nextCheckAt)
                             nextCheckAt = est;
                     }
@@ -316,13 +366,15 @@ namespace Core.Managers
             _recheckTimer.Elapsed += async (s, e) =>
             {
                 _recheckTimer?.Stop();
-                await StartWatchingStreams(); // Re-evaluate everything
+                System.Diagnostics.Debug.WriteLine("[DropsInventoryManager] Re-evaluating streams for active campaigns.");
+                await StartWatchingStreams(true); // Re-evaluate everything
             };
 
             _recheckTimer.AutoReset = false;
             _recheckTimer.Start();
 
             System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Next stream re-evaluation in ~{delayMs / 60000:F1} minutes at {nextCheckAt:u}");
+            MinerStatusChanged?.Invoke("Mining");
         }
         /// <summary>
         /// Begins periodic monitoring of the health status of the Twitch and Kick streams, triggering a re-evaluation
@@ -345,7 +397,12 @@ namespace Core.Managers
 
                     System.Diagnostics.Debug.WriteLine($"[Health Check] Twitch: {(twitchOnline ? "ONLINE" : "OFFLINE")} | Kick: {(kickOnline ? "ONLINE" : "OFFLINE")}");
 
-                    if (!twitchOnline || !kickOnline)
+                    // Group campaigns by platform
+                    List<DropsCampaign> twitchCampaigns = [.. ActiveCampaigns.Where(c => c.Platform == Platform.Twitch && c.HasProgressToMake())];
+                    List<DropsCampaign> kickCampaigns = [.. ActiveCampaigns.Where(c => c.Platform == Platform.Kick && c.HasProgressToMake())];
+
+                    if (twitchCampaigns.Count != 0 && !twitchOnline
+                     || kickCampaigns.Count != 0 && !kickOnline)
                     {
                         System.Diagnostics.Debug.WriteLine("[Health Check] One or both streams offline -> forcing re-evaluation");
                         _streamHealthTimer?.Stop();
@@ -397,7 +454,7 @@ namespace Core.Managers
 
             try
             {
-                string result = await KickWebView.ExecuteScriptAsync(js);
+                string result = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView.ExecuteScriptAsync(js));
                 System.Diagnostics.Debug.WriteLine("[Kick] Quality set to lowest: 160p 30");
             }
             catch { /* Best effort */ }
@@ -423,7 +480,7 @@ namespace Core.Managers
 
             try
             {
-                string result = await TwitchWebView.ExecuteScriptAsync(js);
+                string result = await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.ExecuteScriptAsync(js));
                 System.Diagnostics.Debug.WriteLine("[Twitch] Quality set to 160p 30");
             }
             catch { /* Best effort */ }
@@ -457,7 +514,7 @@ namespace Core.Managers
 
             try
             {
-                string result = await KickWebView.ExecuteScriptAsync(js);
+                string result = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView.ExecuteScriptAsync(js));
                 if (result?.Trim('"').Equals("true", StringComparison.OrdinalIgnoreCase) == true)
                     System.Diagnostics.Debug.WriteLine("[Kick] Auto-accepted mature content gate.");
             }
@@ -491,7 +548,7 @@ namespace Core.Managers
 
             try
             {
-                string result = await TwitchWebView.ExecuteScriptAsync(js);
+                string result = await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.ExecuteScriptAsync(js));
                 if (result?.Trim('"').Equals("true", StringComparison.OrdinalIgnoreCase) == true)
                     System.Diagnostics.Debug.WriteLine("[Twitch] Auto-accepted mature content gate.");
             }
@@ -517,7 +574,7 @@ namespace Core.Managers
                 })();
             ";
 
-            string rawResult = await KickWebView.ExecuteScriptAsync(js);
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView.ExecuteScriptAsync(js));
             bool isOnline = rawResult?
                 .Trim()
                 .Trim('"')
@@ -546,7 +603,7 @@ namespace Core.Managers
                 })();
             ";
 
-            string rawResult = await TwitchWebView.ExecuteScriptAsync(js);
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.ExecuteScriptAsync(js));
             bool isOnline = rawResult?
                 .Trim()
                 .Trim('"')
@@ -570,7 +627,7 @@ namespace Core.Managers
             if (!campaign.IsGeneralDrop)
                 return campaign.ConnectUrls[0];
 
-            await KickWebView!.NavigateAsync(campaign.ConnectUrls[0]);
+            await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.NavigateAsync(campaign.ConnectUrls[0]));
             await Task.Delay(1500);
 
             string js = $@"
@@ -593,9 +650,11 @@ namespace Core.Managers
                 }})();
             ";
 
-            string rawResult = await KickWebView.ExecuteScriptAsync(js);
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.ExecuteScriptAsync(js));
             string streamerUrl = rawResult?.Trim().Trim('"') ?? "";
+
             System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Selected Kick streamer URL for campaign '{campaign.Name}': {streamerUrl}");
+            KickChannelChanged?.Invoke(streamerUrl);
             return streamerUrl;
         }
         /// <summary>
@@ -613,7 +672,7 @@ namespace Core.Managers
             if (!campaign.IsGeneralDrop)
                 return campaign.ConnectUrls[0];
 
-            await TwitchWebView!.NavigateAsync(campaign.ConnectUrls[0]);
+            await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView!.NavigateAsync(campaign.ConnectUrls[0]));
             await Task.Delay(1500);
 
             string js = @"
@@ -625,9 +684,11 @@ namespace Core.Managers
                 })();
             ";
 
-            string rawResult = await TwitchWebView.ExecuteScriptAsync(js);
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView!.ExecuteScriptAsync(js));
             string streamerUrl = rawResult?.Trim().Trim('"') ?? "";
+
             System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Selected Twitch streamer URL for campaign '{campaign.Name}': {streamerUrl}");
+            TwitchChannelChanged?.Invoke(streamerUrl);
             return streamerUrl;
         }
     }

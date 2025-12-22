@@ -1,9 +1,8 @@
-﻿using Core.Enums;
+﻿using System.Text.Json.Nodes;
+using System.Diagnostics;
 using Core.Interfaces;
 using Core.Models;
-using System.Diagnostics;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using Core.Enums;
 
 namespace Core.Services
 {
@@ -22,133 +21,142 @@ namespace Core.Services
 
         public override async Task<IReadOnlyList<DropsCampaign>> GetActiveCampaignsAsync(IWebViewHost host, CancellationToken ct = default)
         {
-            await host.EnsureInitializedAsync();
-
-            JsonArray dashboard = await gql.QueryFullDropsDashboardAsync(ct);
-
-            JsonObject ongoingCampaigns = dashboard[0]!.AsObject();
-            JsonObject activeCampaigns = dashboard[1]!.AsObject();
-
-            JsonArray? campaigns = activeCampaigns["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
-
-            string userId = activeCampaigns["data"]?["currentUser"]?["id"]?.GetValue<string>() ?? "";
-
-            campaigns?.RemoveAll(campaign =>
+            try
             {
-                if (campaign is not JsonObject campaignObj)
-                    return true; // Remove
+                await host.EnsureInitializedAsync();
 
-                // Remove if status != "ACTIVE"
-                if (!campaignObj.TryGetPropertyValue("status", out JsonNode? statusNode) ||
-                    statusNode?.GetValue<string>() != "ACTIVE")
-                    return true;
+                JsonArray dashboard = await gql.QueryFullDropsDashboardAsync(ct);
 
-                // Remove if not connected
-                if (!campaignObj.TryGetPropertyValue("self", out JsonNode? selfNode) ||
-                    selfNode is not JsonObject selfObj ||
-                    !selfObj.TryGetPropertyValue("isAccountConnected", out JsonNode? connectedNode) ||
-                    connectedNode?.GetValue<bool>() != true)
-                    return true; // Remove
+                JsonObject ongoingCampaigns = dashboard[0]!.AsObject();
+                JsonObject activeCampaigns = dashboard[1]!.AsObject();
 
-                return false; // Keep
-            });
+                JsonArray? campaigns = activeCampaigns["data"]?["currentUser"]?["dropCampaigns"]?.AsArray();
 
-            if (campaigns == null || campaigns.Count == 0)
-                return [];
+                string userId = activeCampaigns["data"]?["currentUser"]?["id"]?.GetValue<string>() ?? "";
+                gql.UserId = userId;
 
-            List<(string dropID, string channelLogin)> requests = new List<(string dropID, string channelLogin)>();
-
-            foreach (JsonNode? campaign in campaigns)
-            {
-                if (campaign is not JsonObject campObj)
-                    continue;
-
-                string? dropId = campObj.TryGetPropertyValue("id", out JsonNode? idNode) ? idNode?.GetValue<string>() : null;
-                if (string.IsNullOrEmpty(dropId))
-                    continue;
-
-                requests.Add((dropId, userId)); // Use your fetched channelLogin
-            }
-
-            if (requests.Count == 0)
-            {
-                Debug.WriteLine("[Drops] No valid dropIDs to query.");
-                return [];
-            }
-
-            // Fetch the full details in batches
-            Dictionary<string, JsonObject> campaignDetails = await gql.QueryDropCampaignDetailsBatchAsync(requests, ct);
-
-            Debug.WriteLine($"[Drops] Successfully fetched detailed data for {campaignDetails.Count} campaigns.");
-
-            List<DropsCampaign> result = new List<DropsCampaign>();
-            foreach (JsonObject camp in campaignDetails.Values)
-            {
-                DropsCampaign? dropCampaign = ParseCampaignFromDetails(camp);
-
-                if (dropCampaign != null)
-                    result.Add(dropCampaign);
-            }
-
-            JsonArray dropCampaignsInProgress = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
-
-            // Create a new list with updated campaigns
-            List<DropsCampaign> updatedResult = new List<DropsCampaign>();
-
-            foreach (DropsCampaign dropCampaign in result)
-            {
-                // Find matching progress for this campaign
-                JsonObject? matchingProgress = dropCampaignsInProgress.OfType<JsonObject>().FirstOrDefault(c => c["id"]?.GetValue<string>() == dropCampaign.Id);
-
-                if (matchingProgress == null)
+                campaigns?.RemoveAll(campaign =>
                 {
-                    updatedResult.Add(dropCampaign);
-                    continue;
+                    if (campaign is not JsonObject campaignObj)
+                        return true; // Remove
+
+                    // Remove if status != "ACTIVE"
+                    if (!campaignObj.TryGetPropertyValue("status", out JsonNode? statusNode) ||
+                        statusNode?.GetValue<string>() != "ACTIVE")
+                        return true;
+
+                    // Remove if not connected
+                    if (!campaignObj.TryGetPropertyValue("self", out JsonNode? selfNode) ||
+                        selfNode is not JsonObject selfObj ||
+                        !selfObj.TryGetPropertyValue("isAccountConnected", out JsonNode? connectedNode) ||
+                        connectedNode?.GetValue<bool>() != true)
+                        return true; // Remove
+
+                    return false; // Keep
+                });
+
+                if (campaigns == null || campaigns.Count == 0)
+                    return [];
+
+                List<(string dropID, string channelLogin)> requests = new List<(string dropID, string channelLogin)>();
+
+                foreach (JsonNode? campaign in campaigns)
+                {
+                    if (campaign is not JsonObject campObj)
+                        continue;
+
+                    string? dropId = campObj.TryGetPropertyValue("id", out JsonNode? idNode) ? idNode?.GetValue<string>() : null;
+                    if (string.IsNullOrEmpty(dropId))
+                        continue;
+
+                    requests.Add((dropId, userId)); // Use your fetched channelLogin
                 }
 
-                JsonArray? timeBasedDropsProgress = matchingProgress["timeBasedDrops"]?.AsArray();
-                if (timeBasedDropsProgress == null)
+                if (requests.Count == 0)
                 {
-                    updatedResult.Add(dropCampaign);
-                    continue;
+                    Debug.WriteLine("[Drops] No valid dropIDs to query.");
+                    return [];
                 }
 
-                // Update rewards for THIS campaign only
-                List<DropsReward> updatedRewardsForThisCampaign = new List<DropsReward>();
+                // Fetch the full details in batches
+                Dictionary<string, JsonObject> campaignDetails = await gql.QueryDropCampaignDetailsBatchAsync(requests, ct);
 
-                foreach (DropsReward reward in dropCampaign.Rewards)
+                Debug.WriteLine($"[Drops] Successfully fetched detailed data for {campaignDetails.Count} campaigns.");
+
+                List<DropsCampaign> result = new List<DropsCampaign>();
+                foreach (JsonObject camp in campaignDetails.Values)
                 {
-                    JsonObject? matchingDropProgress = timeBasedDropsProgress.OfType<JsonObject>().FirstOrDefault(d => d["id"]?.GetValue<string>() == reward.Id);
+                    DropsCampaign? dropCampaign = ParseCampaignFromDetails(camp);
 
-                    if (matchingDropProgress == null)
+                    if (dropCampaign != null)
+                        result.Add(dropCampaign);
+                }
+
+                JsonArray dropCampaignsInProgress = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
+
+                // Create a new list with updated campaigns
+                List<DropsCampaign> updatedResult = new List<DropsCampaign>();
+
+                foreach (DropsCampaign dropCampaign in result)
+                {
+                    // Find matching progress for this campaign
+                    JsonObject? matchingProgress = dropCampaignsInProgress.OfType<JsonObject>().FirstOrDefault(c => c["id"]?.GetValue<string>() == dropCampaign.Id);
+
+                    if (matchingProgress == null)
                     {
-                        updatedRewardsForThisCampaign.Add(reward);
+                        updatedResult.Add(dropCampaign);
                         continue;
                     }
 
-                    int progressMinutes = matchingDropProgress["self"]?["currentMinutesWatched"]?.GetValue<int>() ?? reward.ProgressMinutes;
-                    bool isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? reward.IsClaimed;
-
-                    DropsReward updatedReward = reward with
+                    JsonArray? timeBasedDropsProgress = matchingProgress["timeBasedDrops"]?.AsArray();
+                    if (timeBasedDropsProgress == null)
                     {
-                        ProgressMinutes = progressMinutes,
-                        IsClaimed = isClaimed
+                        updatedResult.Add(dropCampaign);
+                        continue;
+                    }
+
+                    // Update rewards for THIS campaign only
+                    List<DropsReward> updatedRewardsForThisCampaign = new List<DropsReward>();
+
+                    foreach (DropsReward reward in dropCampaign.Rewards)
+                    {
+                        JsonObject? matchingDropProgress = timeBasedDropsProgress.OfType<JsonObject>().FirstOrDefault(d => d["id"]?.GetValue<string>() == reward.Id);
+
+                        if (matchingDropProgress == null)
+                        {
+                            updatedRewardsForThisCampaign.Add(reward);
+                            continue;
+                        }
+
+                        int progressMinutes = matchingDropProgress["self"]?["currentMinutesWatched"]?.GetValue<int>() ?? reward.ProgressMinutes;
+                        bool isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? reward.IsClaimed;
+
+                        DropsReward updatedReward = reward with
+                        {
+                            ProgressMinutes = progressMinutes,
+                            IsClaimed = isClaimed
+                        };
+
+                        updatedRewardsForThisCampaign.Add(updatedReward);
+                    }
+
+                    // Create new campaign with updated rewards
+                    DropsCampaign updatedCampaign = dropCampaign with
+                    {
+                        Rewards = updatedRewardsForThisCampaign.AsReadOnly()
                     };
 
-                    updatedRewardsForThisCampaign.Add(updatedReward);
+                    updatedResult.Add(updatedCampaign);
                 }
 
-                // Create new campaign with updated rewards
-                DropsCampaign updatedCampaign = dropCampaign with
-                {
-                    Rewards = updatedRewardsForThisCampaign.AsReadOnly()
-                };
-
-                updatedResult.Add(updatedCampaign);
+                // Return the new list
+                return updatedResult.AsReadOnly();
             }
-
-            // Return the new list
-            return updatedResult.AsReadOnly();
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Drops] Error fetching active campaigns: {ex}");
+                return [];
+            }
         }
 
         /// <summary>
