@@ -8,8 +8,8 @@
         WindowStyle="None"
         ShowInTaskbar="False"
         ShowActivated="False"
-        Top="-2000"
-        Left="-2000"
+        Top="-20000"
+        Left="-20000"
         Visibility="Visible">
     <Grid Background="Black">
         <wv2:WebView2 x:Name="WebViewElement" DefaultBackgroundColor="Black"/>

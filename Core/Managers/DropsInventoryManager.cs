@@ -666,8 +666,9 @@ namespace Core.Managers
             string streamerUrl = rawResult?.Trim().Trim('"') ?? "";
 
             System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Selected Kick streamer URL for campaign '{campaign.Name}': {streamerUrl}");
-            KickChannelChanged?.Invoke(streamerUrl);
-            return GetStreamerNameFromUrl(streamerUrl);
+            KickChannelChanged?.Invoke(GetStreamerNameFromUrl(streamerUrl));
+
+            return streamerUrl;
         }
         /// <summary>
         /// Selects the appropriate Twitch streamer URL for the specified drops campaign.
@@ -700,9 +701,9 @@ namespace Core.Managers
             string streamerUrl = rawResult?.Trim().Trim('"') ?? "";
 
             System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Selected Twitch streamer URL for campaign '{campaign.Name}': {streamerUrl}");
-            TwitchChannelChanged?.Invoke(streamerUrl);
+            TwitchChannelChanged?.Invoke(GetStreamerNameFromUrl(streamerUrl));
 
-            return GetStreamerNameFromUrl(streamerUrl);
+            return streamerUrl;
         }
         /// <summary>
         /// Extracts the streamer name from the specified Twitch or Kick channel URL.
