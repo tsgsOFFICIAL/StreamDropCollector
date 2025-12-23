@@ -18,9 +18,8 @@
         <WindowChrome GlassFrameThickness="1" ResizeBorderThickness="5" CaptionHeight="0"/>
     </WindowChrome.WindowChrome>
 
-    <!-- YOUR STYLES - ONLY COLORS ARE NOW THEME-AWARE -->
     <Window.Resources>
-        <!-- Sidebar Nav Button - YOUR EXACT #3A3A3A HOVER PRESERVED -->
+        <!-- Sidebar Nav Button -->
         <Style x:Key="NavButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
@@ -91,7 +90,7 @@
                 <RowDefinition Height="93*"/>
             </Grid.RowDefinitions>
 
-            <!-- SIDEBAR - YOUR SOUL, NOW THEMED -->
+            <!-- SIDEBAR -->
             <Border Background="{DynamicResource CardBackgroundBrush}" Grid.Row="1">
                 <StackPanel Margin="0,20,0,0">
                     <TextBlock Text="StreamDropCollector"
@@ -107,7 +106,7 @@
                 </StackPanel>
             </Border>
 
-            <!-- HEADER - YOUR EXACT VIEWBOXES + TEXT -->
+            <!-- HEADER -->
             <StackPanel x:Name="customApplicationHeader" 
                         Background="{DynamicResource HeaderBackgroundBrush}" 
                         MouseLeftButtonDown="OnWindowHeaderMouseDown" 
@@ -125,7 +124,7 @@
                 </Viewbox>
             </StackPanel>
 
-            <!-- YOUR ICONS - PERFECT HOVER, NO HARD CODED COLORS -->
+            <!-- ICONS -->
             <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Name="Min_Button"       Content="&#x1F5D5;"   Click="OnMinimizeButtonClicked"   Style="{StaticResource TitleBarMinMaxButton}" ToolTip="Minimize"/>
                 <Button x:Name="Maximize_Button" Content="&#x1F5D6;" Click="OnMaximizeButtonClicked" Style="{StaticResource TitleBarMinMaxButton}" ToolTip="Maximize"/>

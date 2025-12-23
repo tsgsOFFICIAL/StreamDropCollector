@@ -69,7 +69,7 @@ namespace Core.Services
                     if (string.IsNullOrEmpty(dropId))
                         continue;
 
-                    requests.Add((dropId, userId)); // Use your fetched channelLogin
+                    requests.Add((dropId, userId));
                 }
 
                 if (requests.Count == 0)
