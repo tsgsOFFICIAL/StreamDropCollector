@@ -29,6 +29,11 @@ namespace Core.Managers
         private bool _notifyOnAutoClaimed = true;
         private bool _updateAvailable = true;
 
+        /// <summary>
+        /// Gets or sets a value indicating whether the application starts automatically when Windows starts.
+        /// </summary>
+        /// <remarks>Disabling this option may also disable related startup behaviors, such as minimizing
+        /// to the system tray on startup.</remarks>
         public bool StartWithWindows
         {
             get => _startWithWindows;
@@ -41,7 +46,13 @@ namespace Core.Managers
                 }
             }
         }
-
+        /// <summary>
+        /// Gets or sets a value indicating whether the application should start minimized to the system tray on
+        /// startup.
+        /// </summary>
+        /// <remarks>This property can only be enabled if the application is configured to start with
+        /// Windows. If StartWithWindows is disabled, setting this property to true has no effect and the value will
+        /// remain false.</remarks>
         public bool MinimizeToTrayOnStartup
         {
             get => _minimizeToTrayOnStartup;
@@ -59,19 +70,28 @@ namespace Core.Managers
                     SetField(ref _minimizeToTrayOnStartup, value);
             }
         }
-
+        /// <summary>
+        /// Gets or sets the name of the current application theme.
+        /// </summary>
         public string Theme
         {
             get => _theme;
             set => SetField(ref _theme, value);
         }
-
+        /// <summary>
+        /// Gets or sets the frequency at which updates are performed.
+        /// </summary>
         public UpdateFrequency UpdateFrequency
         {
             get => _updateFrequency;
             set => SetField(ref _updateFrequency, value);
         }
-
+        /// <summary>
+        /// Gets or sets a value indicating whether rewards are automatically claimed when they become available.
+        /// </summary>
+        /// <remarks>Enabling this property may automatically disable certain notification options, such
+        /// as notifications for rewards ready to claim or for rewards that have been auto-claimed. Changing this
+        /// property can affect related notification settings.</remarks>
         public bool AutoClaimRewards
         {
             get => _autoClaimRewards;
@@ -87,13 +107,20 @@ namespace Core.Managers
                 }
             }
         }
-
+        /// <summary>
+        /// Gets or sets a value indicating whether a notification is raised when an item is dropped and unlocked.
+        /// </summary>
         public bool NotifyOnDropUnlocked
         {
             get => _notifyOnDropUnlocked;
             set => SetField(ref _notifyOnDropUnlocked, value);
         }
-
+       /// <summary>
+       /// Gets or sets a value indicating whether a notification should be sent when rewards are ready to be claimed.
+       /// </summary>
+       /// <remarks>This property cannot be enabled if automatic reward claiming is active. If <see
+       /// cref="AutoClaimRewards"/> is <see langword="true"/>, setting this property to <see langword="true"/> has no
+       /// effect and the value remains <see langword="false"/>.</remarks>
         public bool NotifyOnReadyToClaim
         {
             get => _notifyOnReadyToClaim;
@@ -111,7 +138,12 @@ namespace Core.Managers
                     SetField(ref _notifyOnReadyToClaim, value);
             }
         }
-
+        /// <summary>
+        /// Gets or sets a value indicating whether a notification is sent when rewards are automatically claimed.
+        /// </summary>
+        /// <remarks>This property can only be enabled if automatic reward claiming is active. If
+        /// automatic reward claiming is disabled, setting this property to true has no effect and the value remains
+        /// false.</remarks>
         public bool NotifyOnAutoClaimed
         {
             get => _notifyOnAutoClaimed;
@@ -129,7 +161,9 @@ namespace Core.Managers
                     SetField(ref _notifyOnAutoClaimed, value);
             }
         }
-
+        /// <summary>
+        /// Gets or sets a value indicating whether a software update is available.
+        /// </summary>
         public bool UpdateAvailable
         {
             get => _updateAvailable;
@@ -140,7 +174,12 @@ namespace Core.Managers
         {
             LoadSettings();
         }
-
+        /// <summary>
+        /// Loads application settings from the configuration file, if it exists, and applies them to the current
+        /// instance.
+        /// </summary>
+        /// <remarks>If the configuration file does not exist or cannot be read, default settings are
+        /// used. Invalid or inaccessible files are ignored without throwing an exception.</remarks>
         private void LoadSettings()
         {
             if (!File.Exists(_settingsFilePath))
@@ -168,7 +207,12 @@ namespace Core.Managers
 
             UpdateStartupRegistry();
         }
-
+        /// <summary>
+        /// Saves the current application settings to the settings file in JSON format.
+        /// </summary>
+        /// <remarks>If the settings file or its directory does not exist, they are created automatically.
+        /// Any I/O or access errors encountered during the save operation are silently ignored; the method does not
+        /// throw exceptions in these cases.</remarks>
         public void SaveSettings()
         {
             try
@@ -195,12 +239,30 @@ namespace Core.Managers
 
             }
         }
-
+        /// <summary>
+        /// Raises the PropertyChanged event to notify listeners that a property value has changed.
+        /// </summary>
+        /// <remarks>Call this method in a property's setter to notify subscribers that the property's
+        /// value has changed. This is commonly used to support data binding in applications that implement the
+        /// INotifyPropertyChanged interface.</remarks>
+        /// <param name="propertyName">The name of the property that changed. This value is optional and is automatically provided when called from
+        /// a property setter.</param>
         private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-
+        /// <summary>
+        /// Sets the specified field to a new value and raises a property changed notification if the value has changed.
+        /// </summary>
+        /// <remarks>This method is typically used in property setters to implement the
+        /// INotifyPropertyChanged pattern. It also performs additional actions such as updating startup settings and
+        /// saving configuration when certain properties change.</remarks>
+        /// <typeparam name="T">The type of the field and value being set.</typeparam>
+        /// <param name="field">A reference to the field to update. The field is set to the new value if it differs from the current value.</param>
+        /// <param name="value">The new value to assign to the field.</param>
+        /// <param name="propertyName">The name of the property associated with the field. This is used for property change notification. If not
+        /// specified, the caller member name is used.</param>
+        /// <returns>true if the field value was changed and a property change notification was raised; otherwise, false.</returns>
         private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
             if (EqualityComparer<T>.Default.Equals(field, value))
@@ -218,7 +280,14 @@ namespace Core.Managers
 
             return true;
         }
-
+        /// <summary>
+        /// Updates the Windows startup registry entry to configure whether the application launches automatically when
+        /// the user logs in.
+        /// </summary>
+        /// <remarks>This method adds or removes the application's registry entry based on the current
+        /// startup and minimize settings. It does not throw exceptions if registry access fails; errors are logged for
+        /// diagnostic purposes. This method should be called whenever the startup-related settings change to ensure the
+        /// registry reflects the desired behavior.</remarks>
         private void UpdateStartupRegistry()
         {
             string keyName = "StreamDropCollector";
