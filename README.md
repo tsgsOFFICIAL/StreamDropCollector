@@ -22,7 +22,15 @@ Watch streams in the background, earn campaign rewards, and claim them automatic
 
 ## Screenshots
 
-*(Add your own screenshots here - dashboard, progress cards, help tab, etc.)*
+![Dashboard](https://github.com/tsgsOFFICIAL/StreamDropCollector/blob/master/Github-Assets/Dashboard.png?raw=true)  
+_Main dashboard showing live progress for both platforms_
+
+---
+
+![Inventory](https://github.com/tsgsOFFICIAL/StreamDropCollector/blob/master/Github-Assets/Inventory.png?raw=true)  
+_Active campaigns and rewards overview_
+
+---
 
 ## Requirements
 
