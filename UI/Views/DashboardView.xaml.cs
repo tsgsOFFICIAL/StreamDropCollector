@@ -331,12 +331,12 @@ namespace UI.Views
 
                 _activeCampaigns.Clear();
 
-                //IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _kickService.Status, _twitchWebView, _twitchService.Status, _twitchGqlService, cts.Token);
+                IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _kickService.Status, _twitchWebView, _twitchService.Status, _twitchGqlService, cts.Token);
 
-                //foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
-                //    _activeCampaigns.Add(c);
+                foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.GameName))
+                    _activeCampaigns.Add(c);
 
-                //DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns, _twitchGqlService);
+                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns, _twitchGqlService);
 
                 MinerStatus = "Idle";
                 MinerStatusDetails = $"{_activeCampaigns.Count} active campaigns loaded";

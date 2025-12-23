@@ -113,12 +113,18 @@
                         Grid.Row="0" Grid.ColumnSpan="2" 
                         Orientation="Horizontal">
                 <Image Margin="10,10,10,10" Height="Auto" MaxHeight="75" Source="/Assets/logo.png" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+
                 <Viewbox Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8" MaxHeight="40">
-                    <StackPanel Orientation="Vertical">
-                        <TextBlock x:Name="MainAppHeader" Text="Stream Drop Collector" FontFamily="Roboto" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                        <TextBlock Text="by tsgsOFFICIAL" FontStyle="Italic" FontFamily="Roboto" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock x:Name="MainAppHeader" Text="Stream Drop Collector" FontFamily="Roboto" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Text="by tsgsOFFICIAL" FontStyle="Italic" FontFamily="Roboto" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding VersionString, StringFormat='Version {0}', FallbackValue='Version N/A'}" Margin="10,0,0,0" FontStyle="Italic" FontFamily="Roboto" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                 </Viewbox>
+
                 <Viewbox Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8" MaxHeight="40">
                     <TextBlock x:Name="MainAppVersion" FontStyle="Italic" FontFamily="Roboto" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                 </Viewbox>
@@ -131,7 +137,7 @@
                 <Button Name="Close_Button"     Content="&#10006;"      Click="OnCloseButtonClicked"      Style="{StaticResource CloseBtn}"              ToolTip="Close"/>
             </StackPanel>
 
-            <!-- MAIN CONTENT - EXACTLY AS YOU WROTE IT -->
+            <!-- MAIN CONTENT -->
             <Border Grid.Column="1" Grid.Row="1" Background="{DynamicResource MainBackgroundBrush}">
                 <ContentControl x:Name="MainContent"/>
             </Border>

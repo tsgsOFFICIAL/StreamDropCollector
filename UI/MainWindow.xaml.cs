@@ -1,7 +1,9 @@
 ﻿using UserControl = System.Windows.Controls.UserControl;
 using Button = System.Windows.Controls.Button;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Media.Animation;
+using System.ComponentModel;
 using System.Windows.Input;
 using System.Diagnostics;
 using System.IO.Pipes;
@@ -9,13 +11,15 @@ using System.Windows;
 using Core.Managers;
 using System.IO;
 using UI.Views;
+using Core;
+
 
 namespace UI
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, INotifyPropertyChanged
     {
         public ICommand? JoinDiscordCommand { get; }
         public ICommand? ToggleWindowCommand { get; }
@@ -32,6 +36,18 @@ namespace UI
                 UpdateTrayIconVisibility();
             }
         }
+
+        private string _versionString = "";
+        public string VersionString
+        {
+            get => string.IsNullOrEmpty(_versionString) ? "N/A" : _versionString;
+            set
+            {
+                _versionString = value;
+                OnPropertyChanged();
+            }
+        }
+
         private UserControl? _currentPage;
 
         private bool _isInTrayMode = false;
@@ -40,6 +56,24 @@ namespace UI
 
         private const int WS_EX_TOOLWINDOW = 0x00000080;
         private const int GWL_EXSTYLE = -20;
+
+        /// <summary>
+        /// Occurs when a property value changes.
+        /// </summary>
+        /// <remarks>This event is typically raised by the implementation of the INotifyPropertyChanged
+        /// interface to notify subscribers that a property value has changed. Handlers receive the name of the property
+        /// that changed in the event data. This event is commonly used in data binding scenarios to update UI elements
+        /// when underlying data changes.</remarks>
+        public event PropertyChangedEventHandler? PropertyChanged;
+        /// <summary>
+        /// Raises the PropertyChanged event to notify listeners that a property value has changed.
+        /// </summary>
+        /// <remarks>Use this method to implement the INotifyPropertyChanged interface in classes that
+        /// support data binding. Calling this method with the correct property name ensures that UI elements or other
+        /// listeners are updated when the property value changes.</remarks>
+        /// <param name="name">The name of the property that changed. This value is optional and is automatically provided when called from
+        /// a property setter.</param>
+        private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         [DllImport("user32.dll")]
         private static extern int GetWindowLong(IntPtr hwnd, int index);
@@ -73,6 +107,9 @@ namespace UI
         private void OnMainWindowLoaded(object sender, RoutedEventArgs e)
         {
             StartActivationServer();
+
+            FileVersionInfo localVersionInfo = FileVersionInfo.GetVersionInfo(Utility.GetExePath());
+            VersionString = localVersionInfo.FileVersion ?? "N/A";
 
             string basePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector");
             string updatePath = Path.Combine(basePath, "Update");

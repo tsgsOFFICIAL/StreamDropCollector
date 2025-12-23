@@ -82,7 +82,7 @@ namespace Core
             }
         }
 
-        internal static string GetExePath()
+        public static string GetExePath()
         {
             string? exeLocation5 = Process.GetCurrentProcess().MainModule?.FileName;
 
