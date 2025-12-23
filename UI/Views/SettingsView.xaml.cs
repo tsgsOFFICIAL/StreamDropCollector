@@ -20,9 +20,12 @@ namespace UI.Views
             DataContext = UISettingsManager.Instance;
         }
 
-        private void OnUpdateButtonClick(object sender, RoutedEventArgs e)
+        private async void OnUpdateButtonClick(object sender, RoutedEventArgs e)
         {
-            // TODO: Implement update logic here
+            if (UISettingsManager.Instance.UpdateAvailable)
+            {
+                await UpdateManager.Instance.DownloadUpdate(); // Download and apply the update
+            }
         }
 
         private void OnRemoveAllAccountsButtonClick(object sender, RoutedEventArgs e)
