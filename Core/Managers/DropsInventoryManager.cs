@@ -78,7 +78,6 @@ namespace Core.Managers
                         {
                             int newProgress = reward.ProgressMinutes + 1;
                             updatedRewards.Add(reward with { ProgressMinutes = newProgress });
-
                         }
 
                         DropsCampaign updatedCampaign = campaign with { Rewards = updatedRewards };
