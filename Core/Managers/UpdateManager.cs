@@ -36,9 +36,9 @@ namespace Core.Managers
 
             try
             {
-                await downloader.DownloadDirectoryAsync(updatePath);
+                //await downloader.DownloadDirectoryAsync(updatePath);
 
-                Process.Start(Path.Combine(updatePath, "StreamDropCollector"));
+                Process.Start(Path.Combine(updatePath, "Stream Drop Collector"), "--updated");
                 Environment.Exit(0);
             }
             catch (Exception ex)

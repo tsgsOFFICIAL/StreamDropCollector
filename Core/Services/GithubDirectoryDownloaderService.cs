@@ -191,7 +191,7 @@ namespace Core.Services
                         case "file":
                             string downloadUrl = item.DownloadUrl!;
                             string localFilePath = Path.Combine(downloadPath, item.Name!);
-                            string oldFilePath = Path.Combine(downloadPath.Replace("\\UPDATE", ""), item.Name!);
+                            string oldFilePath = Path.Combine(downloadPath.Replace("\\Update", ""), item.Name!);
 
                             // Check if file needs to be downloaded
                             string? localSha = _fileHashes.ContainsKey(item.Path!) ? _fileHashes[item.Path!] : null;
