@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="updateInfo.sdc" />
+  </Folder>
   <Project Path="Core/Core.csproj" />
   <Project Path="UI/UI.csproj" />
 </Solution>

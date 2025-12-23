@@ -152,7 +152,12 @@ namespace UI
                 IsTrayIconVisible ? Visibility.Visible
                 : Visibility.Collapsed;
         }
-
+        /// <summary>
+        /// Toggles the window state between normal mode and tray mode.
+        /// </summary>
+        /// <remarks>If the window is currently in tray mode, this method restores it to normal mode.
+        /// Otherwise, it minimizes the window to the system tray. This method is typically used to provide a quick way
+        /// for users to hide or restore the application window.</remarks>
         private void ToggleWindowState()
         {
             if (_isInTrayMode)
@@ -160,7 +165,13 @@ namespace UI
             else
                 EnterTrayMode();
         }
-
+        /// <summary>
+        /// Switches the application window to tray mode, minimizing it to the system tray while keeping background
+        /// operations active.
+        /// </summary>
+        /// <remarks>When tray mode is activated, the window is hidden from the taskbar and ALT+TAB, and a
+        /// notification is displayed to inform the user that background processing continues. The window's previous
+        /// position is saved and can be restored when exiting tray mode.</remarks>
         private void EnterTrayMode()
         {
             if (_isInTrayMode)
@@ -190,7 +201,13 @@ namespace UI
             MinimizeAndRestore.Header = "Restore";
             MyNotifyIcon.ToolTipText = "Stream Drop Collector - Farming in background";
         }
-
+        /// <summary>
+        /// Restores the application's main window from tray mode to its normal state and updates its appearance and
+        /// position.
+        /// </summary>
+        /// <remarks>This method reverses the changes made when entering tray mode, including restoring
+        /// the window's position, showing it in the taskbar and ALT+TAB, and updating related UI elements. It should be
+        /// called only when the application is currently in tray mode.</remarks>
         private void ExitTrayMode()
         {
             if (!_isInTrayMode)

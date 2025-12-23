@@ -307,7 +307,7 @@
                                 <ComboBoxItem Content="Every time the app starts" Tag="{x:Static enums:UpdateFrequency.OnLaunch}"/>
                                 <ComboBoxItem Content="Daily" Tag="{x:Static enums:UpdateFrequency.Daily}"/>
                                 <ComboBoxItem Content="Weekly" Tag="{x:Static enums:UpdateFrequency.Weekly}"/>
-                                <ComboBoxItem Content="Never (manual only)" Tag="{x:Static enums:UpdateFrequency.Never}"/>
+                                <ComboBoxItem Content="Never" Tag="{x:Static enums:UpdateFrequency.Never}"/>
                             </ComboBox>
                         </StackPanel>
 
@@ -362,8 +362,14 @@
                         <CheckBox IsChecked="{Binding NotifyOnAutoClaimed, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop successfully auto-claimed (only if auto-claim is on)"
-                                  Margin="0,0,0,16"
+                                  Margin="0,0,0,12"
                                   IsEnabled="{Binding AutoClaimRewards}"/>
+
+                        <CheckBox IsChecked="{Binding NotifyOnNewUpdateAvailable, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="New update is available"
+                                  Margin="0,0,0,12"
+                                  IsEnabled="{Binding IsUpdateNotificationEnabled}"/>
                     </StackPanel>
                 </Border>
 

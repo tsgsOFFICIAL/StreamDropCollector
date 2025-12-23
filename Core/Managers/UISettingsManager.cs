@@ -1,6 +1,10 @@
 ﻿using System.Runtime.CompilerServices;
+using Timer = System.Timers.Timer;
+using System.Net.Http.Headers;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Text.Json;
+using System.Net.Http;
 using Core.Models;
 using Core.Enums;
 using System.IO;
@@ -24,10 +28,11 @@ namespace Core.Managers
         private string _theme = "System";
         private UpdateFrequency _updateFrequency = UpdateFrequency.Daily;
         private bool _autoClaimRewards = true;
-        private bool _notifyOnDropUnlocked;
         private bool _notifyOnReadyToClaim;
         private bool _notifyOnAutoClaimed = true;
-        private bool _updateAvailable = true;
+        private bool _updateAvailable = false;
+        private bool _notifyOnNewUpdateAvailable = true;
+        private DateTime? _lastUpdateCheck = null;
 
         /// <summary>
         /// Gets or sets a value indicating whether the application starts automatically when Windows starts.
@@ -84,7 +89,17 @@ namespace Core.Managers
         public UpdateFrequency UpdateFrequency
         {
             get => _updateFrequency;
-            set => SetField(ref _updateFrequency, value);
+            set
+            {
+                SetField(ref _updateFrequency, value);
+
+                if (value == UpdateFrequency.Never)
+                {
+                    NotifyOnNewUpdateAvailable = false;
+                }
+
+                OnPropertyChanged(nameof(IsUpdateNotificationEnabled));
+            }
         }
         /// <summary>
         /// Gets or sets a value indicating whether rewards are automatically claimed when they become available.
@@ -107,12 +122,12 @@ namespace Core.Managers
                 }
             }
         }
-       /// <summary>
-       /// Gets or sets a value indicating whether a notification should be sent when rewards are ready to be claimed.
-       /// </summary>
-       /// <remarks>This property cannot be enabled if automatic reward claiming is active. If <see
-       /// cref="AutoClaimRewards"/> is <see langword="true"/>, setting this property to <see langword="true"/> has no
-       /// effect and the value remains <see langword="false"/>.</remarks>
+        /// <summary>
+        /// Gets or sets a value indicating whether a notification should be sent when rewards are ready to be claimed.
+        /// </summary>
+        /// <remarks>This property cannot be enabled if automatic reward claiming is active. If <see
+        /// cref="AutoClaimRewards"/> is <see langword="true"/>, setting this property to <see langword="true"/> has no
+        /// effect and the value remains <see langword="false"/>.</remarks>
         public bool NotifyOnReadyToClaim
         {
             get => _notifyOnReadyToClaim;
@@ -159,12 +174,125 @@ namespace Core.Managers
         public bool UpdateAvailable
         {
             get => _updateAvailable;
-            set => SetField(ref _updateAvailable, value);
+            set
+            {
+                SetField(ref _updateAvailable, value);
+
+                if (value && NotifyOnNewUpdateAvailable)
+                    NotificationManager.ShowNotification("Update Available", "A new version is available.");
+            }
         }
+        /// <summary>
+        /// Gets or sets a value indicating whether the application should notify the user when a new update is
+        /// available.
+        /// </summary>
+        public bool NotifyOnNewUpdateAvailable
+        {
+            get => _notifyOnNewUpdateAvailable;
+            set => SetField(ref _notifyOnNewUpdateAvailable, value);
+        }
+        /// <summary>
+        /// Gets a value indicating whether update notifications are enabled.
+        /// </summary>
+        public bool IsUpdateNotificationEnabled => UpdateFrequency != UpdateFrequency.Never;
 
         private UISettingsManager()
         {
             LoadSettings();
+            _ = CheckForUpdatesAsync(); // Fire and forget
+        }
+
+        private async Task CheckForUpdatesAsync()
+        {
+            if (UpdateFrequency != UpdateFrequency.Never)
+            {
+                LoadSettings(); // Ensure we have the latest settings, this includes last time we checked for an update
+
+                if (_lastUpdateCheck.HasValue)
+                {
+                    TimeSpan timeSinceLastCheck = DateTime.Now - _lastUpdateCheck.Value;
+
+                    switch (UpdateFrequency)
+                    {
+                        case UpdateFrequency.OnLaunch:
+                            // Always check on launch
+                            break;
+                        case UpdateFrequency.Daily:
+                            if (timeSinceLastCheck < TimeSpan.FromDays(1))
+                            {
+                                TimeSpan timeLeft = TimeSpan.FromDays(1) - timeSinceLastCheck;
+
+                                // Create a timer, to check again in "timeLeft" and skip for now
+                                Timer timer = new Timer(timeLeft.TotalMilliseconds);
+
+                                timer.Elapsed += async (sender, e) =>
+                                {
+                                    timer.Stop();
+                                    timer.Dispose();
+                                    await CheckForUpdatesAsync();
+                                };
+
+                                timer.Start();
+
+                                Debug.WriteLine($"[Update Check] Skipping check. Next check in {timeLeft.TotalHours:F1} hours.");
+
+                                return; // Skip check
+                            }
+                            break;
+                        case UpdateFrequency.Weekly:
+                            if (timeSinceLastCheck < TimeSpan.FromDays(7))
+                            {
+                                TimeSpan timeLeft = TimeSpan.FromDays(7) - timeSinceLastCheck;
+
+                                // Create a timer, to check again in "timeLeft" and skip for now
+                                Timer timer = new Timer(timeLeft.TotalMilliseconds);
+
+                                timer.Elapsed += async (sender, e) =>
+                                {
+                                    timer.Stop();
+                                    timer.Dispose();
+                                    await CheckForUpdatesAsync();
+                                };
+
+                                timer.Start();
+
+                                Debug.WriteLine($"[Update Check] Skipping check. Next check in {timeLeft.TotalHours:F1} hours.");
+
+                                return; // Skip check
+                            }
+                            break;
+                    }
+                }
+
+                FileVersionInfo localVersionInfo = FileVersionInfo.GetVersionInfo(Utility.GetExePath());
+                UpdateInfo? serverUpdateInfo;
+
+                try
+                {
+                    using HttpClient client = new HttpClient();
+                    client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
+                    {
+                        NoCache = true
+                    };
+
+                    client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
+
+                    serverUpdateInfo = JsonSerializer.Deserialize<UpdateInfo>(await client.GetStringAsync("https://raw.githubusercontent.com/tsgsOFFICIAL/StreamDropCollector/master/updateInfo.sdc")) ?? new UpdateInfo();
+                }
+                catch (Exception)
+                {
+                    UpdateAvailable = false;
+                    return;
+                }
+
+                if (Version.TryParse(serverUpdateInfo.Version, out Version? serverVersion) && Version.TryParse(localVersionInfo.FileVersion, out Version? localVersion))
+                    UpdateAvailable = serverVersion > localVersion;
+                else
+                    UpdateAvailable = false;
+
+                _lastUpdateCheck = DateTime.Now;
+                SaveSettings();
+            }
         }
         /// <summary>
         /// Loads application settings from the configuration file, if it exists, and applies them to the current
@@ -191,6 +319,8 @@ namespace Core.Managers
                     AutoClaimRewards = settings.AutoClaimRewards;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
                     NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
+                    NotifyOnNewUpdateAvailable = settings.NotifyOnNewUpdateAvailable;
+                    _lastUpdateCheck = settings.LastUpdateCheck;
                 }
             }
             catch (Exception ex) when (ex is JsonException || ex is IOException || ex is UnauthorizedAccessException)
@@ -218,7 +348,9 @@ namespace Core.Managers
                     UpdateFrequency = UpdateFrequency,
                     AutoClaimRewards = AutoClaimRewards,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,
-                    NotifyOnAutoClaimed = NotifyOnAutoClaimed
+                    NotifyOnAutoClaimed = NotifyOnAutoClaimed,
+                    NotifyOnNewUpdateAvailable = NotifyOnNewUpdateAvailable,
+                    LastUpdateCheck = _lastUpdateCheck
                 };
 
                 string json = JsonSerializer.Serialize(settings, _jsonOptions);
