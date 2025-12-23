@@ -28,7 +28,7 @@ namespace Core.Managers
         /// application to exit and restart.</remarks>
         public async Task DownloadUpdate()
         {
-            string basePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "StreamDropCollector");
+            string basePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector");
             string updatePath = Path.Combine(basePath, "Update");
 
             using GitHubDirectoryDownloaderService downloader = new GitHubDirectoryDownloaderService(_repositoryOwner, _repositoryName, _folderPath, basePath);
