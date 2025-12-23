@@ -1,5 +1,4 @@
 ﻿using System.Collections.ObjectModel;
-using System.Windows.Threading;
 using Core.Interfaces;
 using System.Windows;
 using System.Timers;
@@ -655,7 +654,7 @@ namespace Core.Managers
 
             System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Selected Kick streamer URL for campaign '{campaign.Name}': {streamerUrl}");
             KickChannelChanged?.Invoke(streamerUrl);
-            return streamerUrl;
+            return GetStreamerNameFromUrl(streamerUrl);
         }
         /// <summary>
         /// Selects the appropriate Twitch streamer URL for the specified drops campaign.
@@ -689,7 +688,31 @@ namespace Core.Managers
 
             System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Selected Twitch streamer URL for campaign '{campaign.Name}': {streamerUrl}");
             TwitchChannelChanged?.Invoke(streamerUrl);
-            return streamerUrl;
+
+            return GetStreamerNameFromUrl(streamerUrl);
+        }
+        /// <summary>
+        /// Extracts the streamer name from the specified Twitch or Kick channel URL.
+        /// </summary>
+        /// <remarks>This method expects the URL path to be in the format "/{streamerName}". If the URL is
+        /// not valid or does not match the expected format, the method returns an empty string.</remarks>
+        /// <param name="url">The URL of the Twitch or Kick channel from which to extract the streamer name. Must be a valid absolute URL.</param>
+        /// <returns>The streamer name extracted from the URL, or an empty string if the URL is invalid or does not contain a
+        /// streamer name.</returns>
+        private string GetStreamerNameFromUrl(string url)
+        {
+            try
+            {
+                Uri uri = new Uri(url);
+                string path = uri.AbsolutePath.Trim('/');
+                // Twitch URLs are typically in the format /{streamerName}
+                // Kick URLs are typically in the format /{streamerName}
+                return path.Split('/')[0];
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 
