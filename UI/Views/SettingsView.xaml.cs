@@ -22,7 +22,7 @@ namespace UI.Views
 
         private void OnUpdateButtonClick(object sender, RoutedEventArgs e)
         {
-
+            // TODO: Implement update logic here
         }
 
         private void OnRemoveAllAccountsButtonClick(object sender, RoutedEventArgs e)

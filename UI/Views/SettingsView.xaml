@@ -353,11 +353,6 @@
                         <TextBlock Text="Notifications" Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
 
-                        <CheckBox IsChecked="{Binding NotifyOnDropUnlocked, Mode=TwoWay}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  Content="New drop unlocked"
-                                  Margin="0,0,0,12"/>
-
                         <CheckBox IsChecked="{Binding NotifyOnReadyToClaim, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop ready to claim (only if auto-claim is off)"

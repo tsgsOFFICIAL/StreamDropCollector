@@ -107,14 +107,6 @@ namespace Core.Managers
                 }
             }
         }
-        /// <summary>
-        /// Gets or sets a value indicating whether a notification is raised when an item is dropped and unlocked.
-        /// </summary>
-        public bool NotifyOnDropUnlocked
-        {
-            get => _notifyOnDropUnlocked;
-            set => SetField(ref _notifyOnDropUnlocked, value);
-        }
        /// <summary>
        /// Gets or sets a value indicating whether a notification should be sent when rewards are ready to be claimed.
        /// </summary>
@@ -197,7 +189,6 @@ namespace Core.Managers
                     Theme = settings.Theme ?? "System";
                     UpdateFrequency = settings.UpdateFrequency;
                     AutoClaimRewards = settings.AutoClaimRewards;
-                    NotifyOnDropUnlocked = settings.NotifyOnDropUnlocked;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
                     NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
                 }
@@ -226,7 +217,6 @@ namespace Core.Managers
                     Theme = Theme,
                     UpdateFrequency = UpdateFrequency,
                     AutoClaimRewards = AutoClaimRewards,
-                    NotifyOnDropUnlocked = NotifyOnDropUnlocked,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,
                     NotifyOnAutoClaimed = NotifyOnAutoClaimed
                 };

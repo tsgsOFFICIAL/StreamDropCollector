@@ -42,11 +42,12 @@ namespace Core.Managers
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
             _liveProgressTimer.AutoReset = true;
 
-            // New: minute-by-minute progress for Inventory UI
+            // Minute-by-minute progress for Inventory UI
             _liveMinuteTickTimer.Elapsed += OnLiveMinuteTick;
             _liveMinuteTickTimer.AutoReset = true;
             _liveMinuteTickTimer.Start(); // Always on – safe
         }
+
         /// <summary>
         /// Handles the timer event that occurs every minute to update the progress of active drops campaigns.
         /// </summary>
@@ -216,42 +217,54 @@ namespace Core.Managers
             // Get a list of ready to claim rewards, this means the reward is unclaimed and progress >= required
             List<DropsReward> readyToClaimRewards = [.. ActiveCampaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
 
-            // Claim all ready rewards
-            foreach (DropsReward item in readyToClaimRewards)
+            if (UISettingsManager.Instance.AutoClaimRewards)
             {
-                DropsCampaign? parentCampaign = ActiveCampaigns.FirstOrDefault(c => c.Rewards.Contains(item));
-
-                // If Twitch, use Gql.ClaimDropAsync()
-                if (parentCampaign == null)
-                    continue;
-
-                bool claimResult = false;
-                if (parentCampaign.Platform == Platform.Twitch && _twitchGqlService != null)
-                    claimResult = await _twitchGqlService.ClaimDropAsync(parentCampaign.Id, item.Id);
-                else if (parentCampaign.Platform == Platform.Kick)
-                    claimResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.ClaimKickDropAsync(parentCampaign.Id, item.Id));
-
-                if (claimResult)
+                // Claim all ready rewards
+                foreach (DropsReward item in readyToClaimRewards)
                 {
-                    // Update ActiveCampaigns to mark reward as claimed
-                    Application.Current.Dispatcher.Invoke(() =>
+                    DropsCampaign? parentCampaign = ActiveCampaigns.FirstOrDefault(c => c.Rewards.Contains(item));
+
+                    // If Twitch, use Gql.ClaimDropAsync()
+                    if (parentCampaign == null)
+                        continue;
+
+                    bool claimResult = false;
+                    if (parentCampaign.Platform == Platform.Twitch && _twitchGqlService != null)
+                        claimResult = await _twitchGqlService.ClaimDropAsync(parentCampaign.Id, item.Id);
+                    else if (parentCampaign.Platform == Platform.Kick)
+                        claimResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.ClaimKickDropAsync(parentCampaign.Id, item.Id));
+
+                    if (claimResult)
                     {
-                        List<DropsReward> updatedRewards = new List<DropsReward>();
-                        foreach (DropsReward reward in parentCampaign.Rewards)
+                        // Update ActiveCampaigns to mark reward as claimed
+                        Application.Current.Dispatcher.Invoke(() =>
                         {
-                            if (reward.Id == item.Id)
-                                updatedRewards.Add(reward with { IsClaimed = true });
-                            else
-                                updatedRewards.Add(reward);
-                        }
+                            List<DropsReward> updatedRewards = new List<DropsReward>();
+                            foreach (DropsReward reward in parentCampaign.Rewards)
+                            {
+                                if (reward.Id == item.Id)
+                                    updatedRewards.Add(reward with { IsClaimed = true });
+                                else
+                                    updatedRewards.Add(reward);
+                            }
 
-                        DropsCampaign updatedCampaign = parentCampaign with { Rewards = updatedRewards };
+                            DropsCampaign updatedCampaign = parentCampaign with { Rewards = updatedRewards };
 
-                        int index = ActiveCampaigns.IndexOf(parentCampaign);
-                        if (index >= 0)
-                            ActiveCampaigns[index] = updatedCampaign;
-                    });
+                            int index = ActiveCampaigns.IndexOf(parentCampaign);
+                            if (index >= 0)
+                                ActiveCampaigns[index] = updatedCampaign;
+                        });
+
+                        NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}");
+                    }
+                    else
+                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward: {item.Name}");
                 }
+            }
+            else if (UISettingsManager.Instance.NotifyOnReadyToClaim)
+            {
+                // Notify user that there are rewards ready to claim
+                NotificationManager.ShowNotification("Drop Ready to Claim", $"You have {readyToClaimRewards.Count} drops rewards ready to claim. Please claim them manually.");
             }
 
             // Group campaigns by platform
