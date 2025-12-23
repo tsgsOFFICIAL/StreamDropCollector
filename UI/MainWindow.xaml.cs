@@ -1,10 +1,12 @@
 ﻿using UserControl = System.Windows.Controls.UserControl;
 using Button = System.Windows.Controls.Button;
-using System.Windows.Media.Animation;
 using System.Runtime.InteropServices;
+using System.Windows.Media.Animation;
 using System.Windows.Input;
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Windows;
+using Core.Managers;
 using System.IO;
 using UI.Views;
 
@@ -49,7 +51,7 @@ namespace UI
         {
             InitializeComponent();
 
-            Loaded += (_, _) => StartActivationServer();
+            Loaded += OnMainWindowLoaded;
 
             // Initialize tray icon visibility
             IsTrayIconVisible = true;
@@ -67,6 +69,94 @@ namespace UI
             // Default page
             SwitchPage(DashboardView.Instance);
         }
+
+        private void OnMainWindowLoaded(object sender, RoutedEventArgs e)
+        {
+            StartActivationServer();
+
+            string basePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector");
+            string updatePath = Path.Combine(basePath, "Update");
+
+            string[] args = Environment.GetCommandLineArgs();
+
+            foreach (string arg in args)
+            {
+                switch (arg)
+                {
+                    case "--updating":
+                        Thread.Sleep(3000); // Allow other instance(s) to close before finalizing the update
+
+                        // Delete all files and folders from the base path (%appdata% + \\Stream Drop Collector) except the "Update" folder, and some other files and folders
+                        string[] foldersToKeep =
+                        [
+                            "Update",
+                            "Stream Drop Collector.exe.WebView2"
+                        ];
+
+                        string[] filesToKeep =
+                        [
+                            "Settings.json",
+                            "sha_cache.tsgs"
+                        ];
+
+                        // Delete all files, except for the ones in filesToKeep
+                        foreach (string file in Directory.GetFiles(basePath))
+                        {
+                            string fileName = Path.GetFileName(file);
+                            if (Array.Exists(filesToKeep, f => f.Equals(fileName, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+
+                            File.Delete(file);
+                        }
+
+                        foreach (string directory in Directory.GetDirectories(basePath))
+                        {
+                            string dirName = Path.GetFileName(directory);
+                            if (Array.Exists(foldersToKeep, f => f.Equals(dirName, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+
+                            Directory.Delete(directory, true);
+                        }
+
+                        // Move update files to base path
+                        foreach (string file in Directory.GetFiles(updatePath, "*", SearchOption.AllDirectories))
+                        {
+                            string relativePath = Path.GetRelativePath(updatePath, file);
+                            string destinationPath = Path.Combine(basePath, relativePath);
+                            string destinationDir = Path.GetDirectoryName(destinationPath)!;
+
+                            if (!Directory.Exists(destinationDir))
+                                Directory.CreateDirectory(destinationDir);
+
+                            File.Copy(file, destinationPath, true);
+                        }
+
+                        // Start the real, updated app
+                        Process.Start(Path.Combine(basePath, "Stream Drop Collector"), "--updated");
+                        Environment.Exit(0);
+                        break;
+                    case "--updated":
+                        // Start normally, but delete the Update folder after a delay
+                        Task.Run(() =>
+                        {
+                            Thread.Sleep(10 * 1000); // Wait 10 seconds to ensure the app has started properly
+                            try
+                            {
+                                if (Directory.Exists(updatePath))
+                                    Directory.Delete(updatePath, true);
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"Failed to delete Update folder: {ex.Message}");
+                            }
+                        });
+
+                        NotificationManager.ShowNotification("Stream Drop Collector", "Application updated successfully!");
+                        break;
+                }
+            }
+        }
+
         /// <summary>
         /// Replaces the current page displayed in the main content area with the specified page, applying a fade
         /// animation during the transition.

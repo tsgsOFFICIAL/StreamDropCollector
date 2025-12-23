@@ -31,7 +31,7 @@ namespace UI
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            bool ignoreMutexRule = e.Args.Any(a => a.Equals("--updated", StringComparison.OrdinalIgnoreCase));
+            bool ignoreMutexRule = e.Args.Any(a => a.Equals("--updating", StringComparison.OrdinalIgnoreCase) || a.Equals("--updated", StringComparison.OrdinalIgnoreCase));
 
             _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
 

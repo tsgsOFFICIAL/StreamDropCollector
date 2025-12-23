@@ -23,9 +23,7 @@ namespace UI.Views
         private async void OnUpdateButtonClick(object sender, RoutedEventArgs e)
         {
             if (UISettingsManager.Instance.UpdateAvailable)
-            {
                 await UpdateManager.Instance.DownloadUpdate(); // Download and apply the update
-            }
         }
 
         private void OnRemoveAllAccountsButtonClick(object sender, RoutedEventArgs e)

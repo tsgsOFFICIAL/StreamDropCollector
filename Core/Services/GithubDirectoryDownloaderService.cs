@@ -147,6 +147,7 @@ namespace Core.Services
             {
                 // Get the rate limit reset time (epoch seconds)
                 string? resetTimeString = response.Headers.GetValues("x-ratelimit-reset").FirstOrDefault();
+                DateTime resetLocal = DateTime.Now.AddHours(1);
 
                 if (long.TryParse(resetTimeString, out long resetEpoch))
                 {
@@ -154,7 +155,7 @@ namespace Core.Services
                     DateTime resetUtc = DateTimeOffset.FromUnixTimeSeconds(resetEpoch).UtcDateTime;
 
                     // Convert UTC to local time
-                    DateTime resetLocal = resetUtc.ToLocalTime();
+                    resetLocal = resetUtc.ToLocalTime();
 
                     Debug.WriteLine($"Rate limit resets at: {resetLocal}");
                     OnProgressChanged(new ProgressEventArgs(0, $"API rate limit exceeded, try again after {resetLocal:T}"));
@@ -166,7 +167,7 @@ namespace Core.Services
                 }
 
                 Dispose();
-                throw new Exception("API rate limit exceeded");
+                throw new Exception($"API rate limit exceeded\nRate limit resets at: {resetLocal}");
             }
 
             if (response.IsSuccessStatusCode)

@@ -36,13 +36,14 @@ namespace Core.Managers
 
             try
             {
-                //await downloader.DownloadDirectoryAsync(updatePath);
+                await downloader.DownloadDirectoryAsync(updatePath);
 
-                Process.Start(Path.Combine(updatePath, "Stream Drop Collector"), "--updated");
+                Process.Start(Path.Combine(updatePath, "Stream Drop Collector"), "--updating");
                 Environment.Exit(0);
             }
             catch (Exception ex)
             {
+                NotificationManager.ShowNotification("Update Error", $"An error occurred while updating the application.\n{ex.Message}\n\nTry again after this time", 300);
                 Debug.WriteLine(ex.Message);
             }
         }
