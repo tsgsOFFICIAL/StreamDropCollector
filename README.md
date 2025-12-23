@@ -32,7 +32,7 @@ Watch streams in the background, earn campaign rewards, and claim them automatic
 ## Quick Start
 
 1. **Download** the latest release from [Releases](https://github.com/tsgsOFFICIAL/StreamDropCollector/releases/latest) _(recommended)_
-   - or direct folder download: [https://download-directory.github.io/?url=https://github.com/tsgsOFFICIAL/StreamDropCollector/tree/master/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64](https://download-directory.github.io/?url=https://github.com/tsgsOFFICIAL/StreamDropCollector/tree/master/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64)
+   - or direct folder download: [https://download-directory.github.io/?url=https://github.com/tsgsOFFICIAL/StreamDropCollector/tree/master/UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64](https://download-directory.github.io/?url=https://github.com/tsgsOFFICIAL/StreamDropCollector/tree/master/UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64)
 2. Extract the ZIP
 3. Run `StreamDropCollector.exe`
 4. Log in to Twitch and Kick when the embedded browsers appear
