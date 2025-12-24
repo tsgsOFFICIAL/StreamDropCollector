@@ -604,7 +604,8 @@ namespace UI.Views
                                 credentials: 'include',
                                 headers: {{
                                     'Content-Type': 'application/json',
-                                    'Accept': 'application/json'
+                                    'Accept': 'application/json',
+                                    'Authorization': 'Bearer {bearerToken}'
                                 }},
                                 body: JSON.stringify({{
                                     campaign_id: '{campaignId}',
