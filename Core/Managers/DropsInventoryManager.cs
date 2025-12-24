@@ -213,6 +213,8 @@ namespace Core.Managers
                 return;
             }
 
+            DateTime nextCheckAt = DateTime.Now.AddHours(1); // Fallback: recheck in 1 hour
+
             // Get a list of ready to claim rewards, this means the reward is unclaimed and progress >= required
             List<DropsReward> readyToClaimRewards = [.. ActiveCampaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
 
@@ -257,7 +259,10 @@ namespace Core.Managers
                         NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}");
                     }
                     else
-                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward: {item.Name}");
+                    {
+                        nextCheckAt = DateTime.Now.AddMinutes(5);
+                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward, re-trying in 5 minutes: {item.Name}");
+                    }
                 }
             }
             else if (UISettingsManager.Instance.NotifyOnReadyToClaim)
@@ -269,9 +274,7 @@ namespace Core.Managers
             // Group campaigns by platform
             List<DropsCampaign> twitchCampaigns = [.. ActiveCampaigns.Where(c => c.Platform == Platform.Twitch && c.HasProgressToMake())];
             List<DropsCampaign> kickCampaigns = [.. ActiveCampaigns.Where(c => c.Platform == Platform.Kick && c.HasProgressToMake())];
-
-            DateTime nextCheckAt = DateTime.Now.AddHours(1); // Fallback: recheck in 1 hour
-
+                       
             // Handle Twitch
             if (twitchCampaigns.Count != 0 && TwitchWebView != null)
             {
