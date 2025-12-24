@@ -10,7 +10,7 @@
 		<ApplicationIcon>Assets\logo.ico</ApplicationIcon>
 		<AssemblyTitle>Stream Drop Collector</AssemblyTitle>
 		<AssemblyName>Stream Drop Collector</AssemblyName>
-		<FileVersion>1.0.0</FileVersion>
+		<FileVersion>1.0.1</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
