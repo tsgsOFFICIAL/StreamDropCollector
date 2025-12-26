@@ -180,7 +180,7 @@ namespace Core.Managers
                 return 0; // Campaign done
 
             double percentage = (double)totalWatchedSeconds / totalRequiredSeconds * 100;
-            return (byte)Math.Clamp(Math.Round(percentage), 0, 100);
+            return (byte)Math.Clamp((int)Math.Floor(percentage), 0, 100);
         }
         /// <summary>
         /// Calculates the progress percentage toward the next unclaimed live drop reward in the specified campaign.
@@ -202,7 +202,7 @@ namespace Core.Managers
 
             int requiredSeconds = nextReward.RequiredMinutes * 60;
             double percentage = (double)totalWatchedSeconds / requiredSeconds * 100;
-            return (byte)Math.Clamp(Math.Round(percentage), 0, 100);
+            return (byte)Math.Clamp((int)Math.Floor(percentage), 0, 100);
         }
         /// <summary>
         /// Initiates monitoring of active campaign streams to progress eligible rewards on supported platforms.
