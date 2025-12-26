@@ -9,7 +9,7 @@
 
     <UserControl.Resources>
         <Style TargetType="ProgressBar">
-            <Setter Property="Height" Value="20"/>
+            <Setter Property="Height" Value="12"/>
             <Setter Property="Background" Value="{DynamicResource TextMutedBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -18,13 +18,10 @@
                     <ControlTemplate TargetType="ProgressBar">
                         <Grid x:Name="Root">
                             <!-- Track -->
-                            <Border Background="{TemplateBinding Background}" 
-                                CornerRadius="10"/>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="5"/>
 
                             <!-- Fill -->
-                            <Border HorizontalAlignment="Left"
-                                CornerRadius="10"
-                                Background="{TemplateBinding Foreground}">
+                            <Border HorizontalAlignment="Left" CornerRadius="5" Background="{TemplateBinding Foreground}">
                                 <Border.Width>
                                     <MultiBinding Converter="{StaticResource PercentToWidthConverter}">
                                         <Binding Path="Value" RelativeSource="{RelativeSource TemplatedParent}"/>
@@ -104,7 +101,6 @@
                        FontSize="16"/>
 
                     <ProgressBar
-                       Height="20"
                        Margin="0,10,0,5"
                        Minimum="0"
                        Maximum="100"
@@ -112,6 +108,22 @@
 
                     <TextBlock
                        Text="{Binding TwitchCampaignProgress, StringFormat='{}{0}% Complete'}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       FontSize="12"/>
+
+                    <TextBlock Text="Drop Progress"
+                       Margin="0,10,0,0"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       FontSize="16"/>
+
+                    <ProgressBar
+                       Margin="0,10,0,5"
+                       Minimum="0"
+                       Maximum="100"
+                       Value="{Binding TwitchDropProgress}"/>
+
+                    <TextBlock
+                       Text="{Binding TwitchDropProgress, StringFormat='{}{0}% Complete'}"
                        Foreground="{DynamicResource TextMutedBrush}"
                        FontSize="12"/>
 
@@ -137,7 +149,6 @@
                        FontSize="16"/>
 
                     <ProgressBar
-                       Height="20"
                        Margin="0,10,0,5"
                        Minimum="0"
                        Maximum="100"
@@ -145,6 +156,22 @@
 
                     <TextBlock
                        Text="{Binding KickCampaignProgress, StringFormat='{}{0}% Complete'}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       FontSize="12"/>
+
+                    <TextBlock Text="Drop Progress"
+                       Margin="0,10,0,0"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       FontSize="16"/>
+
+                    <ProgressBar
+                       Margin="0,10,0,5"
+                       Minimum="0"
+                       Maximum="100"
+                       Value="{Binding KickDropProgress}"/>
+
+                    <TextBlock
+                       Text="{Binding KickDropProgress, StringFormat='{}{0}% Complete'}"
                        Foreground="{DynamicResource TextMutedBrush}"
                        FontSize="12"/>
 

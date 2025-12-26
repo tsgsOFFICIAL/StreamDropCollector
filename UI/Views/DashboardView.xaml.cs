@@ -116,6 +116,16 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
+        private byte _twitchDropProgress = 0;
+        public byte TwitchDropProgress
+        {
+            get => _twitchDropProgress;
+            set
+            {
+                _twitchDropProgress = value;
+                OnPropertyChanged();
+            }
+        }
         private byte _kickCampaignProgress = 0;
         public byte KickCampaignProgress
         {
@@ -123,6 +133,16 @@ namespace UI.Views
             set
             {
                 _kickCampaignProgress = value;
+                OnPropertyChanged();
+            }
+        }
+        private byte _kickDropProgress = 0;
+        public byte KickDropProgress
+        {
+            get => _kickDropProgress;
+            set
+            {
+                _kickDropProgress = value;
                 OnPropertyChanged();
             }
         }
@@ -189,19 +209,21 @@ namespace UI.Views
             Loaded += async (s, e) => await OnLoadedAsync();
 
             // Subscribe to progress updates ===
-            DropsInventoryManager.Instance.TwitchProgressChanged += progress =>
+            DropsInventoryManager.Instance.TwitchProgressChanged += (campPct, dropPct) =>
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchCampaignProgress = progress;
+                    TwitchCampaignProgress = campPct;
+                    TwitchDropProgress = dropPct;
                 });
             };
 
-            DropsInventoryManager.Instance.KickProgressChanged += progress =>
+            DropsInventoryManager.Instance.KickProgressChanged += (campPct, dropPct) =>
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickCampaignProgress = progress;
+                    KickCampaignProgress = campPct;
+                    KickDropProgress = dropPct;
                 });
             };
 
