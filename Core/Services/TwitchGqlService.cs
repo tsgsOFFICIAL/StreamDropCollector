@@ -174,7 +174,7 @@ namespace Core.Services
         /// reward was successfully claimed; otherwise, <see langword="false"/>.</returns>
         public async Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default)
         {
-            await RefreshHeadersAsync(ct);
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () => await RefreshHeadersAsync(ct));
 
             // Step 1. Construct the payload, according to the above format
             string operationName = "DropsPage_ClaimDropRewards";

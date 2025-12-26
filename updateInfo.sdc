@@ -1,8 +1,13 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "Patch",
-  "changelog": "Added drop progress to the dashboard.",
+  "changelog": "Fixed a few minor issues with claim status for twitch rewards.",
   "historic_versions": [
+    {
+      "version": "1.0.3",
+      "type": "Patch",
+      "changelog": "Added drop progress to the dashboard."
+    },
     {
       "version": "1.0.2",
       "type": "Patch",

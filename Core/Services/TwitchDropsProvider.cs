@@ -93,49 +93,53 @@ namespace Core.Services
                 }
 
                 JsonArray dropCampaignsInProgress = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
+                JsonArray gameEventDrops = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["gameEventDrops"]?.AsArray() ?? new JsonArray(); // Already finished/claimed drops
 
                 // Create a new list with updated campaigns
                 List<DropsCampaign> updatedResult = new List<DropsCampaign>();
 
                 foreach (DropsCampaign dropCampaign in result)
                 {
-                    // Find matching progress for this campaign
+                    // Find matching progress for this campaign (in-progress data)
                     JsonObject? matchingProgress = dropCampaignsInProgress.OfType<JsonObject>().FirstOrDefault(c => c["id"]?.GetValue<string>() == dropCampaign.Id);
 
-                    if (matchingProgress == null)
-                    {
-                        updatedResult.Add(dropCampaign);
-                        continue;
-                    }
+                    JsonArray? timeBasedDropsProgress = matchingProgress?["timeBasedDrops"]?.AsArray();
 
-                    JsonArray? timeBasedDropsProgress = matchingProgress["timeBasedDrops"]?.AsArray();
-                    if (timeBasedDropsProgress == null)
-                    {
-                        updatedResult.Add(dropCampaign);
-                        continue;
-                    }
-
-                    // Update rewards for THIS campaign only
+                    // Prepare updated rewards list for this campaign
                     List<DropsReward> updatedRewardsForThisCampaign = new List<DropsReward>();
 
                     foreach (DropsReward reward in dropCampaign.Rewards)
                     {
-                        JsonObject? matchingDropProgress = timeBasedDropsProgress.OfType<JsonObject>().FirstOrDefault(d => d["id"]?.GetValue<string>() == reward.Id);
+                        DropsReward updatedReward = reward; // Start with original
 
-                        if (matchingDropProgress == null)
+                        // 1. Apply in-progress data if available (progress minutes + claim status)
+                        if (timeBasedDropsProgress != null)
                         {
-                            updatedRewardsForThisCampaign.Add(reward);
-                            continue;
+                            JsonObject? matchingDropProgress = timeBasedDropsProgress.OfType<JsonObject>()
+                                .FirstOrDefault(d => d["id"]?.GetValue<string>() == reward.Id);
+
+                            if (matchingDropProgress != null)
+                            {
+                                int progressMinutes = matchingDropProgress["self"]?["currentMinutesWatched"]?.GetValue<int>() ?? reward.ProgressMinutes;
+                                bool isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? reward.IsClaimed;
+
+                                updatedReward = updatedReward with
+                                {
+                                    ProgressMinutes = progressMinutes,
+                                    IsClaimed = isClaimed
+                                };
+                            }
                         }
 
-                        int progressMinutes = matchingDropProgress["self"]?["currentMinutesWatched"]?.GetValue<int>() ?? reward.ProgressMinutes;
-                        bool isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? reward.IsClaimed;
+                        // 2. Apply gameEventDrops (completed drops) - these mark rewards as claimed via DropInstanceId
+                        JsonObject? matchingEventDrop = gameEventDrops.OfType<JsonObject>()
+                            .FirstOrDefault(e => e["id"]?.GetValue<string>() == reward.DropInstanceId);
 
-                        DropsReward updatedReward = reward with
+                        if (matchingEventDrop != null)
                         {
-                            ProgressMinutes = progressMinutes,
-                            IsClaimed = isClaimed
-                        };
+                            // This reward has been fully claimed via a game event drop
+                            updatedReward = updatedReward with { IsClaimed = true };
+                        }
 
                         updatedRewardsForThisCampaign.Add(updatedReward);
                     }

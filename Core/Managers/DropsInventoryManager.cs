@@ -774,7 +774,7 @@ namespace Core.Managers
         /// otherwise, false.</returns>
         public static bool HasProgressToMake(this DropsCampaign campaign)
         {
-            return campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes);
+            return campaign.Rewards.Any(r => !r.IsClaimed);
         }
         /// <summary>
         /// Calculates the overall completion percentage of all rewards in the specified campaign that require progress.
