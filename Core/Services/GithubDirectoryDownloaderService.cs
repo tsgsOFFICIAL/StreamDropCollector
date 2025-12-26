@@ -26,8 +26,6 @@ namespace Core.Services
         private HashSet<string> _currentFiles;
         public event EventHandler<ProgressEventArgs>? ProgressUpdated;
 
-        private readonly SemaphoreSlim _downloadSemaphore = new SemaphoreSlim(25); // Anywhere from 5 to 50 concurrent downloads should be fine.
-
         /// <summary>
         /// Initializes a new instance of the GitHubDirectoryDownloaderService class for downloading the contents of a specific
         /// directory from a GitHub repository to a local path.
@@ -43,12 +41,10 @@ namespace Core.Services
         public GitHubDirectoryDownloaderService(string repositoryOwner, string repositoryName, string folderPath, string basePath)
         {
             #region HttpClient Settings
-            HttpClientHandler httpClientHandler = new HttpClientHandler()
-            {
-                AllowAutoRedirect = true,
-                SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-            };
-
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            httpClientHandler.AllowAutoRedirect = true;
+            httpClientHandler.SslProtocols = SslProtocols.Tls12; // Set the SSL/TLS version (for example, TLS 1.2)
+            
             //httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) =>
             //{
             //    return true;
@@ -58,11 +54,10 @@ namespace Core.Services
             _httpClient.Timeout = new TimeSpan(0, 5, 0);
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "GitHubDirectoryDownloaderService");
 
-            AppContext.SetSwitch("System.Net.Http.UseSocketsHttpHandler", true); // default anyway
-            AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", false);
-
-            _httpClient.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
-            _httpClient.DefaultRequestVersion = HttpVersion.Version11;
+            // Replace with token, IF token exists locally (development purposes only)
+            string githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN") ?? "N/A";
+            if (!string.IsNullOrEmpty(githubToken))
+                _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("token", githubToken);
             #endregion
 
             _repositoryOwner = repositoryOwner;
@@ -147,6 +142,8 @@ namespace Core.Services
         /// <exception cref="Exception">Thrown if the GitHub API rate limit is exceeded during the download process.</exception>
         private async Task StartDownloadAsync(string downloadPath, string apiUrl = null!)
         {
+            string originalApiUrl = apiUrl;
+
             // Construct the API url
             apiUrl ??= $"https://api.github.com/repos/{_repositoryOwner}/{_repositoryName}/contents/{_folderPath}";
 
@@ -232,7 +229,7 @@ namespace Core.Services
 
                             lock (_subfolderTasks)
                             {
-                                _subfolderTasks.Add(StartDownloadAsync(subfolderDownloadDirectory, apiUrl.Replace(_folderPath, subFolderPath)));
+                                _subfolderTasks.Add(StartDownloadAsync(subfolderDownloadDirectory, item.Url!));
                             }
                             break;
                     }
@@ -256,8 +253,6 @@ namespace Core.Services
         /// <returns>A task that represents the asynchronous download operation.</returns>
         private async Task DownloadFileAsync(GitHubContent item, string filePath)
         {
-            Debug.WriteLine($"[QUEUE] Waiting for slot to download: {item.Name}");
-            await _downloadSemaphore.WaitAsync(); // Limit concurrent downloads
             try
             {
                 Debug.WriteLine($"[START] Downloading file: {item.Name} | Size: {item.Size ?? -1} bytes");
@@ -292,16 +287,10 @@ namespace Core.Services
             catch (TaskCanceledException tcex)
             {
                 Debug.WriteLine($"[TIMEOUT/CANCEL] {item.Name}: {tcex.Message} (IsTimeout: {!tcex.CancellationToken.IsCancellationRequested})");
-                // Optional: retry logic here
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ERROR] {item.Name}: {ex}");
-            }
-            finally
-            {
-                _downloadSemaphore.Release(); // Always release the slot
-                Debug.WriteLine($"[SLOT RELEASED] for {item.Name} | Current count: {_downloadSemaphore.CurrentCount}");
             }
         }
         /// <summary>
