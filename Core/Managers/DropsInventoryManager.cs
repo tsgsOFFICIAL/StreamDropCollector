@@ -17,8 +17,8 @@ namespace Core.Managers
         public IWebViewHost? TwitchWebView { get; private set; }
         public IWebViewHost? KickWebView { get; private set; }
 
-        public event Action<byte>? TwitchProgressChanged;
-        public event Action<byte>? KickProgressChanged;
+        public event Action<byte, byte>? TwitchProgressChanged;
+        public event Action<byte, byte>? KickProgressChanged;
         public event Action<string>? MinerStatusChanged;
         public event Action<string>? TwitchChannelChanged;
         public event Action<string>? KickChannelChanged;
@@ -113,15 +113,17 @@ namespace Core.Managers
             if (_currentTwitchCampaign != null)
             {
                 _twitchWatchedSeconds++;
-                byte twitchPct = CalculateLiveProgress(_currentTwitchCampaign, _twitchWatchedSeconds);
-                TwitchProgressChanged?.Invoke(twitchPct);
+                byte twitchCampPct = CalculateLiveCampaignProgress(_currentTwitchCampaign, _twitchWatchedSeconds);
+                byte twitchDropPct = CalculateLiveDropProgress(_currentTwitchCampaign, _twitchWatchedSeconds);
+                TwitchProgressChanged?.Invoke(twitchCampPct, twitchDropPct);
             }
 
             if (_currentKickCampaign != null)
             {
                 _kickWatchedSeconds++;
-                byte kickPct = CalculateLiveProgress(_currentKickCampaign, _kickWatchedSeconds);
-                KickProgressChanged?.Invoke(kickPct);
+                byte kickCampPct = CalculateLiveCampaignProgress(_currentKickCampaign, _kickWatchedSeconds);
+                byte kickDropPct = CalculateLiveDropProgress(_currentKickCampaign, _kickWatchedSeconds);
+                KickProgressChanged?.Invoke(kickCampPct, kickDropPct);
             }
         }
         /// <summary>
@@ -167,17 +169,38 @@ namespace Core.Managers
         /// equal to 0.</param>
         /// <returns>A value between 0 and 100 representing the percentage of progress toward all unclaimed rewards. Returns 100
         /// if all rewards are already claimed.</returns>
-        private static byte CalculateLiveProgress(DropsCampaign campaign, int totalWatchedSeconds)
+        private static byte CalculateLiveCampaignProgress(DropsCampaign campaign, int totalWatchedSeconds)
         {
             // Total required seconds across all unclaimed rewards
-            int totalRequiredSeconds = campaign.Rewards
-                .Where(r => !r.IsClaimed)
-                .Sum(r => r.RequiredMinutes * 60);
+            int totalRequiredSeconds = campaign.Rewards.Sum(r => r.RequiredMinutes * 60);
+            int totalProgressSeconds = campaign.Rewards.Sum(r => r.ProgressMinutes * 60);
 
-            if (totalRequiredSeconds == 0)
-                return 100; // All claimed
+            if (totalRequiredSeconds <= totalProgressSeconds)
+                return 0; // Campaign done
 
             double percentage = (double)totalWatchedSeconds / totalRequiredSeconds * 100;
+            return (byte)Math.Clamp(Math.Round(percentage), 0, 100);
+        }
+        /// <summary>
+        /// Calculates the progress percentage toward the next unclaimed live drop reward in the specified campaign.
+        /// </summary>
+        /// <param name="campaign">The drops campaign containing the list of rewards and their claim status.</param>
+        /// <param name="totalWatchedSeconds">The total number of seconds the user has watched, used to determine progress toward the next reward.</param>
+        /// <returns>A value between 0 and 100 representing the percentage of progress toward the next unclaimed reward. Returns
+        /// 100 if all rewards have been claimed.</returns>
+        private static byte CalculateLiveDropProgress(DropsCampaign campaign, int totalWatchedSeconds)
+        {
+            // Find the next unclaimed reward
+            DropsReward? nextReward = campaign.Rewards
+                .Where(r => !r.IsClaimed)
+                .OrderBy(r => r.RequiredMinutes)
+                .FirstOrDefault();
+
+            if (nextReward == null)
+                return 0; // Nothing to claim
+
+            int requiredSeconds = nextReward.RequiredMinutes * 60;
+            double percentage = (double)totalWatchedSeconds / requiredSeconds * 100;
             return (byte)Math.Clamp(Math.Round(percentage), 0, 100);
         }
         /// <summary>
@@ -274,7 +297,7 @@ namespace Core.Managers
             // Group campaigns by platform
             List<DropsCampaign> twitchCampaigns = [.. ActiveCampaigns.Where(c => c.Platform == Platform.Twitch && c.HasProgressToMake())];
             List<DropsCampaign> kickCampaigns = [.. ActiveCampaigns.Where(c => c.Platform == Platform.Kick && c.HasProgressToMake())];
-                       
+
             // Handle Twitch
             if (twitchCampaigns.Count != 0 && TwitchWebView != null)
             {
@@ -304,8 +327,9 @@ namespace Core.Managers
                         .Where(r => !r.IsClaimed)
                         .Sum(r => r.ProgressMinutes * 60); // Total minutes watched so far -> seconds
 
-                    byte initialTwitchPct = CalculateLiveProgress(bestTwitch, _twitchWatchedSeconds);
-                    TwitchProgressChanged?.Invoke(initialTwitchPct);
+                    byte initialTwitchPct = CalculateLiveCampaignProgress(bestTwitch, _twitchWatchedSeconds);
+                    byte initialTwitchDropPct = CalculateLiveDropProgress(bestTwitch, _twitchWatchedSeconds);
+                    TwitchProgressChanged?.Invoke(initialTwitchPct, initialTwitchDropPct);
 
                     System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Watching Twitch stream: {twitchUrl}");
 
@@ -349,8 +373,9 @@ namespace Core.Managers
                         .Where(r => !r.IsClaimed)
                         .Sum(r => r.ProgressMinutes * 60);
 
-                    byte initialKickPct = CalculateLiveProgress(bestKick, _kickWatchedSeconds);
-                    KickProgressChanged?.Invoke(initialKickPct);
+                    byte initialKickPct = CalculateLiveCampaignProgress(bestKick, _kickWatchedSeconds);
+                    byte initialKickDropPct = CalculateLiveDropProgress(bestKick, _kickWatchedSeconds);
+                    KickProgressChanged?.Invoke(initialKickPct, initialKickDropPct);
 
                     System.Diagnostics.Debug.WriteLine($"[DropsInventoryManager] Watching Kick stream: {kickUrl}");
 
