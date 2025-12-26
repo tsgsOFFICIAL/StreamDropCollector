@@ -96,7 +96,7 @@ namespace Core.Managers
                 if (value == UpdateFrequency.Never)
                     NotifyOnNewUpdateAvailable = false;
                 else if (UpdateFrequency == UpdateFrequency.OnLaunch)
-                    _ = CheckForUpdatesAsync();
+                    _ = CheckForUpdatesAsync(true);
 
                 OnPropertyChanged(nameof(IsUpdateNotificationEnabled));
             }
@@ -202,11 +202,12 @@ namespace Core.Managers
             _ = CheckForUpdatesAsync(); // Fire and forget
         }
 
-        private async Task CheckForUpdatesAsync()
+        private async Task CheckForUpdatesAsync(bool skipLoad = false)
         {
             if (UpdateFrequency != UpdateFrequency.Never)
             {
-                LoadSettings(); // Ensure we have the latest settings, this includes last time we checked for an update
+                if (!skipLoad)
+                    LoadSettings(); // Ensure we have the latest settings, this includes last time we checked for an update
 
                 if (_lastUpdateCheck.HasValue)
                 {
