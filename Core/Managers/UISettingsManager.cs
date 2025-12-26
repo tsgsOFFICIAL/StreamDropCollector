@@ -94,9 +94,9 @@ namespace Core.Managers
                 SetField(ref _updateFrequency, value);
 
                 if (value == UpdateFrequency.Never)
-                {
                     NotifyOnNewUpdateAvailable = false;
-                }
+                else if (UpdateFrequency == UpdateFrequency.OnLaunch)
+                    _ = CheckForUpdatesAsync();
 
                 OnPropertyChanged(nameof(IsUpdateNotificationEnabled));
             }
