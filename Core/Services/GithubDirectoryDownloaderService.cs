@@ -26,6 +26,8 @@ namespace Core.Services
         private HashSet<string> _currentFiles;
         public event EventHandler<ProgressEventArgs>? ProgressUpdated;
 
+        private readonly SemaphoreSlim _downloadSemaphore = new SemaphoreSlim(25); // Anywhere from 5 to 50 concurrent downloads should be fine.
+
         /// <summary>
         /// Initializes a new instance of the GitHubDirectoryDownloaderService class for downloading the contents of a specific
         /// directory from a GitHub repository to a local path.
@@ -254,57 +256,52 @@ namespace Core.Services
         /// <returns>A task that represents the asynchronous download operation.</returns>
         private async Task DownloadFileAsync(GitHubContent item, string filePath)
         {
-            Debug.WriteLine($"[START] Downloading file: {item.Name} | Path: {item.Path} | Size: {item.Size ?? -1} bytes | URL: {item.DownloadUrl}");
-
-            Stopwatch sw = Stopwatch.StartNew();
-
+            Debug.WriteLine($"[QUEUE] Waiting for slot to download: {item.Name}");
+            await _downloadSemaphore.WaitAsync(); // Limit concurrent downloads
             try
             {
-                Debug.WriteLine($"[GETASYNC] Calling GetAsync for {item.Name}");
+                Debug.WriteLine($"[START] Downloading file: {item.Name} | Size: {item.Size ?? -1} bytes");
+
+                Stopwatch sw = Stopwatch.StartNew();
                 using HttpResponseMessage response = await _httpClient.GetAsync(item.DownloadUrl!);
                 sw.Stop();
-                Debug.WriteLine($"[GETASYNC DONE] Response for {item.Name} in {sw.ElapsedMilliseconds} ms | Status: {response.StatusCode} | ContentLength: {response.Content.Headers.ContentLength ?? -1}");
+                Debug.WriteLine($"[HEADERS DONE] {item.Name} in {sw.ElapsedMilliseconds} ms | Status: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
                 {
-                    Debug.WriteLine($"[STREAM] Opening FileStream for {filePath}");
                     using FileStream fileStream = File.Create(filePath);
-
-                    Debug.WriteLine($"[COPY] Starting CopyToAsync for {item.Name}");
                     sw.Restart();
                     await response.Content.CopyToAsync(fileStream);
                     sw.Stop();
-                    Debug.WriteLine($"[COPY DONE] Copied {fileStream.Length} bytes for {item.Name} in {sw.ElapsedMilliseconds} ms");
+                    Debug.WriteLine($"[DOWNLOAD DONE] {item.Name} ({fileStream.Length} bytes) in {sw.ElapsedMilliseconds} ms");
 
-                    // After downloading, update the hash record
                     _fileHashes[item.Path!] = item.Sha!;
 
                     lock (_lockDownloadedSize)
                     {
                         _downloadedFileSize += fileStream.Length;
-                        Debug.WriteLine($"[PROGRESS] Updated downloaded size: {_downloadedFileSize} / {_totalFileSize}");
                         OnProgressChanged(new ProgressEventArgs((int)(((double)_downloadedFileSize / _totalFileSize) * 100)));
                     }
                 }
                 else
                 {
-                    string errorContent = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"[FAIL] Failed to download {item.Name}: {response.StatusCode} | Content: {errorContent}");
+                    string error = await response.Content.ReadAsStringAsync();
+                    Debug.WriteLine($"[FAIL] {item.Name}: {response.StatusCode} | {error}");
                 }
             }
             catch (TaskCanceledException tcex)
             {
-                Debug.WriteLine($"[CANCELED] TaskCanceledException for {item.Name} after {sw.ElapsedMilliseconds} ms | IsCancellationRequested: {tcex.CancellationToken.IsCancellationRequested} | Message: {tcex.Message}");
-                Debug.WriteLine($"[CANCELED STACK] {tcex.StackTrace}");
-                OnProgressChanged(new ProgressEventArgs(0, $"Timeout/cancel downloading {item.Name}"));
-                // Don't Dispose() here – it kills the whole client for other tasks
+                Debug.WriteLine($"[TIMEOUT/CANCEL] {item.Name}: {tcex.Message} (IsTimeout: {!tcex.CancellationToken.IsCancellationRequested})");
+                // Optional: retry logic here
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ERROR] Exception downloading {item.Name}: {ex.GetType().Name} | {ex.Message}");
-                Debug.WriteLine($"[ERROR STACK] {ex.StackTrace}");
-                OnProgressChanged(new ProgressEventArgs(0, ex.Message));
-                // Don't Dispose() here either
+                Debug.WriteLine($"[ERROR] {item.Name}: {ex}");
+            }
+            finally
+            {
+                _downloadSemaphore.Release(); // Always release the slot
+                Debug.WriteLine($"[SLOT RELEASED] for {item.Name} | Current count: {_downloadSemaphore.CurrentCount}");
             }
         }
         /// <summary>
