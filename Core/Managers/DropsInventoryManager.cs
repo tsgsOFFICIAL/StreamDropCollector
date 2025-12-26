@@ -172,33 +172,14 @@ namespace Core.Managers
         private static byte CalculateLiveCampaignProgress(DropsCampaign campaign, int totalWatchedSeconds)
         {
             // Total required seconds across all unclaimed rewards
-            int totalRequiredSeconds = campaign.Rewards.Sum(r => r.RequiredMinutes * 60);
-            int totalProgressSeconds = campaign.Rewards.Sum(r => r.ProgressMinutes * 60);
-
-            if (totalRequiredSeconds <= totalProgressSeconds)
-                return 0; // Campaign done
-
-            double percentage = (double)totalWatchedSeconds / totalRequiredSeconds * 100;
-            return (byte)Math.Clamp(Math.Round(percentage), 0, 100);
-        }
-        /// <summary>
-        /// Calculates the progress percentage toward the next unclaimed live drop reward in the specified campaign.
-        /// </summary>
-        /// <param name="campaign">The drops campaign containing the list of rewards and their claim status.</param>
-        /// <param name="totalWatchedSeconds">The total number of seconds the user has watched, used to determine progress toward the next reward.</param>
-        /// <returns>A value between 0 and 100 representing the percentage of progress toward the next unclaimed reward. Returns
-        /// 100 if all rewards have been claimed.</returns>
-        private static byte CalculateLiveDropProgress(DropsCampaign campaign, int totalWatchedSeconds)
-        {
-            // Find the next unclaimed reward
-            DropsReward? nextReward = campaign.Rewards
+            int totalRequiredSeconds = campaign.Rewards
                 .Where(r => !r.IsClaimed)
                 .Sum(r => r.RequiredMinutes * 60);
-            
+
             if (totalRequiredSeconds <= totalWatchedSeconds)
                 return 0; // Campaign done
 
-            double percentage = (double)totalWatchedSeconds / totalRequiredSeconds * 100;            
+            double percentage = (double)totalWatchedSeconds / totalRequiredSeconds * 100;
             return (byte)Math.Clamp(Math.Round(percentage), 0, 100);
         }
         /// <summary>
