@@ -3,6 +3,7 @@ using System.Security.Authentication;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Net.Http;
+using System.Net;
 using System.IO;
 
 namespace Core.Services
@@ -40,10 +41,12 @@ namespace Core.Services
         public GitHubDirectoryDownloaderService(string repositoryOwner, string repositoryName, string folderPath, string basePath)
         {
             #region HttpClient Settings
-            HttpClientHandler httpClientHandler = new HttpClientHandler();
-            httpClientHandler.AllowAutoRedirect = true;
-            // Set the SSL/TLS version (for example, TLS 1.2)
-            httpClientHandler.SslProtocols = SslProtocols.Tls12;
+            HttpClientHandler httpClientHandler = new HttpClientHandler()
+            {
+                AllowAutoRedirect = true,
+                SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            };
+
             //httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) =>
             //{
             //    return true;
@@ -52,6 +55,12 @@ namespace Core.Services
             _httpClient = new HttpClient(httpClientHandler);
             _httpClient.Timeout = new TimeSpan(0, 5, 0);
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "GitHubDirectoryDownloaderService");
+
+            AppContext.SetSwitch("System.Net.Http.UseSocketsHttpHandler", true); // default anyway
+            AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", false);
+
+            _httpClient.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+            _httpClient.DefaultRequestVersion = HttpVersion.Version11;
             #endregion
 
             _repositoryOwner = repositoryOwner;
@@ -245,15 +254,27 @@ namespace Core.Services
         /// <returns>A task that represents the asynchronous download operation.</returns>
         private async Task DownloadFileAsync(GitHubContent item, string filePath)
         {
-            Debug.WriteLine($"Downloading file: {item.Name}");
+            Debug.WriteLine($"[START] Downloading file: {item.Name} | Path: {item.Path} | Size: {item.Size ?? -1} bytes | URL: {item.DownloadUrl}");
+
+            Stopwatch sw = Stopwatch.StartNew();
 
             try
             {
+                Debug.WriteLine($"[GETASYNC] Calling GetAsync for {item.Name}");
                 using HttpResponseMessage response = await _httpClient.GetAsync(item.DownloadUrl!);
+                sw.Stop();
+                Debug.WriteLine($"[GETASYNC DONE] Response for {item.Name} in {sw.ElapsedMilliseconds} ms | Status: {response.StatusCode} | ContentLength: {response.Content.Headers.ContentLength ?? -1}");
+
                 if (response.IsSuccessStatusCode)
                 {
+                    Debug.WriteLine($"[STREAM] Opening FileStream for {filePath}");
                     using FileStream fileStream = File.Create(filePath);
+
+                    Debug.WriteLine($"[COPY] Starting CopyToAsync for {item.Name}");
+                    sw.Restart();
                     await response.Content.CopyToAsync(fileStream);
+                    sw.Stop();
+                    Debug.WriteLine($"[COPY DONE] Copied {fileStream.Length} bytes for {item.Name} in {sw.ElapsedMilliseconds} ms");
 
                     // After downloading, update the hash record
                     _fileHashes[item.Path!] = item.Sha!;
@@ -261,19 +282,29 @@ namespace Core.Services
                     lock (_lockDownloadedSize)
                     {
                         _downloadedFileSize += fileStream.Length;
+                        Debug.WriteLine($"[PROGRESS] Updated downloaded size: {_downloadedFileSize} / {_totalFileSize}");
                         OnProgressChanged(new ProgressEventArgs((int)(((double)_downloadedFileSize / _totalFileSize) * 100)));
                     }
                 }
                 else
                 {
-                    Debug.WriteLine($"Failed to download file: {response.Content}");
+                    string errorContent = await response.Content.ReadAsStringAsync();
+                    Debug.WriteLine($"[FAIL] Failed to download {item.Name}: {response.StatusCode} | Content: {errorContent}");
                 }
+            }
+            catch (TaskCanceledException tcex)
+            {
+                Debug.WriteLine($"[CANCELED] TaskCanceledException for {item.Name} after {sw.ElapsedMilliseconds} ms | IsCancellationRequested: {tcex.CancellationToken.IsCancellationRequested} | Message: {tcex.Message}");
+                Debug.WriteLine($"[CANCELED STACK] {tcex.StackTrace}");
+                OnProgressChanged(new ProgressEventArgs(0, $"Timeout/cancel downloading {item.Name}"));
+                // Don't Dispose() here – it kills the whole client for other tasks
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.Message);
+                Debug.WriteLine($"[ERROR] Exception downloading {item.Name}: {ex.GetType().Name} | {ex.Message}");
+                Debug.WriteLine($"[ERROR STACK] {ex.StackTrace}");
                 OnProgressChanged(new ProgressEventArgs(0, ex.Message));
-                Dispose();
+                // Don't Dispose() here either
             }
         }
         /// <summary>
