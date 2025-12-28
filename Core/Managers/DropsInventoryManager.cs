@@ -176,7 +176,7 @@ namespace Core.Managers
                 .Where(r => !r.IsClaimed)
                 .Sum(r => r.RequiredMinutes * 60);
 
-            if (totalRequiredSeconds <= totalWatchedSeconds)
+            if (!campaign.Rewards.Where(r => !r.IsClaimed).Any())
                 return 0; // Campaign done
 
             double percentage = (double)totalWatchedSeconds / totalRequiredSeconds * 100;
@@ -261,9 +261,10 @@ namespace Core.Managers
 
                     if (claimResult)
                     {
-                        // Update ActiveCampaigns to mark reward as claimed
+                        // Update ActiveCampaigns: mark reward as claimed and remove campaign if all rewards are claimed
                         Application.Current.Dispatcher.Invoke(() =>
                         {
+                            // Create updated rewards list with the claimed reward
                             List<DropsReward> updatedRewards = new List<DropsReward>();
                             foreach (DropsReward reward in parentCampaign.Rewards)
                             {
@@ -273,19 +274,33 @@ namespace Core.Managers
                                     updatedRewards.Add(reward);
                             }
 
-                            DropsCampaign updatedCampaign = parentCampaign with { Rewards = updatedRewards };
+                            // Check if EVERY reward in the campaign is now claimed
+                            bool allRewardsClaimed = updatedRewards.All(r => r.IsClaimed);
 
-                            int index = ActiveCampaigns.IndexOf(parentCampaign);
-                            if (index >= 0)
-                                ActiveCampaigns[index] = updatedCampaign;
+                            if (allRewardsClaimed)
+                            {
+                                // Remove the entire campaign from the list
+                                ActiveCampaigns.Remove(parentCampaign);
+                            }
+                            else
+                            {
+                                // Update the campaign with the new rewards list
+                                DropsCampaign updatedCampaign = parentCampaign with { Rewards = updatedRewards };
+
+                                int index = ActiveCampaigns.IndexOf(parentCampaign);
+                                if (index >= 0)
+                                {
+                                    ActiveCampaigns[index] = updatedCampaign;
+                                }
+                            }
                         });
 
                         NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}");
                     }
                     else
                     {
-                        nextCheckAt = DateTime.Now.AddMinutes(5);
-                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward, re-trying in 5 minutes: {item.Name}");
+                        nextCheckAt = DateTime.Now.AddMinutes(1);
+                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward, re-trying in a minute: {item.Name}");
                     }
                 }
             }
@@ -469,7 +484,7 @@ namespace Core.Managers
             return campaigns
                 .OrderByDescending(c => c.CompletionPercentage())
                 .ThenBy(c => c.Rewards
-                    .Where(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes)
+                    .Where(r => !r.IsClaimed)
                     .Min(r => r.RequiredMinutes - r.ProgressMinutes))
                 .First();
         }
