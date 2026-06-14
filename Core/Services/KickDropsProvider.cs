@@ -180,36 +180,59 @@ namespace Core.Services
                         foreach (JsonElement item in progressArray.EnumerateArray())
                         {
                             string campaignId = item.GetProperty("id").GetString()!;
+                            int campaignProgressUnits = item.GetProperty("progress_units").GetInt32();
 
-                            foreach (JsonElement reward in item.GetProperty("rewards").EnumerateArray())
+                            DropsCampaign? campaign = campaigns.FirstOrDefault(c => c.Id == campaignId);
+                            if (campaign == null)
+                                continue;
+
+                            // Build per-reward claimed status + progress lookup from the API
+                            Dictionary<string, (bool isClaimed, int progressUnits)> rewardData
+                                = new Dictionary<string, (bool, int)>();
+
+                            foreach (JsonElement apiReward in item.GetProperty("rewards").EnumerateArray())
                             {
-                                string rewardId = reward.GetProperty("id").GetString()!;
+                                string rid = apiReward.GetProperty("id").GetString()!;
+                                bool claimed = apiReward.GetProperty("claimed").GetBoolean();
 
-                                DropsCampaign? campaign = campaigns.FirstOrDefault(c => c.Id == campaignId);
-                                if (campaign == null)
-                                    continue;
-
-                                DropsReward? targetReward = campaign.Rewards.FirstOrDefault(r => r.Id == rewardId);
-                                if (targetReward == null)
-                                    continue;
-
-                                // UPDATE IN-PLACE
-                                targetReward = targetReward with
+                                if (apiReward.TryGetProperty("progress_units", out JsonElement perRewardProgress))
                                 {
-                                    ProgressMinutes = Math.Min(item.GetProperty("progress_units").GetInt32(), targetReward.RequiredMinutes),
-                                    IsClaimed = reward.GetProperty("claimed").GetBoolean()
-                                };
-
-                                // Replace in list (records are immutable)
-                                List<DropsReward> list = [.. campaign.Rewards];
-                                int index = list.IndexOf(campaign.Rewards.First(r => r.Id == rewardId));
-                                list[index] = targetReward;
-
-                                // Replace in campaign
-                                DropsCampaign updatedCampaign = campaign with { Rewards = list.AsReadOnly() };
-                                int campIndex = campaigns.IndexOf(campaign);
-                                campaigns[campIndex] = updatedCampaign;
+                                    rewardData[rid] = (claimed, perRewardProgress.GetInt32());
+                                }
+                                else
+                                {
+                                    // Fallback: use campaign-level total, capped at RequiredMinutes
+                                    DropsReward? existing = campaign.Rewards.FirstOrDefault(r => r.Id == rid);
+                                    int capped = existing != null
+                                        ? Math.Min(campaignProgressUnits, existing.RequiredMinutes)
+                                        : campaignProgressUnits;
+                                    rewardData[rid] = (claimed, capped);
+                                }
                             }
+
+                            // Rebuild ALL rewards at once, then update the campaign ONCE
+                            // to avoid the IndexOutOfRange crash when a campaign has multiple rewards
+                            // (the old code replaced the campaign in the list per-reward, but records
+                            // use value equality, so IndexOf failed on the second iteration).
+                            List<DropsReward> mergedRewards = new List<DropsReward>(campaign.Rewards.Count);
+                            foreach (DropsReward reward in campaign.Rewards)
+                            {
+                                if (rewardData.TryGetValue(reward.Id, out var data))
+                                {
+                                    mergedRewards.Add(reward with
+                                    {
+                                        ProgressMinutes = data.progressUnits,
+                                        IsClaimed = data.isClaimed
+                                    });
+                                }
+                                else
+                                {
+                                    mergedRewards.Add(reward);
+                                }
+                            }
+
+                            int campIndex = campaigns.IndexOf(campaign);
+                            campaigns[campIndex] = campaign with { Rewards = mergedRewards.AsReadOnly() };
                         }
                     }
                 }

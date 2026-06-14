@@ -1010,6 +1010,45 @@ namespace Core.Managers
                 if (_currentKickCampaign?.Id == campaignId)
                     _currentKickCampaign = updatedCampaign;
 
+                // When a reward is claimed and there's a next unclaimed reward,
+                // recalculate the drop-watched-seconds counter so the progress
+                // bar reflects the correct percentage for the NEW current reward.
+                // Without this, _kickDropWatchedSeconds keeps accumulating from
+                // the previous reward, inflating the displayed progress.
+                if (_currentKickCampaign?.Id == campaignId)
+                {
+                    DropsReward? nextKickReward = updatedCampaign.Rewards
+                        .Where(r => !r.IsClaimed)
+                        .OrderBy(r => r.RequiredMinutes)
+                        .FirstOrDefault();
+
+                    if (nextKickReward != null)
+                    {
+                        int minutesBefore = updatedCampaign.Rewards
+                            .Where(r => !r.IsClaimed && r.RequiredMinutes < nextKickReward.RequiredMinutes)
+                            .Sum(r => r.RequiredMinutes);
+                        _kickDropWatchedSeconds = Math.Max(0, nextKickReward.ProgressMinutes - minutesBefore) * 60;
+                        VerboseLog("DropReset", $"Kick reward '{nextKickReward.Name}' became current; reset _kickDropWatchedSeconds to {_kickDropWatchedSeconds}s ({nextKickReward.ProgressMinutes}/{nextKickReward.RequiredMinutes} min)");
+                    }
+                }
+
+                if (_currentTwitchCampaign?.Id == campaignId)
+                {
+                    DropsReward? nextTwitchReward = updatedCampaign.Rewards
+                        .Where(r => !r.IsClaimed)
+                        .OrderBy(r => r.RequiredMinutes)
+                        .FirstOrDefault();
+
+                    if (nextTwitchReward != null)
+                    {
+                        int minutesBefore = updatedCampaign.Rewards
+                            .Where(r => !r.IsClaimed && r.RequiredMinutes < nextTwitchReward.RequiredMinutes)
+                            .Sum(r => r.RequiredMinutes);
+                        _twitchDropWatchedSeconds = Math.Max(0, nextTwitchReward.ProgressMinutes - minutesBefore) * 60;
+                        VerboseLog("DropReset", $"Twitch reward '{nextTwitchReward.Name}' became current; reset _twitchDropWatchedSeconds to {_twitchDropWatchedSeconds}s ({nextTwitchReward.ProgressMinutes}/{nextTwitchReward.RequiredMinutes} min)");
+                    }
+                }
+
                 UpdateCurrentSelectionFlags();
                 updated = true;
             });
