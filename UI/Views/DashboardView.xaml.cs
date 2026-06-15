@@ -459,9 +459,9 @@ namespace UI.Views
         /// the current loading state.
         /// </summary>
         /// <remarks>If a previous load operation is in progress, it will be canceled before starting a
-        /// new one. The method updates status properties to indicate progress and results, including error messages if
-        /// loading fails. This method should be called when the application needs to refresh the list of available
-        /// campaigns.</remarks>
+        /// new one. Campaigns from each connected platform are added to the UI as soon as that platform
+        /// responds, without waiting for all platforms to finish. This method should be called when the
+        /// application needs to refresh the list of available campaigns.</remarks>
         /// <returns>A task that represents the asynchronous operation of loading active drops campaigns.</returns>
         private async Task LoadDropsAsync()
         {
@@ -491,14 +491,23 @@ namespace UI.Views
                 MinerStatusDetails = "Fetching latest drops...";
 
                 _activeCampaigns.Clear();
+                List<DropsCampaign> allCampaigns = [];
 
-                IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _kickService.Status, _twitchWebView, _twitchService.Status, _twitchGqlService, cts.Token);
+                // Campaigns are added to the UI as each platform responds
+                await foreach (IReadOnlyList<DropsCampaign> batch in _dropsService.GetAllActiveCampaignsAsync(
+                    _kickWebView, _kickService.Status,
+                    _twitchWebView, _twitchService.Status,
+                    _twitchGqlService, cts.Token))
+                {
+                    foreach (DropsCampaign c in batch.OrderBy(x => x.Platform).ThenBy(x => x.GameName))
+                        _activeCampaigns.Add(c);
+
+                    allCampaigns.AddRange(batch);
+                }
+
                 AppLogger.Info("Dashboard", $"Campaign load completed. totalCampaigns={allCampaigns.Count}, twitchStatus={_twitchService.Status}, kickStatus={_kickService.Status}");
 
-                foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.Platform).ThenBy(x => x.GameName))
-                    _activeCampaigns.Add(c);
-
-                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns, _twitchGqlService, startWatching: false);
+                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns.AsReadOnly(), _twitchGqlService, startWatching: false);
 
                 MinerStatus = "Idle";
                 MinerStatusDetails = $"{_activeCampaigns.Count} active campaigns loaded";

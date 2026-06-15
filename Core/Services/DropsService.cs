@@ -1,4 +1,5 @@
-﻿using Core.Interfaces;
+﻿using System.Runtime.CompilerServices;
+using Core.Interfaces;
 using Core.Models;
 using Core.Enums;
 
@@ -15,40 +16,45 @@ namespace Core.Services
         private TwitchDropsProvider? _twitchProvider;
 
         /// <summary>
-        /// Retrieves all active drops campaigns from connected Kick and Twitch hosts asynchronously.
+        /// Asynchronously streams active drops campaigns from connected hosts, yielding each platform's
+        /// results as soon as they are available rather than waiting for all platforms to finish.
         /// </summary>
-        /// <remarks>If both Kick and Twitch hosts are connected, campaigns from both sources are combined
-        /// into a single list. The method returns quickly with an empty list if neither host is connected.</remarks>
-        /// <param name="kickHost">The Kick web view host used to query active campaigns. Must not be null if Kick is connected.</param>
-        /// <param name="kickStatus">The connection status of the Kick host. If set to <see langword="Connected"/>, Kick campaigns will be
-        /// included.</param>
-        /// <param name="twitchHost">The Twitch web view host used to query active campaigns. Must not be null if Twitch is connected.</param>
-        /// <param name="twitchStatus">The connection status of the Twitch host. If set to <see langword="Connected"/>, Twitch campaigns will be
-        /// included.</param>
-        /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation.</param>
-        /// <returns>A read-only list containing all active drops campaigns from the specified connected hosts. The list will be
-        /// empty if neither host is connected or no campaigns are found.</returns>
-        public async Task<IReadOnlyList<DropsCampaign>> GetAllActiveCampaignsAsync(IWebViewHost kickHost, ConnectionStatus? kickStatus, IWebViewHost twitchHost, ConnectionStatus? twitchStatus, IGqlService? gqlService, CancellationToken ct = default)
+        /// <remarks>Tasks for each connected platform run concurrently. Results are yielded in
+        /// completion order - whichever platform responds first is returned first.</remarks>
+        /// <param name="kickHost">The Kick web view host used to query active campaigns.</param>
+        /// <param name="kickStatus">If <see langword="Connected"/>, Kick campaigns are included.</param>
+        /// <param name="twitchHost">The Twitch web view host used to query active campaigns.</param>
+        /// <param name="twitchStatus">If <see langword="Connected"/>, Twitch campaigns are included.</param>
+        /// <param name="gqlService">The GQL service required by the Twitch provider.</param>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>
+        /// An async stream of per-platform campaign lists, yielded as each platform completes.
+        /// Yields nothing if neither host is connected.
+        /// </returns>
+        public async IAsyncEnumerable<IReadOnlyList<DropsCampaign>> GetAllActiveCampaignsAsync(
+            IWebViewHost kickHost, ConnectionStatus? kickStatus,
+            IWebViewHost twitchHost, ConnectionStatus? twitchStatus,
+            IGqlService? gqlService,
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
-            List<Task<IReadOnlyList<DropsCampaign>>> tasks = new List<Task<IReadOnlyList<DropsCampaign>>>();
+            List<Task<IReadOnlyList<DropsCampaign>>> pending = [];
 
             if (kickStatus == ConnectionStatus.Connected)
-                tasks.Add(_kickProvider.GetActiveCampaignsAsync(kickHost, ct));
+                pending.Add(_kickProvider.GetActiveCampaignsAsync(kickHost, ct));
 
             if (twitchStatus == ConnectionStatus.Connected)
             {
                 _twitchProvider = new TwitchDropsProvider(gqlService!);
-
-                tasks.Add(_twitchProvider.GetActiveCampaignsAsync(twitchHost, ct));
+                pending.Add(_twitchProvider.GetActiveCampaignsAsync(twitchHost, ct));
             }
 
-            // If nothing to do -> return fast
-            if (tasks.Count == 0)
-                return Array.Empty<DropsCampaign>().AsReadOnly();
-
-            IReadOnlyList<DropsCampaign>[] results = await Task.WhenAll(tasks);
-
-            return results.SelectMany(x => x ?? []).ToList().AsReadOnly();
+            // Yield each platform's results as soon as it finishes, without blocking on the other
+            while (pending.Count > 0)
+            {
+                Task<IReadOnlyList<DropsCampaign>> completed = await Task.WhenAny(pending);
+                pending.Remove(completed);
+                yield return await completed;
+            }
         }
     }
 }
