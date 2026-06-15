@@ -272,7 +272,7 @@
                         <!-- LOGIN BUTTONS - BRANDED, HARD-CODED (THEY'RE ICONIC) -->
                         <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
                             <Button x:Name="KickLoginButton"
-                                    Content="Login Kick"
+                                    Content="{Binding KickLoginButtonText}"
                                     Width="120" Height="36"
                                     Margin="0,0,10,0"
                                     FontWeight="SemiBold"
@@ -305,7 +305,7 @@
                             </Button>
 
                             <Button x:Name="TwitchLoginButton"
-                                    Content="Login Twitch"
+                                    Content="{Binding TwitchLoginButtonText}"
                                     Width="120" Height="36"
                                     FontWeight="SemiBold"
                                     Cursor="Hand"

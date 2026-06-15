@@ -64,7 +64,16 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
-
+        private string _twitchLoginButtonText = "Login Twitch";
+        public string TwitchLoginButtonText
+        {
+            get => _twitchLoginButtonText;
+            set
+            {
+                _twitchLoginButtonText = value;
+                OnPropertyChanged();
+            }
+        }
         private string _kickConnectionStatus = "Not Connected";
         public string KickConnectionStatus
         {
@@ -85,7 +94,16 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
-
+        private string _kickLoginButtonText = "Login Kick";
+        public string KickLoginButtonText
+        {
+            get => _kickLoginButtonText;
+            set
+            {
+                _kickLoginButtonText = value;
+                OnPropertyChanged();
+            }
+        }
         private string _minerStatus = "Idle";
         public string MinerStatus
         {
@@ -566,11 +584,14 @@ namespace UI.Views
         /// <param name="status">The new connection status value indicating the current state of the Kick login process.</param>
         private void OnKickStatusChanged(ConnectionStatus status)
         {
+            KickLoginButtonText = "Checking...";
+
             switch (status)
             {
                 case ConnectionStatus.NotConnected:
                     KickConnectionStatus = "Not Connected";
                     KickConnectionColor = "Red";
+                    KickLoginButtonText = "Login Kick";
                     KickLoginButton.IsEnabled = true;
                     break;
 
@@ -583,6 +604,7 @@ namespace UI.Views
                 case ConnectionStatus.Connected:
                     KickConnectionStatus = "Connected";
                     KickConnectionColor = "Lime";
+                    KickLoginButtonText = "Kick Logged in";
                     KickLoginButton.IsEnabled = false; // disable when already logged in
                     ScheduleDropsLoad();
                     break;
@@ -601,11 +623,14 @@ namespace UI.Views
         /// state.</param>
         private void OnTwitchStatusChanged(ConnectionStatus status)
         {
+            TwitchLoginButtonText = "Checking...";
+
             switch (status)
             {
                 case ConnectionStatus.NotConnected:
                     TwitchConnectionStatus = "Not Connected";
                     TwitchConnectionColor = "Red";
+                    TwitchLoginButtonText = "Login Twitch";
                     TwitchLoginButton.IsEnabled = true;
                     break;
 
@@ -618,6 +643,7 @@ namespace UI.Views
                 case ConnectionStatus.Connected:
                     TwitchConnectionStatus = "Connected";
                     TwitchConnectionColor = "Lime";
+                    TwitchLoginButtonText = "Twitch Logged in";
                     TwitchLoginButton.IsEnabled = false; // disable when already logged in
                     ScheduleDropsLoad();
                     break;
