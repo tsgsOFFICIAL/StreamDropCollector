@@ -73,13 +73,6 @@ namespace Core.Interfaces
         /// request header, or null if the header is not present in the matching request.</returns>
         Task<string> CaptureRequestHeaderAsync(string headerName, string urlContains, int timeoutMs = 8000, CancellationToken ct = default);
         /// <summary>
-        /// Asynchronously captures the integrity value from a successful GraphQL request, waiting up to the specified timeout.
-        /// </summary>
-        /// <param name="timeoutMs"></param>
-        /// <param name="ct"></param>
-        /// <returns></returns>
-        Task<string> CaptureIntegrityFromSuccessfulGqlAsync(int timeoutMs = 15000, CancellationToken ct = default);
-        /// <summary>
         /// Asynchronously captures the body of the first GraphQL request containing the specified trigger text within
         /// the given timeout period.
         /// </summary>
