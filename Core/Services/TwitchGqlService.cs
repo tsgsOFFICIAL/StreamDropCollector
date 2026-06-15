@@ -30,6 +30,9 @@ namespace Core.Services
             "Stream Drop Collector",
             "GqlHashCache.json");
 
+        /// <summary>
+        /// Sets the Twitch user ID for the authenticated session. This value is used to construct unique identifiers for drop claiming.
+        /// </summary>
         public string UserId
         {
             set => _userId = value;
