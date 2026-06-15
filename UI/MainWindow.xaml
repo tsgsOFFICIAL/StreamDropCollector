@@ -98,10 +98,10 @@
                                FontSize="16"
                                HorizontalAlignment="Center"
                                Margin="0 0 0 25"/>
-                    <Button Content="Dashboard" Tag="Dashboard" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                    <Button Content="Inventory" Tag="Inventory" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                    <Button Content="Settings" Tag="Settings" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                    <Button Content="Help" Tag="Help" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="DashboardNavButton" Content="Dashboard" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="InventoryNavButton" Content="Inventory" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="SettingsNavButton" Content="Settings" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="HelpNavButton" Content="Help" Click="SidebarButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 </StackPanel>
             </Border>
 

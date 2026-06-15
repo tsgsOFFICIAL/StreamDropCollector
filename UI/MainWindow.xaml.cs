@@ -8,8 +8,8 @@ using System.Windows.Input;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Windows;
-using Core.Logging;
 using Core.Managers;
+using Core.Logging;
 using System.IO;
 using UI.Views;
 using Core;
@@ -96,16 +96,27 @@ namespace UI
             // Initialize commands
             ToggleWindowCommand = new RelayCommand(o => ToggleWindowState());
             CloseCommand = new RelayCommand(o => CloseApplication());
-            OpenGithubCommand = new RelayCommand(o => Core.Utility.LaunchWeb("https://github.com/tsgsOFFICIAL/StreamDropCollector"));
-            JoinDiscordCommand = new RelayCommand(o => Core.Utility.LaunchWeb("https://discord.gg/Cddu5aJ"));
+            OpenGithubCommand = new RelayCommand(o => Utility.LaunchWeb("https://github.com/tsgsOFFICIAL/StreamDropCollector"));
+            JoinDiscordCommand = new RelayCommand(o => Utility.LaunchWeb("https://discord.gg/Cddu5aJ"));
 
             // Event handler for double-click on TaskbarIcon
             MyNotifyIcon.TrayMouseDoubleClick += OnTrayIconDoubleClick;
+
+            // Set the xaml nav button Tag's programmatically
+            DashboardNavButton.Tag = DashboardView.Instance;
+            InventoryNavButton.Tag = InventoryView.Instance;
+            SettingsNavButton.Tag = SettingsView.Instance;
+            HelpNavButton.Tag = HelpView.Instance;
 
             // Default page
             SwitchPage(DashboardView.Instance);
         }
 
+        /// <summary>
+        /// Handles the Loaded event of the MainWindow control. This method is called when the window has finished loading and is ready for interaction.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OnMainWindowLoaded(object sender, RoutedEventArgs e)
         {
             StartActivationServer();
@@ -214,6 +225,8 @@ namespace UI
         /// <param name="newPage">The new <see cref="UserControl"/> to display as the main content. Cannot be null.</param>
         private void SwitchPage(UserControl newPage)
         {
+            UpdateSidebarSelection(newPage);
+
             // Same instance? Do nothing (prevents flicker + no new WebViews)
             if (ReferenceEquals(_currentPage, newPage))
                 return;
@@ -244,30 +257,40 @@ namespace UI
             }
         }
         /// <summary>
-        /// Handles the Click event for sidebar navigation buttons, switching the displayed page based on the button's
-        /// tag.
+        /// Updates the visual state of the sidebar buttons to reflect the currently selected page.
         /// </summary>
-        /// <remarks>The method expects the sender to be a Button whose Tag property is set to a
-        /// recognized page identifier (such as "Dashboard", "Inventory", "Settings", or "Help"). If the Tag does not
-        /// match a known page, no action is taken.</remarks>
-        /// <param name="sender">The source of the event, expected to be a Button with its Tag property indicating the target page.</param>
-        /// <param name="e">The event data associated with the button click.</param>
+        /// <param name="newPage">The new page that is selected.</param>
+        private void UpdateSidebarSelection(UserControl newPage)
+        {
+            Button[] navButtons = [DashboardNavButton, InventoryNavButton, SettingsNavButton, HelpNavButton];
+
+            foreach (Button button in navButtons)
+            {
+                bool isSelected = ReferenceEquals(button.Tag, newPage);
+
+                if (isSelected)
+                {
+                    button.SetResourceReference(BackgroundProperty, "SidebarHoverBrush");
+                    button.SetResourceReference(ForegroundProperty, "TextPrimaryBrush");
+                    button.FontWeight = FontWeights.SemiBold;
+                }
+                else
+                {
+                    button.ClearValue(BackgroundProperty);
+                    button.ClearValue(ForegroundProperty);
+                    button.ClearValue(FontWeightProperty);
+                }
+            }
+        }
+        /// <summary>
+        /// Updates the visual selection state of the sidebar buttons based on the type of the currently displayed page.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void SidebarButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is not Button btn)
-                return;
-
-            UserControl? targetPage = (btn.Tag?.ToString()) switch
-            {
-                "Dashboard" => _currentPage is DashboardView ? _currentPage : DashboardView.Instance,
-                "Inventory" => _currentPage is InventoryView ? _currentPage : InventoryView.Instance,
-                "Settings" => _currentPage is SettingsView ? _currentPage : SettingsView.Instance,
-                "Help" => _currentPage is HelpView ? _currentPage : HelpView.Instance,
-                _ => null
-            };
-
-            if (targetPage is not null)
-                SwitchPage(targetPage);
+            if (sender is Button { Tag: UserControl page })
+                SwitchPage(page);
         }
         /// <summary>
         /// Closes the application
