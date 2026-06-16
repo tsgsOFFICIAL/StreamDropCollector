@@ -759,33 +759,21 @@ namespace Core.Services
             }
         }
 
-        private static bool IsVerboseCacheLoggingEnabled()
-        {
-            try
-            {
-                return UISettingsManager.Instance.VerboseDebugLogging;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private static void LogCacheDebug(string message)
         {
-            if (IsVerboseCacheLoggingEnabled())
+            if (UISettingsManager.Instance.VerboseDebugLogging)
                 AppLogger.Debug("TwitchGql", $"[HashCache] {message}");
         }
 
         private static void LogCacheInfo(string message)
         {
-            if (IsVerboseCacheLoggingEnabled())
+            if (UISettingsManager.Instance.VerboseDebugLogging)
                 AppLogger.Info("TwitchGql", $"[HashCache] {message}");
         }
 
         private static void LogCacheWarn(string message)
         {
-            if (IsVerboseCacheLoggingEnabled())
+            if (UISettingsManager.Instance.VerboseDebugLogging)
                 AppLogger.Warn("TwitchGql", $"[HashCache] {message}");
         }
 
