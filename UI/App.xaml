@@ -10,5 +10,6 @@
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
         <converters:ResourceKeyToBrushConverter x:Key="ResourceKeyToBrushConverter"/>
+        <converters:StringToImageSourceConverter x:Key="StringToImageSourceConverter"/>
     </Application.Resources>
 </Application>
