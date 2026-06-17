@@ -63,10 +63,14 @@ namespace UI
 
             Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
-            // Load Colors first
+            // Load Colors and shared control styles first
             Resources.MergedDictionaries.Add(new ResourceDictionary
             {
                 Source = new Uri("/Themes/Colors.xaml", UriKind.Relative)
+            });
+            Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri("/Themes/Controls.xaml", UriKind.Relative)
             });
 
             // Load theme
