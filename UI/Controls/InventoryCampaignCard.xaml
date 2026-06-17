@@ -1,0 +1,87 @@
+﻿<UserControl x:Class="UI.Controls.InventoryCampaignCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:controls="clr-namespace:UI.Controls"
+             xmlns:models="clr-namespace:UI.Models"
+             mc:Ignorable="d"
+             d:DesignHeight="200" d:DesignWidth="900">
+
+    <Border Style="{StaticResource CardBorder}"
+            CornerRadius="12"
+            Margin="0,0,0,20">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <controls:RoundedImage SourceUrl="{Binding GameImageUrl}"
+                                   ImageWidth="100" ImageHeight="100" CornerRadius="10"/>
+
+            <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding GameName}"
+                           FontSize="22"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                <TextBlock Text="{Binding Name}"
+                           FontSize="14"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,4,0,10"/>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <controls:PlatformBadge DataContext="{Binding}"/>
+
+                    <TextBlock Margin="15,0,0,0" Foreground="#FF6666">
+                        <Run Text="Ends "/>
+                        <Run Text="{Binding EndsAt, Mode=OneWay, StringFormat=MMM dd • HH:mm}"/>
+                    </TextBlock>
+
+                    <controls:StatusBadge BadgeText="WATCHING"
+                                          Variant="{x:Static models:StatusBadgeVariant.Watching}"
+                                          Margin="12,0,0,0"
+                                          Visibility="{Binding IsCurrentCampaign, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </StackPanel>
+
+                <Button Content="▶  Watch this campaign instead"
+                        Margin="0,12,0,0"
+                        Padding="12,6"
+                        HorizontalAlignment="Left"
+                        Command="{Binding DataContext.SwitchCampaignCommand, RelativeSource={RelativeSource AncestorType=UserControl, AncestorLevel=2}}"
+                        CommandParameter="{Binding}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource WatchCampaignButtonStyle}">
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsCurrentCampaign}" Value="False"/>
+                                        <Condition Binding="{Binding AllRewardsClaimed}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" VerticalAlignment="Top" MinWidth="320">
+                <TextBlock Text="Rewards"
+                           FontSize="14"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,0,0,8"/>
+
+                <ItemsControl ItemsSource="{Binding Rewards}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <controls:InventoryRewardCard/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

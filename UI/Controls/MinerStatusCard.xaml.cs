@@ -1,6 +1,6 @@
-using System.Windows;
-using System.Windows.Media;
 using UserControl = System.Windows.Controls.UserControl;
+using System.Windows.Media;
+using System.Windows;
 
 namespace UI.Controls
 {
@@ -13,8 +13,12 @@ namespace UI.Controls
             DependencyProperty.Register(nameof(Details), typeof(string), typeof(MinerStatusCard), new PropertyMetadata(string.Empty));
 
         public static readonly DependencyProperty StatusBrushProperty =
-            DependencyProperty.Register(nameof(StatusBrush), typeof(System.Windows.Media.Brush), typeof(MinerStatusCard),
-                new PropertyMetadata(new SolidColorBrush(Colors.Orange)));
+            DependencyProperty.Register(
+                    nameof(StatusBrush),
+                    typeof(System.Windows.Media.Brush),
+                    typeof(MinerStatusCard),
+                    new PropertyMetadata(new SolidColorBrush(Colors.Orange))
+                );
 
         public string Status
         {

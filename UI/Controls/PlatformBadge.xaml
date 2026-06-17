@@ -1,0 +1,28 @@
+﻿<UserControl x:Class="UI.Controls.PlatformBadge"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:enums="clr-namespace:Core.Enums;assembly=Core"
+             mc:Ignorable="d"
+             d:DesignHeight="24" d:DesignWidth="80">
+
+    <Border CornerRadius="6" Padding="10,4">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource KickBrush}"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Platform}" Value="{x:Static enums:Platform.Twitch}">
+                        <Setter Property="Background" Value="{DynamicResource TwitchBrush}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+        <TextBlock Text="{Binding Platform, Mode=OneWay}"
+                   FontWeight="UltraBold"
+                   Foreground="Black"
+                   FontSize="12"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"/>
+    </Border>
+</UserControl>
