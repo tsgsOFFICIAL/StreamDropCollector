@@ -10,13 +10,13 @@ namespace UI.Views
         public TwitchLoginWindow()
         {
             InitializeComponent();
-            Initialize();
+            Loaded += OnLoaded;
         }
 
-        private async void Initialize()
+        private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            Loaded -= OnLoaded;
             await Web.EnsureCoreWebView2Async();
-
             Web.Source = new Uri("https://twitch.tv/login");
         }
     }
