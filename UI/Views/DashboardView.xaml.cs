@@ -9,6 +9,7 @@ using Core.Managers;
 using Core.Services;
 using Core.Models;
 using Core.Enums;
+using UI.Models;
 
 namespace UI.Views
 {
@@ -43,67 +44,8 @@ namespace UI.Views
         private readonly ObservableCollection<DropsCampaign> _activeCampaigns = new();
         public IReadOnlyCollection<DropsCampaign> ActiveCampaigns => _activeCampaigns;
 
-        // UI Properties
-        private string _twitchConnectionStatus = "Not Connected";
-        public string TwitchConnectionStatus
-        {
-            get => _twitchConnectionStatus;
-            set
-            {
-                _twitchConnectionStatus = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchConnectionColor = "Red";
-        public string TwitchConnectionColor
-        {
-            get => _twitchConnectionColor;
-            set
-            {
-                _twitchConnectionColor = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchLoginButtonText = "Login Twitch";
-        public string TwitchLoginButtonText
-        {
-            get => _twitchLoginButtonText;
-            set
-            {
-                _twitchLoginButtonText = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickConnectionStatus = "Not Connected";
-        public string KickConnectionStatus
-        {
-            get => _kickConnectionStatus;
-            set
-            {
-                _kickConnectionStatus = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickConnectionColor = "Red";
-        public string KickConnectionColor
-        {
-            get => _kickConnectionColor;
-            set
-            {
-                _kickConnectionColor = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickLoginButtonText = "Login Kick";
-        public string KickLoginButtonText
-        {
-            get => _kickLoginButtonText;
-            set
-            {
-                _kickLoginButtonText = value;
-                OnPropertyChanged();
-            }
-        }
+        public PlatformConnectionState TwitchConnection { get; } = new("Twitch", "TwitchBrush", "Login Twitch");
+        public PlatformConnectionState KickConnection { get; } = new("Kick", "KickBrush", "Login Kick");
         private string _minerStatus = "Idle";
         public string MinerStatus
         {
@@ -124,146 +66,8 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
-        private byte _twitchCampaignProgress = 0;
-        public byte TwitchCampaignProgress
-        {
-            get => _twitchCampaignProgress;
-            set
-            {
-                _twitchCampaignProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private byte _twitchDropProgress = 0;
-        public byte TwitchDropProgress
-        {
-            get => _twitchDropProgress;
-            set
-            {
-                _twitchDropProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private byte _kickCampaignProgress = 0;
-        public byte KickCampaignProgress
-        {
-            get => _kickCampaignProgress;
-            set
-            {
-                _kickCampaignProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private byte _kickDropProgress = 0;
-        public byte KickDropProgress
-        {
-            get => _kickDropProgress;
-            set
-            {
-                _kickDropProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchWatchedChannel = string.Empty;
-        public string TwitchWatchedChannel
-        {
-            get => _twitchWatchedChannel;
-            set
-            {
-                _twitchWatchedChannel = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickWatchedChannel = string.Empty;
-        public string KickWatchedChannel
-        {
-            get => _kickWatchedChannel;
-            set
-            {
-                _kickWatchedChannel = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchCampaignName = string.Empty;
-        public string TwitchCampaignName
-        {
-            get => _twitchCampaignName;
-            set
-            {
-                _twitchCampaignName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickCampaignName = string.Empty;
-        public string KickCampaignName
-        {
-            get => _kickCampaignName;
-            set
-            {
-                _kickCampaignName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchCampaignImageUrl = string.Empty;
-        public string TwitchCampaignImageUrl
-        {
-            get => _twitchCampaignImageUrl;
-            set
-            {
-                _twitchCampaignImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickCampaignImageUrl = string.Empty;
-        public string KickCampaignImageUrl
-        {
-            get => _kickCampaignImageUrl;
-            set
-            {
-                _kickCampaignImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchDropName = string.Empty;
-        public string TwitchDropName
-        {
-            get => _twitchDropName;
-            set
-            {
-                _twitchDropName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchDropImageUrl = string.Empty;
-        public string TwitchDropImageUrl
-        {
-            get => _twitchDropImageUrl;
-            set
-            {
-                _twitchDropImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickDropName = string.Empty;
-        public string KickDropName
-        {
-            get => _kickDropName;
-            set
-            {
-                _kickDropName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickDropImageUrl = string.Empty;
-        public string KickDropImageUrl
-        {
-            get => _kickDropImageUrl;
-            set
-            {
-                _kickDropImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
+        public PlatformProgressState TwitchProgress { get; } = new("Twitch", "TwitchBrush");
+        public PlatformProgressState KickProgress { get; } = new("Kick", "KickBrush");
 
         /// <summary>
         /// Occurs when a property value changes.
@@ -309,8 +113,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchCampaignProgress = campPct;
-                    TwitchDropProgress = dropPct;
+                    TwitchProgress.CampaignProgress = campPct;
+                    TwitchProgress.DropProgress = dropPct;
                 });
             };
 
@@ -318,8 +122,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickCampaignProgress = campPct;
-                    KickDropProgress = dropPct;
+                    KickProgress.CampaignProgress = campPct;
+                    KickProgress.DropProgress = dropPct;
                 });
             };
 
@@ -353,7 +157,7 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickWatchedChannel = channel;
+                    KickProgress.WatchedChannel = channel;
                 });
             };
 
@@ -361,7 +165,7 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchWatchedChannel = channel;
+                    TwitchProgress.WatchedChannel = channel;
                 });
             };
 
@@ -369,8 +173,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickCampaignName = campaign;
-                    KickCampaignImageUrl = imageUrl ?? string.Empty;
+                    KickProgress.CampaignName = campaign;
+                    KickProgress.CampaignImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -378,8 +182,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchCampaignName = campaign;
-                    TwitchCampaignImageUrl = imageUrl ?? string.Empty;
+                    TwitchProgress.CampaignName = campaign;
+                    TwitchProgress.CampaignImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -387,8 +191,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickDropName = drop;
-                    KickDropImageUrl = imageUrl ?? string.Empty;
+                    KickProgress.DropName = drop;
+                    KickProgress.DropImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -396,8 +200,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchDropName = drop;
-                    TwitchDropImageUrl = imageUrl ?? string.Empty;
+                    TwitchProgress.DropName = drop;
+                    TwitchProgress.DropImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -593,34 +397,34 @@ namespace UI.Views
         /// <param name="status">The new connection status value indicating the current state of the Kick login process.</param>
         private void OnKickStatusChanged(ConnectionStatus status)
         {
-            KickLoginButtonText = "Checking...";
+            KickConnection.LoginButtonText = "Checking...";
 
             switch (status)
             {
                 case ConnectionStatus.NotConnected:
-                    KickConnectionStatus = "Not Connected";
-                    KickConnectionColor = "Red";
-                    KickLoginButtonText = "Login Kick";
-                    KickLoginButton.IsEnabled = true;
+                    KickConnection.ConnectionStatus = "Not Connected";
+                    KickConnection.ConnectionColor = "Red";
+                    KickConnection.LoginButtonText = "Login Kick";
+                    KickConnection.IsLoginEnabled = true;
                     break;
 
                 case ConnectionStatus.Validating:
-                    KickConnectionStatus = "Validating...";
-                    KickConnectionColor = "Orange";
-                    KickLoginButton.IsEnabled = false;
+                    KickConnection.ConnectionStatus = "Validating...";
+                    KickConnection.ConnectionColor = "Orange";
+                    KickConnection.IsLoginEnabled = false;
                     break;
 
                 case ConnectionStatus.Connected:
-                    KickConnectionStatus = "Connected";
-                    KickConnectionColor = "Lime";
-                    KickLoginButtonText = "Kick Logged in";
-                    KickLoginButton.IsEnabled = false; // disable when already logged in
+                    KickConnection.ConnectionStatus = "Connected";
+                    KickConnection.ConnectionColor = "Lime";
+                    KickConnection.LoginButtonText = "Kick Logged in";
+                    KickConnection.IsLoginEnabled = false;
                     ScheduleDropsLoad();
                     break;
                 case ConnectionStatus.Connecting:
-                    KickConnectionStatus = "Connecting...";
-                    KickConnectionColor = "Yellow";
-                    KickLoginButton.IsEnabled = false;
+                    KickConnection.ConnectionStatus = "Connecting...";
+                    KickConnection.ConnectionColor = "Yellow";
+                    KickConnection.IsLoginEnabled = false;
                     break;
             }
         }
@@ -632,34 +436,34 @@ namespace UI.Views
         /// state.</param>
         private void OnTwitchStatusChanged(ConnectionStatus status)
         {
-            TwitchLoginButtonText = "Checking...";
+            TwitchConnection.LoginButtonText = "Checking...";
 
             switch (status)
             {
                 case ConnectionStatus.NotConnected:
-                    TwitchConnectionStatus = "Not Connected";
-                    TwitchConnectionColor = "Red";
-                    TwitchLoginButtonText = "Login Twitch";
-                    TwitchLoginButton.IsEnabled = true;
+                    TwitchConnection.ConnectionStatus = "Not Connected";
+                    TwitchConnection.ConnectionColor = "Red";
+                    TwitchConnection.LoginButtonText = "Login Twitch";
+                    TwitchConnection.IsLoginEnabled = true;
                     break;
 
                 case ConnectionStatus.Validating:
-                    TwitchConnectionStatus = "Validating...";
-                    TwitchConnectionColor = "Orange";
-                    TwitchLoginButton.IsEnabled = false;
+                    TwitchConnection.ConnectionStatus = "Validating...";
+                    TwitchConnection.ConnectionColor = "Orange";
+                    TwitchConnection.IsLoginEnabled = false;
                     break;
 
                 case ConnectionStatus.Connected:
-                    TwitchConnectionStatus = "Connected";
-                    TwitchConnectionColor = "Lime";
-                    TwitchLoginButtonText = "Twitch Logged in";
-                    TwitchLoginButton.IsEnabled = false; // disable when already logged in
+                    TwitchConnection.ConnectionStatus = "Connected";
+                    TwitchConnection.ConnectionColor = "Lime";
+                    TwitchConnection.LoginButtonText = "Twitch Logged in";
+                    TwitchConnection.IsLoginEnabled = false;
                     ScheduleDropsLoad();
                     break;
                 case ConnectionStatus.Connecting:
-                    TwitchConnectionStatus = "Connecting...";
-                    TwitchConnectionColor = "Yellow";
-                    TwitchLoginButton.IsEnabled = false;
+                    TwitchConnection.ConnectionStatus = "Connecting...";
+                    TwitchConnection.ConnectionColor = "Yellow";
+                    TwitchConnection.IsLoginEnabled = false;
                     break;
             }
         }

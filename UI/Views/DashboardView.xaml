@@ -2,40 +2,12 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:views="clr-namespace:UI.Views"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:controls="clr-namespace:UI.Controls"
              xmlns:local="clr-namespace:UI"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800"
              Background="{DynamicResource MainBackgroundBrush}">
-
-    <UserControl.Resources>
-        <Style TargetType="ProgressBar">
-            <Setter Property="Height" Value="12"/>
-            <Setter Property="Background" Value="{DynamicResource TextMutedBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ProgressBar">
-                        <Grid x:Name="Root">
-                            <!-- Track -->
-                            <Border Background="{TemplateBinding Background}" CornerRadius="5"/>
-
-                            <!-- Fill -->
-                            <Border HorizontalAlignment="Left" CornerRadius="5" Background="{TemplateBinding Foreground}">
-                                <Border.Width>
-                                    <MultiBinding Converter="{StaticResource PercentToWidthConverter}">
-                                        <Binding Path="Value" RelativeSource="{RelativeSource TemplatedParent}"/>
-                                        <Binding Path="ActualWidth" ElementName="Root"/>
-                                    </MultiBinding>
-                                </Border.Width>
-                            </Border>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </UserControl.Resources>
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -74,271 +46,26 @@
                     <TextBlock Text="Miner Status"
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                FontSize="16"/>
-                    <TextBlock x:Name="MinerStatusText"
-                               Text="{Binding MinerStatus, FallbackValue=Active}"
+                    <TextBlock Text="{Binding MinerStatus, FallbackValue=Active}"
                                Foreground="Orange"
                                FontSize="28"
                                Margin="0,10,0,0"
                                FontWeight="SemiBold"/>
-                    <TextBlock x:Name="MinerStatusDetailsText"
-                               Text="{Binding MinerStatusDetails, FallbackValue=Waiting...}"
+                    <TextBlock Text="{Binding MinerStatusDetails, FallbackValue=Waiting...}"
                                Foreground="{DynamicResource TextMutedBrush}"
                                FontSize="12"/>
                 </StackPanel>
             </Border>
 
-            <!-- TWITCH CAMPAIGN PROGRESS CARD -->
-            <Border Grid.Row="0" Grid.Column="1"
-                Margin="0,0,0,20"
-                Background="{DynamicResource CardBackgroundBrush}"
-                Padding="20"
-                CornerRadius="8"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1">
+            <controls:PlatformCampaignProgressCard Grid.Row="0" Grid.Column="1" DataContext="{Binding TwitchProgress}" Margin="0,0,0,20"/>
 
-                <StackPanel>
-                    <TextBlock Text="Twitch Campaign Progress"
-                       Foreground="{DynamicResource TextPrimaryBrush}"
-                       FontSize="16"/>
+            <controls:PlatformCampaignProgressCard Grid.Row="1" Grid.Column="1" DataContext="{Binding KickProgress}" Margin="0,0,0,20"/>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding TwitchCampaignName, Converter={StaticResource StringToVisibilityConverter}}">
-                        <Border Width="32" Height="42" CornerRadius="4" ClipToBounds="True"
-                                Background="{DynamicResource MainBackgroundBrush}" Margin="0,0,8,0"
-                                Visibility="{Binding TwitchCampaignImageUrl, Converter={StaticResource StringToVisibilityConverter}}">
-                            <Image local:ImageEx.SourceUrl="{Binding TwitchCampaignImageUrl}" Stretch="UniformToFill"/>
-                        </Border>
-                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                            <Run Text="Campaign: " Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <Run Text="{Binding TwitchCampaignName}" FontWeight="SemiBold" Foreground="{DynamicResource TwitchBrush}"/>
-                        </TextBlock>
-                    </StackPanel>
-
-                    <ProgressBar
-                       Margin="0,10,0,5"
-                       Minimum="0"
-                       Maximum="100"
-                       Value="{Binding TwitchCampaignProgress}"/>
-
-                    <TextBlock
-                       Text="{Binding TwitchCampaignProgress, StringFormat='{}{0}% Complete'}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       FontSize="12"/>
-
-                    <TextBlock Text="Drop Progress"
-                       Margin="0,10,0,0"
-                       Foreground="{DynamicResource TextPrimaryBrush}"
-                       FontSize="16"/>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding TwitchDropName, Converter={StaticResource StringToVisibilityConverter}}">
-                        <Border Width="32" Height="32" CornerRadius="4" ClipToBounds="True"
-                                Background="{DynamicResource MainBackgroundBrush}" Margin="0,0,8,0"
-                                Visibility="{Binding TwitchDropImageUrl, Converter={StaticResource StringToVisibilityConverter}}">
-                            <Image local:ImageEx.SourceUrl="{Binding TwitchDropImageUrl}" Stretch="UniformToFill"/>
-                        </Border>
-                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                            <Run Text="Item: " Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <Run Text="{Binding TwitchDropName}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                        </TextBlock>
-                    </StackPanel>
-
-                    <ProgressBar
-                       Margin="0,10,0,5"
-                       Minimum="0"
-                       Maximum="100"
-                       Value="{Binding TwitchDropProgress}"/>
-
-                    <TextBlock
-                       Text="{Binding TwitchDropProgress, StringFormat='{}{0}% Complete'}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       FontSize="12"/>
-
-                    <TextBlock Margin="0,5,0,0" Visibility="{Binding TwitchWatchedChannel, Converter={StaticResource StringToVisibilityConverter}}">
-                        <Run Text="Watching: " Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <Run Text="{Binding TwitchWatchedChannel}" FontWeight="SemiBold" Foreground="{DynamicResource TwitchBrush}"/>
-                    </TextBlock>
-                </StackPanel>
-            </Border>
-
-            <!-- KICK CAMPAIGN PROGRESS CARD -->
-            <Border Grid.Row="1" Grid.Column="1"
-                Margin="0,0,0,20"
-                Background="{DynamicResource CardBackgroundBrush}"
-                Padding="20"
-                CornerRadius="8"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1">
-
-                <StackPanel>
-                    <TextBlock Text="Kick Campaign Progress"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       FontSize="16"/>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding KickCampaignName, Converter={StaticResource StringToVisibilityConverter}}">
-                        <Border Width="32" Height="42" CornerRadius="4" ClipToBounds="True"
-                                Background="{DynamicResource MainBackgroundBrush}" Margin="0,0,8,0"
-                                Visibility="{Binding KickCampaignImageUrl, Converter={StaticResource StringToVisibilityConverter}}">
-                            <Image local:ImageEx.SourceUrl="{Binding KickCampaignImageUrl}" Stretch="UniformToFill"/>
-                        </Border>
-                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                            <Run Text="Campaign: " Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <Run Text="{Binding KickCampaignName}" FontWeight="SemiBold" Foreground="{DynamicResource KickBrush}"/>
-                        </TextBlock>
-                    </StackPanel>
-
-                    <ProgressBar
-                       Margin="0,10,0,5"
-                       Minimum="0"
-                       Maximum="100"
-                       Value="{Binding KickCampaignProgress}"/>
-
-                    <TextBlock
-                       Text="{Binding KickCampaignProgress, StringFormat='{}{0}% Complete'}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       FontSize="12"/>
-
-                    <TextBlock Text="Drop Progress"
-                       Margin="0,10,0,0"
-                       Foreground="{DynamicResource TextPrimaryBrush}"
-                       FontSize="16"/>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding KickDropName, Converter={StaticResource StringToVisibilityConverter}}">
-                        <Border Width="32" Height="32" CornerRadius="4" ClipToBounds="True"
-                                Background="{DynamicResource MainBackgroundBrush}" Margin="0,0,8,0"
-                                Visibility="{Binding KickDropImageUrl, Converter={StaticResource StringToVisibilityConverter}}">
-                            <Image local:ImageEx.SourceUrl="{Binding KickDropImageUrl}" Stretch="UniformToFill"/>
-                        </Border>
-                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                            <Run Text="Item: " Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <Run Text="{Binding KickDropName}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                        </TextBlock>
-                    </StackPanel>
-
-                    <ProgressBar
-                       Margin="0,10,0,5"
-                       Minimum="0"
-                       Maximum="100"
-                       Value="{Binding KickDropProgress}"/>
-
-                    <TextBlock
-                       Text="{Binding KickDropProgress, StringFormat='{}{0}% Complete'}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       FontSize="12"/>
-
-                    <TextBlock Margin="0,5,0,0" Visibility="{Binding KickWatchedChannel, Converter={StaticResource StringToVisibilityConverter}}">
-                        <Run Text="Watching: " Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <Run Text="{Binding KickWatchedChannel}" FontWeight="SemiBold" Foreground="{DynamicResource KickBrush}"/>
-                    </TextBlock>
-                </StackPanel>
-            </Border>
-
-            <!-- LOGIN STATUS CARD -->
-            <Border Grid.Row="1" Grid.Column="0"
-                    Margin="0,0,20,0"
-                    Background="{DynamicResource CardBackgroundBrush}"
-                    Padding="20"
-                    CornerRadius="8"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1">
-                <StackPanel>
-                    <TextBlock Text="Connection Status"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               FontSize="16"/>
-
-                    <StackPanel Margin="0,10,0,0">
-                        <!-- Twitch Status -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Ellipse Width="10" Height="10" Fill="{Binding TwitchConnectionColor, FallbackValue=Red}" VerticalAlignment="Center"/>
-                            <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
-                                <Run Text="Twitch" FontWeight="Bold" Foreground="{DynamicResource TwitchBrush}"/>
-                                <Run Text=" : " Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                <Run Text="{Binding TwitchConnectionStatus, FallbackValue=Disconnected}" 
-                                     FontWeight="SemiBold" 
-                                     Foreground="{DynamicResource TextPrimaryBrush}"/>
-                            </TextBlock>
-                        </StackPanel>
-
-                        <!-- Kick Status -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Ellipse Width="10" Height="10" Fill="{Binding KickConnectionColor, FallbackValue=Red}" VerticalAlignment="Center"/>
-                            <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
-                                <Run Text="Kick" FontWeight="Bold" Foreground="{DynamicResource KickBrush}"/>
-                                <Run Text=" : " Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                <Run Text="{Binding KickConnectionStatus, FallbackValue=Disconnected}" 
-                                     FontWeight="SemiBold" 
-                                     Foreground="{DynamicResource TextPrimaryBrush}"/>
-                            </TextBlock>
-                        </StackPanel>
-
-                        <!-- LOGIN BUTTONS - BRANDED, HARD-CODED (THEY'RE ICONIC) -->
-                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
-                            <Button x:Name="KickLoginButton"
-                                    Content="{Binding KickLoginButtonText}"
-                                    Width="120" Height="36"
-                                    Margin="0,0,10,0"
-                                    FontWeight="SemiBold"
-                                    Cursor="Hand"
-                                    Click="OnKickLoginClick">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="border" Background="#2D9D78" CornerRadius="6">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.Foreground="White"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="border" Property="Background" Value="#34B48F"/>
-                                                <Setter TargetName="border" Property="Effect">
-                                                    <Setter.Value>
-                                                        <DropShadowEffect Color="#34B48F" Opacity="0.5" BlurRadius="10" ShadowDepth="0"/>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Trigger>
-                                            <Trigger Property="IsPressed" Value="True">
-                                                <Setter TargetName="border" Property="Background" Value="#257A63"/>
-                                            </Trigger>
-                                            <Trigger Property="IsEnabled" Value="False">
-                                                <Setter TargetName="border" Property="Background" Value="#333333"/>
-                                                <Setter Property="Foreground" Value="#888888"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-
-                            <Button x:Name="TwitchLoginButton"
-                                    Content="{Binding TwitchLoginButtonText}"
-                                    Width="120" Height="36"
-                                    FontWeight="SemiBold"
-                                    Cursor="Hand"
-                                    Click="OnTwitchLoginClick">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="border" Background="#9146FF" CornerRadius="6">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.Foreground="White"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="border" Property="Background" Value="#A970FF"/>
-                                                <Setter TargetName="border" Property="Effect">
-                                                    <Setter.Value>
-                                                        <DropShadowEffect Color="#A970FF" Opacity="0.5" BlurRadius="12" ShadowDepth="0"/>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Trigger>
-                                            <Trigger Property="IsPressed" Value="True">
-                                                <Setter TargetName="border" Property="Background" Value="#772CE8"/>
-                                            </Trigger>
-                                            <Trigger Property="IsEnabled" Value="False">
-                                                <Setter TargetName="border" Property="Background" Value="#333333"/>
-                                                <Setter Property="Foreground" Value="#888888"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+            <controls:ConnectionStatusCard Grid.Row="1" Grid.Column="0" Margin="0,0,20,0"
+                TwitchConnection="{Binding TwitchConnection}"
+                KickConnection="{Binding KickConnection}"
+                KickLoginClick="OnKickLoginClick"
+                TwitchLoginClick="OnTwitchLoginClick"/>
         </Grid>
     </Grid>
 </UserControl>
