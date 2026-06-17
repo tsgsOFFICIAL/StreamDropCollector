@@ -1,0 +1,74 @@
+﻿<UserControl x:Class="UI.Controls.PlatformLoginButton"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="36" d:DesignWidth="120">
+
+    <UserControl.Resources>
+        <ControlTemplate x:Key="KickLoginTemplate" TargetType="Button">
+            <Border x:Name="border" Background="#2D9D78" CornerRadius="6">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.Foreground="White"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="border" Property="Background" Value="#34B48F"/>
+                    <Setter TargetName="border" Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="#34B48F" Opacity="0.5" BlurRadius="10" ShadowDepth="0"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter TargetName="border" Property="Background" Value="#257A63"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter TargetName="border" Property="Background" Value="#333333"/>
+                    <Setter Property="Foreground" Value="#888888"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <ControlTemplate x:Key="TwitchLoginTemplate" TargetType="Button">
+            <Border x:Name="border" Background="#9146FF" CornerRadius="6">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.Foreground="White"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="border" Property="Background" Value="#A970FF"/>
+                    <Setter TargetName="border" Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="#A970FF" Opacity="0.5" BlurRadius="12" ShadowDepth="0"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter TargetName="border" Property="Background" Value="#772CE8"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter TargetName="border" Property="Background" Value="#333333"/>
+                    <Setter Property="Foreground" Value="#888888"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </UserControl.Resources>
+
+    <Button Content="{Binding LoginButtonText}"
+            IsEnabled="{Binding IsLoginEnabled}"
+            Width="120" Height="36"
+            FontWeight="SemiBold"
+            Cursor="Hand"
+            Click="OnLoginClick">
+        <Button.Style>
+            <Style TargetType="Button">
+                <Setter Property="Template" Value="{StaticResource KickLoginTemplate}"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding PlatformName, Mode=OneWay}" Value="Twitch">
+                        <Setter Property="Template" Value="{StaticResource TwitchLoginTemplate}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Button.Style>
+    </Button>
+</UserControl>
