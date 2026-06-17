@@ -22,11 +22,6 @@ namespace UI
     /// </summary>
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
-        public ICommand? JoinDiscordCommand { get; }
-        public ICommand? ToggleWindowCommand { get; }
-        public ICommand? CloseCommand { get; }
-        public ICommand? OpenGithubCommand { get; }
-
         private bool _isTrayIconVisible;
         public bool IsTrayIconVisible
         {
@@ -92,12 +87,6 @@ namespace UI
             // Initialize tray icon visibility
             IsTrayIconVisible = true;
             DataContext = this;
-
-            // Initialize commands
-            ToggleWindowCommand = new RelayCommand(o => ToggleWindowState());
-            CloseCommand = new RelayCommand(o => CloseApplication());
-            OpenGithubCommand = new RelayCommand(o => Utility.LaunchWeb("https://github.com/tsgsOFFICIAL/StreamDropCollector"));
-            JoinDiscordCommand = new RelayCommand(o => Utility.LaunchWeb("https://discord.gg/Cddu5aJ"));
 
             // Event handler for double-click on TaskbarIcon
             MyNotifyIcon.TrayMouseDoubleClick += OnTrayIconDoubleClick;
@@ -557,6 +546,14 @@ namespace UI
         {
             ExitTrayMode();
         }
+        private void OnTrayJoinDiscordClick(object sender, RoutedEventArgs e) =>
+            Utility.LaunchWeb("https://discord.gg/Cddu5aJ");
+        private void OnTrayOpenGithubClick(object sender, RoutedEventArgs e) =>
+            Utility.LaunchWeb("https://github.com/tsgsOFFICIAL/StreamDropCollector");
+        private void OnTrayToggleWindowClick(object sender, RoutedEventArgs e) =>
+            ToggleWindowState();
+        private void OnTrayExitClick(object sender, RoutedEventArgs e) =>
+            CloseApplication();
         #endregion
     }
 }

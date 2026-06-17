@@ -142,7 +142,7 @@
             </Border>
 
             <!-- NotifyIcon, that minimizes to system tray -->
-            <tb:TaskbarIcon x:Name="MyNotifyIcon" IconSource="/Assets/logo.png" ToolTipText="Stream Drop Collector by tsgsOFFICIAL" DataContext="{Binding RelativeSource={RelativeSource AncestorType=Window}}" Visibility="Collapsed">
+            <tb:TaskbarIcon x:Name="MyNotifyIcon" IconSource="/Assets/logo.png" ToolTipText="Stream Drop Collector by tsgsOFFICIAL" Visibility="Collapsed">
                 <tb:TaskbarIcon.ContextMenu>
                     <ContextMenu>
                         <!--MenuItem with centered icon and text-->
@@ -156,7 +156,7 @@
 
                         <Separator Margin="0"/>
 
-                        <MenuItem x:Name="JoinDiscord" Header="Join Discord" Command="{Binding JoinDiscordCommand}">
+                        <MenuItem x:Name="JoinDiscord" Header="Join Discord" Click="OnTrayJoinDiscordClick">
                             <MenuItem.Icon>
                                 <Canvas Width="24" Height="24" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <Image Source="/Assets/discord.png" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6, 0"/>
@@ -164,7 +164,7 @@
                             </MenuItem.Icon>
                         </MenuItem>
 
-                        <MenuItem x:Name="OpenGithub" Header="Open Github" Command="{Binding OpenGithubCommand}">
+                        <MenuItem x:Name="OpenGithub" Header="Open Github" Click="OnTrayOpenGithubClick">
                             <MenuItem.Icon>
                                 <Canvas Width="24" Height="24" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <Image Source="/Assets/github.png" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6, 0"/>
@@ -172,8 +172,8 @@
                             </MenuItem.Icon>
                         </MenuItem>
 
-                        <MenuItem x:Name="MinimizeAndRestore" Header="Minimize" Command="{Binding ToggleWindowCommand}" />
-                        <MenuItem Header="Exit" Command="{Binding CloseCommand}" />
+                        <MenuItem x:Name="MinimizeAndRestore" Header="Minimize" Click="OnTrayToggleWindowClick" />
+                        <MenuItem x:Name="ExitTray" Header="Exit" Click="OnTrayExitClick" />
 
                         <!--Define a style for the ContextMenu-->
                         <ContextMenu.Resources>
