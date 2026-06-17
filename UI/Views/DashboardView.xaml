@@ -4,7 +4,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:controls="clr-namespace:UI.Controls"
-             xmlns:local="clr-namespace:UI"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800"
              Background="{DynamicResource MainBackgroundBrush}">
@@ -16,13 +15,8 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- HEADER -->
-        <TextBlock Text="Dashboard"
-                   FontSize="30"
-                   FontWeight="Bold"
-                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+        <TextBlock Text="Dashboard" Style="{StaticResource PageHeader}"/>
 
-        <!-- MAIN CONTENT -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*"/>
@@ -34,32 +28,18 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- MINER STATUS CARD -->
-            <Border Grid.Row="0" Grid.Column="0"
-                    Margin="0,0,20,20"
-                    Background="{DynamicResource CardBackgroundBrush}"
-                    Padding="20"
-                    CornerRadius="8"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1">
-                <StackPanel>
-                    <TextBlock Text="Miner Status"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               FontSize="16"/>
-                    <TextBlock Text="{Binding MinerStatus, FallbackValue=Active}"
-                               Foreground="Orange"
-                               FontSize="28"
-                               Margin="0,10,0,0"
-                               FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding MinerStatusDetails, FallbackValue=Waiting...}"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               FontSize="12"/>
-                </StackPanel>
-            </Border>
+            <controls:MinerStatusCard Grid.Row="0" Grid.Column="0"
+                                      Margin="0,0,20,20"
+                                      Status="{Binding MinerStatus}"
+                                      Details="{Binding MinerStatusDetails}"/>
 
-            <controls:PlatformCampaignProgressCard Grid.Row="0" Grid.Column="1" DataContext="{Binding TwitchProgress}" Margin="0,0,0,20"/>
+            <controls:PlatformCampaignProgressCard Grid.Row="0" Grid.Column="1"
+                                                   DataContext="{Binding TwitchProgress}"
+                                                   Margin="0,0,0,20"/>
 
-            <controls:PlatformCampaignProgressCard Grid.Row="1" Grid.Column="1" DataContext="{Binding KickProgress}" Margin="0,0,0,20"/>
+            <controls:PlatformCampaignProgressCard Grid.Row="1" Grid.Column="1"
+                                                   DataContext="{Binding KickProgress}"
+                                                   Margin="0,0,0,20"/>
 
             <controls:ConnectionStatusCard Grid.Row="1" Grid.Column="0" Margin="0,0,20,0"
                 TwitchConnection="{Binding TwitchConnection}"
