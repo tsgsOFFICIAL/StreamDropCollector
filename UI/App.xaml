@@ -9,5 +9,6 @@
         <converters:PercentToWidthConverter x:Key="PercentToWidthConverter"/>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+        <converters:ResourceKeyToBrushConverter x:Key="ResourceKeyToBrushConverter"/>
     </Application.Resources>
 </Application>
