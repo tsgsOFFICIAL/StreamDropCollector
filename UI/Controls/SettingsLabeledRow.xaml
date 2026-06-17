@@ -1,0 +1,17 @@
+﻿<UserControl x:Class="UI.Controls.SettingsLabeledRow"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="40" d:DesignWidth="400"
+             x:Name="Root">
+
+    <StackPanel Orientation="Horizontal" Margin="{Binding RowMargin, ElementName=Root}">
+        <TextBlock Text="{Binding Label, ElementName=Root}"
+                   Foreground="{DynamicResource TextMutedBrush}"
+                   Width="{Binding LabelWidth, ElementName=Root}"
+                   VerticalAlignment="Center"/>
+        <ContentPresenter Content="{Binding RowContent, ElementName=Root}" VerticalAlignment="Center"/>
+    </StackPanel>
+</UserControl>
