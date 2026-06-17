@@ -36,7 +36,7 @@ namespace UI.Models
             set { _loginButtonText = value; OnPropertyChanged(); }
         }
 
-        private bool _isLoginEnabled = true;
+        private bool _isLoginEnabled = false;
         public bool IsLoginEnabled
         {
             get => _isLoginEnabled;
