@@ -98,6 +98,13 @@ namespace UI.Views
             InitializeComponent();
             DataContext = this;
 
+            TwitchConnection.LoginButtonText = "Checking...";
+            TwitchConnection.ConnectionStatus = "Checking...";
+            TwitchConnection.ConnectionColor = "Orange";
+            KickConnection.LoginButtonText = "Checking...";
+            KickConnection.ConnectionStatus = "Checking...";
+            KickConnection.ConnectionColor = "Orange";
+
             MinerStatus = "Initializing";
             MinerStatusDetails = "Please wait...";
 
