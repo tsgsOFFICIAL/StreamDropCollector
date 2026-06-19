@@ -194,7 +194,7 @@ namespace UI
                         // Start normally, but delete the Update folder after a delay
                         Task.Run(() =>
                         {
-                            Thread.Sleep(10 * 1000); // Wait 10 seconds to ensure the app has started properly
+                            Thread.Sleep(60 * 1000); // Wait 60 seconds to ensure the app has started properly
                             try
                             {
                                 if (Directory.Exists(updatePath))
