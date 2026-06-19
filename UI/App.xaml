@@ -12,5 +12,6 @@
         <converters:ResourceKeyToBrushConverter x:Key="ResourceKeyToBrushConverter"/>
         <converters:PlatformToBrushKeyConverter x:Key="PlatformToBrushKeyConverter"/>
         <converters:StringToImageSourceConverter x:Key="StringToImageSourceConverter"/>
+        <converters:StreamerAvatarBrushConverter x:Key="StreamerAvatarBrushConverter"/>
     </Application.Resources>
 </Application>

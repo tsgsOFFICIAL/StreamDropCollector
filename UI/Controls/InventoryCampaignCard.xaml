@@ -15,13 +15,13 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="320"/>
             </Grid.ColumnDefinitions>
 
             <controls:RoundedImage SourceUrl="{Binding GameImageUrl}"
                                    ImageWidth="100" ImageHeight="100" CornerRadius="10"/>
 
-            <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Margin="20,0,24,0" VerticalAlignment="Top">
                 <TextBlock Text="{Binding GameName}"
                            FontSize="22"
                            FontWeight="Bold"
@@ -66,9 +66,11 @@
                         </Style>
                     </Button.Style>
                 </Button>
+
+                <controls:CampaignStreamersSection DataContext="{Binding}"/>
             </StackPanel>
 
-            <StackPanel Grid.Column="2" VerticalAlignment="Top" MinWidth="320">
+            <StackPanel Grid.Column="2" VerticalAlignment="Top" MaxWidth="320">
                 <TextBlock Text="Rewards"
                            FontSize="14"
                            Foreground="{DynamicResource TextSecondaryBrush}"
