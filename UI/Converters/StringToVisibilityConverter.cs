@@ -1,14 +1,16 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Windows.Data;
 using System.Windows;
 
 namespace UI.Converters
 {
+    /// <summary>
+    /// Shows bound content when a string is non-empty; otherwise collapses the target.
+    /// </summary>
     public class StringToVisibilityConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            // Collapsed if null, empty, or whitespace
             return string.IsNullOrWhiteSpace(value as string) ? Visibility.Collapsed : Visibility.Visible;
         }
 

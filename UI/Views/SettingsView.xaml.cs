@@ -14,6 +14,10 @@ namespace UI.Views
     public partial class SettingsView : System.Windows.Controls.UserControl
     {
         private static readonly Lazy<SettingsView> _instance = new(() => new SettingsView());
+
+        /// <summary>
+        /// Gets the singleton instance of the settings view.
+        /// </summary>
         public static SettingsView Instance => _instance.Value;
 
         private SettingsView()

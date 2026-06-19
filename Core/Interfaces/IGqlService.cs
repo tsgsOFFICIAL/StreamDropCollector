@@ -2,6 +2,9 @@
 
 namespace Core.Interfaces
 {
+    /// <summary>
+    /// GraphQL client for Twitch drops dashboard queries, drop claims, and live channel lookups.
+    /// </summary>
     public interface IGqlService : IDisposable
     {
         /// <summary>
@@ -46,6 +49,9 @@ namespace Core.Interfaces
         /// <param name="ct">Cancellation token.</param>
         /// <returns>Ordered list of channel login names that are live and streaming the correct game.</returns>
         Task<List<string>> QueryLiveChannelsBySlugAsync(IReadOnlyList<string> channelLogins, string gameSlug, CancellationToken ct = default);
+        /// <summary>
+        /// Sets the authenticated Twitch user identifier used for GraphQL requests.
+        /// </summary>
         string UserId { set; }
     }
 }

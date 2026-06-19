@@ -3,8 +3,16 @@ using System.ComponentModel;
 
 namespace UI.Models
 {
+    /// <summary>
+    /// Bindable eligible streamer chip with avatar, live state, and profile image metadata.
+    /// </summary>
     public sealed class EligibleStreamer : INotifyPropertyChanged
     {
+        /// <summary>
+        /// Creates a streamer chip from a channel login and optional profile image URL.
+        /// </summary>
+        /// <param name="login">Channel login slug.</param>
+        /// <param name="profileImageUrl">Optional profile image URL from platform APIs.</param>
         public EligibleStreamer(string login, string? profileImageUrl = null)
         {
             Login = login;
@@ -14,15 +22,24 @@ namespace UI.Models
             ProfileImageUrl = profileImageUrl;
         }
 
+        /// <summary>Channel login slug.</summary>
         public string Login { get; }
+
+        /// <summary>Display name shown on the chip.</summary>
         public string Name { get; }
+
+        /// <summary>Avatar fallback initials derived from the login.</summary>
         public string Initials { get; }
+
+        /// <summary>Deterministic palette index for the avatar background brush.</summary>
         public int AvatarColorIndex { get; }
 
-        /// <summary>
-        /// Kick channel API: <c>user.profile_pic</c>. Empty until live/channel metadata is fetched.
-        /// </summary>
         private string? _profileImageUrl;
+
+        /// <summary>
+        /// Profile image URL from platform channel metadata (e.g. Kick <c>user.profile_pic</c>,
+        /// Twitch <c>profile_image_url</c>), or <see langword="null"/> until fetched.
+        /// </summary>
         public string? ProfileImageUrl
         {
             get => _profileImageUrl;
@@ -38,9 +55,12 @@ namespace UI.Models
             }
         }
 
+        /// <summary>Whether a non-empty profile image URL is available.</summary>
         public bool HasProfileImage => !string.IsNullOrWhiteSpace(ProfileImageUrl);
 
         private bool _isLive;
+
+        /// <summary>Whether the streamer is currently live.</summary>
         public bool IsLive
         {
             get => _isLive;
@@ -56,11 +76,15 @@ namespace UI.Models
             }
         }
 
+        /// <summary>Inverse of <see cref="IsLive"/> for binding convenience.</summary>
         public bool IsOffline => !IsLive;
 
+        /// <summary>Chip opacity; reduced when the streamer is offline.</summary>
         public double ChipOpacity => IsLive ? 1.0 : 0.78;
 
         private bool _isClickable;
+
+        /// <summary>Whether the chip accepts click input to expand or filter the list.</summary>
         public bool IsClickable
         {
             get => _isClickable;

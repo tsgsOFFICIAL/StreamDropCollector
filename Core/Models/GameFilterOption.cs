@@ -23,7 +23,7 @@ namespace Core.Models
         /// parameter.</remarks>
         public event PropertyChangedEventHandler? PropertyChanged;
         /// <summary>
-        /// Gets the platform on which the application is running.
+        /// Gets the streaming platform associated with this filter option.
         /// </summary>
         public Platform Platform { get; }
         /// <summary>

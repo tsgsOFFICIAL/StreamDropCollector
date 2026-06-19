@@ -11,6 +11,9 @@ using UI.Models;
 
 namespace UI.Controls
 {
+    /// <summary>
+    /// Expandable eligible-streamer list for a drops campaign with live filtering and search.
+    /// </summary>
     public partial class CampaignStreamersSection : UserControl, INotifyPropertyChanged
     {
         private const int InlineLimit = 8;
@@ -24,17 +27,28 @@ namespace UI.Controls
         private int _liveCount;
         private string _footerText = string.Empty;
 
+        /// <summary>Preview chips shown when the list is collapsed or partially expanded.</summary>
         public ObservableCollection<EligibleStreamer> PreviewChips { get; } = [];
+
+        /// <summary>Streamers matching the current filter and search query.</summary>
         public ObservableCollection<EligibleStreamer> FilteredStreamers { get; } = [];
 
+        /// <summary>Whether the campaign has at least one eligible streamer.</summary>
         public bool HasStreamers => _allStreamers.Count > 0;
+
+        /// <summary>Whether the streamer count exceeds the inline display limit.</summary>
         public bool NeedsCollapse => _allStreamers.Count > InlineLimit;
+
+        /// <summary>Whether the full expandable panel should be shown.</summary>
         public bool ShowExpandedPanel => NeedsCollapse;
 
+        /// <summary>Whether live-state UI elements should be visible.</summary>
         public bool ShowsLiveUi => HasStreamers;
 
+        /// <summary>Total number of eligible streamers for the campaign.</summary>
         public int TotalCount => _allStreamers.Count;
 
+        /// <summary>Number of streamers currently marked as live.</summary>
         public int LiveCount
         {
             get => _liveCount;
@@ -48,6 +62,7 @@ namespace UI.Controls
             }
         }
 
+        /// <summary>Whether the full streamer list panel is expanded.</summary>
         public bool IsExpanded
         {
             get => _isExpanded;
@@ -68,6 +83,7 @@ namespace UI.Controls
             }
         }
 
+        /// <summary>Search text used to filter streamers by name.</summary>
         public string SearchQuery
         {
             get => _searchQuery;
@@ -82,6 +98,7 @@ namespace UI.Controls
             }
         }
 
+        /// <summary>When <see langword="true"/>, only live streamers are shown in the expanded list.</summary>
         public bool FilterLiveOnly
         {
             get => _filterLiveOnly;
@@ -97,20 +114,25 @@ namespace UI.Controls
             }
         }
 
+        /// <summary>Binding-friendly inverse of <see cref="FilterLiveOnly"/> for the "All" filter toggle.</summary>
         public bool FilterAllActive
         {
             get => !_filterLiveOnly;
             set => FilterLiveOnly = !value;
         }
 
+        /// <summary>Number of streamers hidden behind the collapsed "+N more" affordance.</summary>
         public int HiddenCount => Math.Max(0, TotalCount - CompactChipCount);
 
+        /// <summary>Label for the expand/collapse toggle button.</summary>
         public string MoreButtonText => IsExpanded ? "Show less" : $"+{HiddenCount} more";
 
+        /// <summary>Tooltip describing the expand/collapse action.</summary>
         public string MoreButtonTooltip => IsExpanded
             ? "Collapse streamer list"
             : $"Show all {TotalCount} streamers";
 
+        /// <summary>Footer summary text for collapsed or expanded list states.</summary>
         public string FooterText
         {
             get => _footerText;
@@ -124,10 +146,12 @@ namespace UI.Controls
             }
         }
 
+        /// <summary>Whether to show the empty-state message when filters match no streamers.</summary>
         public bool ShowEmptyFilteredMessage => IsExpanded && FilteredStreamers.Count == 0;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
+        /// <summary>Initializes the campaign streamers section and watches for campaign data context changes.</summary>
         public CampaignStreamersSection()
         {
             InitializeComponent();
@@ -168,9 +192,9 @@ namespace UI.Controls
         }
 
         /// <summary>
-        /// Apply channel metadata from Kick's <c>/api/v2/channels/{slug}</c> response
-        /// (<c>user.profile_pic</c>) once the live/channel API layer is wired up.
+        /// Applies profile image URLs from platform channel metadata once the live/channel API layer is wired up.
         /// </summary>
+        /// <param name="profileImagesByLogin">Profile image URLs keyed by channel login.</param>
         public void ApplyProfileImages(IReadOnlyDictionary<string, string?> profileImagesByLogin)
         {
             foreach (EligibleStreamer streamer in _allStreamers)

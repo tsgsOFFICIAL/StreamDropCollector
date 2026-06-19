@@ -12,26 +12,86 @@ using System.Windows.Input;
 
 namespace Core.Managers
 {
+    /// <summary>
+    /// Central manager for active drop campaigns, stream mining, progress tracking, and reward claiming across Twitch and Kick.
+    /// </summary>
+    /// <remarks>This class follows the singleton pattern. It coordinates hidden WebView hosts, selects campaigns to mine,
+    /// raises UI-facing progress events, and persists pinned campaign and last-mined streamer state.</remarks>
     public sealed class DropsInventoryManager
     {
         private static readonly Lazy<DropsInventoryManager> _instance = new(() => new DropsInventoryManager());
+
+        /// <summary>
+        /// Gets the singleton instance of the drops inventory manager.
+        /// </summary>
         public static DropsInventoryManager Instance => _instance.Value;
 
+        /// <summary>
+        /// Gets the collection of currently active drop campaigns displayed in the inventory UI.
+        /// </summary>
         public ObservableCollection<DropsCampaign> ActiveCampaigns { get; } = new ObservableCollection<DropsCampaign>();
 
+        /// <summary>
+        /// Gets the WebView host used for Twitch drops operations, or null if not yet initialized.
+        /// </summary>
         public IWebViewHost? TwitchWebView { get; private set; }
+
+        /// <summary>
+        /// Gets the WebView host used for Kick drops operations, or null if not yet initialized.
+        /// </summary>
         public IWebViewHost? KickWebView { get; private set; }
 
+        /// <summary>
+        /// Occurs when live Twitch campaign or drop progress percentages change.
+        /// </summary>
+        /// <remarks>The first value is overall campaign completion (0–100). The second value is progress toward the current unclaimed reward (0–100).</remarks>
         public event Action<byte, byte>? TwitchProgressChanged;
+
+        /// <summary>
+        /// Occurs when live Kick campaign or drop progress percentages change.
+        /// </summary>
+        /// <remarks>The first value is overall campaign completion (0–100). The second value is progress toward the current unclaimed reward (0–100).</remarks>
         public event Action<byte, byte>? KickProgressChanged;
+
+        /// <summary>
+        /// Occurs when the miner status label changes (for example, Idle, Starting, Evaluating, or Mining).
+        /// </summary>
         public event Action<string>? MinerStatusChanged;
+
+        /// <summary>
+        /// Occurs when the Twitch channel being mined changes.
+        /// </summary>
+        /// <remarks>An empty string indicates that no Twitch channel is currently being mined.</remarks>
         public event Action<string>? TwitchChannelChanged;
+
+        /// <summary>
+        /// Occurs when the Kick channel being mined changes.
+        /// </summary>
+        /// <remarks>An empty string indicates that no Kick channel is currently being mined.</remarks>
         public event Action<string>? KickChannelChanged;
-        // (campaign name, game image URL). Empty name + null URL means "cleared".
+
+        /// <summary>
+        /// Occurs when the Twitch campaign being mined changes.
+        /// </summary>
+        /// <remarks>Arguments are the campaign display name and game image URL. An empty name with a null URL means the selection was cleared.</remarks>
         public event Action<string, string?>? TwitchCampaignChanged;
+
+        /// <summary>
+        /// Occurs when the Kick campaign being mined changes.
+        /// </summary>
+        /// <remarks>Arguments are the campaign display name and game image URL. An empty name with a null URL means the selection was cleared.</remarks>
         public event Action<string, string?>? KickCampaignChanged;
-        // (reward/item name, reward image URL). Empty name + null URL means "cleared".
+
+        /// <summary>
+        /// Occurs when the current Twitch reward being progressed changes.
+        /// </summary>
+        /// <remarks>Arguments are the reward display name and image URL. An empty name with a null URL means the selection was cleared.</remarks>
         public event Action<string, string?>? TwitchDropChanged;
+
+        /// <summary>
+        /// Occurs when the current Kick reward being progressed changes.
+        /// </summary>
+        /// <remarks>Arguments are the reward display name and image URL. An empty name with a null URL means the selection was cleared.</remarks>
         public event Action<string, string?>? KickDropChanged;
 
         // Currently mined campaigns
@@ -93,8 +153,10 @@ namespace Core.Managers
         }
 
         /// <summary>
-        /// switches the currently mined campaign to the specified campaign, if it is not null and the miner is not paused. This command is intended to be bound to UI elements that allow the user to manually select a campaign to mine. When executed, it updates the pinned campaign ID and restarts the stream mining process to reflect the new selection. If the command is invoked while the miner is paused or with a null campaign, it will have no effect.
+        /// Gets a command that switches the currently mined campaign to the specified campaign when the miner is not paused.
         /// </summary>
+        /// <remarks>When executed, this command updates the pinned campaign ID and restarts stream mining.
+        /// It has no effect if the miner is paused or the campaign argument is null.</remarks>
         public ICommand SwitchCampaignCommand => new Utility.RelayCommand<DropsCampaign>(async campaign =>
         {
             if (campaign == null || _isPaused)
@@ -416,6 +478,8 @@ namespace Core.Managers
         /// After updating, the method initiates stream mining for the active campaigns.</remarks>
         /// <param name="campaigns">A collection of <see cref="DropsCampaign"/> objects to evaluate and update as active campaigns. Only
         /// campaigns that have progress to make, have started, and have not yet ended are considered.</param>
+        /// <param name="twitchGqlService">The Twitch GraphQL service used for Twitch-specific mining operations, or null if unavailable.</param>
+        /// <param name="startMining">true to begin or refresh stream mining after updating campaigns; otherwise, false.</param>
         public void UpdateCampaigns(IEnumerable<DropsCampaign> campaigns, IGqlService? twitchGqlService, bool startMining = true)
         {
             _twitchGqlService = twitchGqlService;
@@ -554,6 +618,7 @@ namespace Core.Managers
         /// on reward progress and campaign status. If no campaigns are eligible for progress, stream monitoring is
         /// stopped. The method is safe to call repeatedly; any previous monitoring timers are stopped and disposed
         /// before starting new ones.</remarks>
+        /// <param name="restartedInternally">true when mining is being restarted by an internal state change rather than an external refresh.</param>
         /// <returns>A task that represents the asynchronous operation of starting and managing stream monitoring.</returns>
         public async Task StartMiningStreams(bool restartedInternally = false)
         {
@@ -2101,8 +2166,14 @@ namespace Core.Managers
             }
         }
 
+        /// <summary>
+        /// Serializable cache entry for the user-pinned mining campaign.
+        /// </summary>
         private sealed class PinnedCampaignCacheEntry
         {
+            /// <summary>
+            /// Gets or sets the identifier of the pinned campaign, or null when no campaign is pinned.
+            /// </summary>
             public string? CampaignId { get; set; }
         }
 
@@ -2113,7 +2184,14 @@ namespace Core.Managers
         /// dictionaries are case-insensitive with respect to streamer slugs.</remarks>
         private sealed class LastMinedStreamersState
         {
+            /// <summary>
+            /// Gets or sets Twitch streamer logins keyed by campaign slug.
+            /// </summary>
             public Dictionary<string, string> TwitchBySlug { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+            /// <summary>
+            /// Gets or sets Kick streamer logins keyed by campaign slug.
+            /// </summary>
             public Dictionary<string, string> KickBySlug { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         }
 

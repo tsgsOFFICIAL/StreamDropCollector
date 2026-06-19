@@ -33,6 +33,10 @@ namespace UI.Views
         private static bool _isInitialized = false;
 
         private static readonly Lazy<DashboardView> _instance = new(() => new DashboardView());
+
+        /// <summary>
+        /// Gets the singleton instance of the dashboard view.
+        /// </summary>
         public static DashboardView Instance => _instance.Value;
 
         // Services
@@ -42,11 +46,27 @@ namespace UI.Views
 
         // Observable collection for UI binding
         private readonly ObservableCollection<DropsCampaign> _activeCampaigns = new();
+
+        /// <summary>
+        /// Gets the read-only collection of active drop campaigns shown on the dashboard.
+        /// </summary>
         public IReadOnlyCollection<DropsCampaign> ActiveCampaigns => _activeCampaigns;
 
+        /// <summary>
+        /// Gets the bindable Twitch account connection state for the dashboard.
+        /// </summary>
         public PlatformConnectionState TwitchConnection { get; } = new("Twitch", "TwitchBrush", "Login Twitch");
+
+        /// <summary>
+        /// Gets the bindable Kick account connection state for the dashboard.
+        /// </summary>
         public PlatformConnectionState KickConnection { get; } = new("Kick", "KickBrush", "Login Kick");
+
         private string _minerStatus = "Idle";
+
+        /// <summary>
+        /// Gets or sets the high-level miner status label shown on the dashboard.
+        /// </summary>
         public string MinerStatus
         {
             get => _minerStatus;
@@ -57,6 +77,10 @@ namespace UI.Views
             }
         }
         private string _minerStatusDetails = "Waiting";
+
+        /// <summary>
+        /// Gets or sets the detailed miner status message shown beneath the main status label.
+        /// </summary>
         public string MinerStatusDetails
         {
             get => _minerStatusDetails;
@@ -66,7 +90,14 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
+        /// <summary>
+        /// Gets the bindable Twitch mining progress state for the dashboard.
+        /// </summary>
         public PlatformProgressState TwitchProgress { get; } = new("Twitch", "TwitchBrush");
+
+        /// <summary>
+        /// Gets the bindable Kick mining progress state for the dashboard.
+        /// </summary>
         public PlatformProgressState KickProgress { get; } = new("Kick", "KickBrush");
 
         /// <summary>

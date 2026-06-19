@@ -5,15 +5,25 @@ using System.IO;
 
 namespace Core.Managers
 {
+    /// <summary>
+    /// Downloads application updates from GitHub and restarts the app to apply them.
+    /// </summary>
     public sealed class UpdateManager
     {
         private static readonly Lazy<UpdateManager> _instance = new(() => new UpdateManager());
+
+        /// <summary>
+        /// Gets the singleton instance of the update manager.
+        /// </summary>
         public static UpdateManager Instance => _instance.Value;
 
         private readonly string _repositoryOwner = "tsgsOFFICIAL";
         private readonly string _repositoryName = "StreamDropCollector";
         private readonly string _folderPath = "UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64";
 
+        /// <summary>
+        /// Occurs when update download progress changes.
+        /// </summary>
         public event EventHandler<ProgressEventArgs>? DownloadProgress;
 
         private UpdateManager()

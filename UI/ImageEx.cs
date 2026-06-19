@@ -9,9 +9,14 @@ using UI.Views;
 
 namespace UI
 {
+    /// <summary>
+    /// Attached property helpers that load remote images into WPF <see cref="System.Windows.Controls.Image"/> controls with memory and disk caching.
+    /// </summary>
     public static class ImageEx
     {
-        // -- Dependency Property ----------------------------------------------
+        /// <summary>
+        /// Identifies the <see cref="SourceUrl"/> attached property used to bind a remote image URL to an image control.
+        /// </summary>
         public static readonly DependencyProperty SourceUrlProperty =
             DependencyProperty.RegisterAttached(
                 "SourceUrl",
@@ -19,9 +24,19 @@ namespace UI
                 typeof(ImageEx),
                 new PropertyMetadata(null, OnSourceUrlChanged));
 
+        /// <summary>
+        /// Sets the remote image URL attached to the specified dependency object.
+        /// </summary>
+        /// <param name="obj">The target dependency object, typically a WPF image control.</param>
+        /// <param name="value">The image URL to load.</param>
         public static void SetSourceUrl(DependencyObject obj, string value) =>
             obj.SetValue(SourceUrlProperty, value);
 
+        /// <summary>
+        /// Gets the remote image URL attached to the specified dependency object.
+        /// </summary>
+        /// <param name="obj">The target dependency object, typically a WPF image control.</param>
+        /// <returns>The attached image URL, or null if none is set.</returns>
         public static string GetSourceUrl(DependencyObject obj) =>
             (string)obj.GetValue(SourceUrlProperty);
 

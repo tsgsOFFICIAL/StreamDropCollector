@@ -3,6 +3,9 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace Core.Interfaces
 {
+    /// <summary>
+    /// Abstraction over a hosted WebView2 instance used for platform login, drops API capture, and scripted automation.
+    /// </summary>
     public interface IWebViewHost
     {
         /// <summary>

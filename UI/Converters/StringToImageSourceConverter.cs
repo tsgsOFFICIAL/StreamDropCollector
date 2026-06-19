@@ -4,6 +4,9 @@ using System.Windows.Data;
 
 namespace UI.Converters
 {
+    /// <summary>
+    /// Loads a <see cref="BitmapImage"/> from an HTTP URL or pack URI string.
+    /// </summary>
     public class StringToImageSourceConverter : IValueConverter
     {
         public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)

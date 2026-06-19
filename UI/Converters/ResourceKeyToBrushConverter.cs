@@ -3,6 +3,9 @@ using System.Windows.Data;
 
 namespace UI.Converters
 {
+    /// <summary>
+    /// Resolves a resource dictionary brush key to a <see cref="System.Windows.Media.Brush"/>.
+    /// </summary>
     public class ResourceKeyToBrushConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

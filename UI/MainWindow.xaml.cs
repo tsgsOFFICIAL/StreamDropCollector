@@ -23,6 +23,10 @@ namespace UI
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         private bool _isTrayIconVisible;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the system tray icon is visible.
+        /// </summary>
         public bool IsTrayIconVisible
         {
             get => _isTrayIconVisible;
@@ -34,6 +38,10 @@ namespace UI
         }
 
         private string _versionString = "";
+
+        /// <summary>
+        /// Gets or sets the application version string displayed in the window header.
+        /// </summary>
         public string VersionString
         {
             get => string.IsNullOrEmpty(_versionString) ? "N/A" : _versionString;
@@ -78,6 +86,9 @@ namespace UI
         [DllImport("user32.dll")]
         private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
 
+        /// <summary>
+        /// Initializes the main application window, navigation pages, and tray icon behavior.
+        /// </summary>
         public MainWindow()
         {
             InitializeComponent();

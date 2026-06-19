@@ -4,11 +4,17 @@ using System.Windows;
 
 namespace UI.Views
 {
+    /// <summary>
+    /// Interaction logic for KickLoginWindow.xaml
+    /// </summary>
     public partial class KickLoginWindow : Window
     {
         private const string LoginSelector = "[data-testid='login']";
         private const int PollIntervalMs = 250;
 
+        /// <summary>
+        /// Initializes the Kick login window and navigates to the Kick site when loaded.
+        /// </summary>
         public KickLoginWindow()
         {
             InitializeComponent();

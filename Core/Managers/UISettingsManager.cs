@@ -13,12 +13,33 @@ using System.IO;
 
 namespace Core.Managers
 {
+    /// <summary>
+    /// Manages user-facing application settings, game filter whitelists, update checks, and startup registry configuration.
+    /// </summary>
+    /// <remarks>This class follows the singleton pattern and implements <see cref="INotifyPropertyChanged"/> for data binding.
+    /// Settings are persisted to disk and auto-saved when changed.</remarks>
     public sealed class UISettingsManager : INotifyPropertyChanged
     {
         private static readonly Lazy<UISettingsManager> _instance = new(() => new UISettingsManager());
+
+        /// <summary>
+        /// Gets the singleton instance of the UI settings manager.
+        /// </summary>
         public static UISettingsManager Instance => _instance.Value;
+
+        /// <summary>
+        /// Occurs when a bindable setting property value changes.
+        /// </summary>
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        /// <summary>
+        /// Occurs when <see cref="MiningPriorityMode"/> changes after settings have finished loading.
+        /// </summary>
         public event Action<MiningPriorityMode>? MiningPriorityModeChanged;
+
+        /// <summary>
+        /// Occurs when the game whitelist or blacklist mode changes for a platform.
+        /// </summary>
         public event Action<Platform>? GameWhitelistChanged;
         private static readonly string _settingsFilePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector", "Settings.json");
         private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -47,7 +68,14 @@ namespace Core.Managers
         private bool _isUpdatingGameFilterOptions;
         private bool _isLoadingSettings;
 
+        /// <summary>
+        /// Gets the selectable Twitch game filter options shown in settings.
+        /// </summary>
         public ObservableCollection<GameFilterOption> TwitchGameFilterOptions { get; } = new ObservableCollection<GameFilterOption>();
+
+        /// <summary>
+        /// Gets the selectable Kick game filter options shown in settings.
+        /// </summary>
         public ObservableCollection<GameFilterOption> KickGameFilterOptions { get; } = new ObservableCollection<GameFilterOption>();
 
         /// <summary>
@@ -146,6 +174,9 @@ namespace Core.Managers
                 }
             }
         }
+        /// <summary>
+        /// Gets or sets the strategy used to prioritize which campaigns are mined when multiple are eligible.
+        /// </summary>
         public MiningPriorityMode MiningPriorityMode
         {
             get => _miningPriorityMode;
@@ -237,19 +268,32 @@ namespace Core.Managers
         /// </summary>
         public bool IsUpdateNotificationEnabled => UpdateFrequency != UpdateFrequency.Never;
 
+        /// <summary>
+        /// Gets a human-readable summary of the current Twitch game filter selection.
+        /// </summary>
         public string TwitchWhitelistSummary => _twitchGameWhitelistSlugs.Count == 0
             ? "All active Twitch games are allowed"
             : _twitchGameFilterBlacklistMode
                 ? $"Excluding {_twitchGameWhitelistSlugs.Count} Twitch game(s)"
                 : $"{_twitchGameWhitelistSlugs.Count} Twitch game(s) selected";
 
+        /// <summary>
+        /// Gets a human-readable summary of the current Kick game filter selection.
+        /// </summary>
         public string KickWhitelistSummary => _kickGameWhitelistSlugs.Count == 0
             ? "All active Kick games are allowed"
             : _kickGameFilterBlacklistMode
                 ? $"Excluding {_kickGameWhitelistSlugs.Count} Kick game(s)"
                 : $"{_kickGameWhitelistSlugs.Count} Kick game(s) selected";
 
+        /// <summary>
+        /// Gets the read-only list of Twitch game slugs currently selected in the game filter.
+        /// </summary>
         public IReadOnlyList<string> TwitchGameWhitelistSlugs => _twitchGameWhitelistSlugs.AsReadOnly();
+
+        /// <summary>
+        /// Gets the read-only list of Kick game slugs currently selected in the game filter.
+        /// </summary>
         public IReadOnlyList<string> KickGameWhitelistSlugs => _kickGameWhitelistSlugs.AsReadOnly();
 
         /// <summary>
@@ -559,6 +603,10 @@ namespace Core.Managers
             }
         }
 
+        /// <summary>
+        /// Rebuilds the Twitch and Kick game filter option lists from the supplied active campaigns.
+        /// </summary>
+        /// <param name="campaigns">The campaigns used to derive selectable game slugs and display names.</param>
         public void UpdateAvailableGameFilterOptions(IEnumerable<DropsCampaign> campaigns)
         {
             _isUpdatingGameFilterOptions = true;
@@ -594,6 +642,10 @@ namespace Core.Managers
             OnPropertyChanged(nameof(KickWhitelistSummary));
         }
 
+        /// <summary>
+        /// Clears the game filter selection for the specified platform and removes inactive filter entries.
+        /// </summary>
+        /// <param name="platform">The platform whose game filter should be reset.</param>
         public void ClearGameWhitelist(Platform platform)
         {
             if (platform == Platform.Twitch)
@@ -632,6 +684,11 @@ namespace Core.Managers
             GameWhitelistChanged?.Invoke(platform);
         }
 
+        /// <summary>
+        /// Determines whether the specified campaign is allowed by the current game filter for its platform.
+        /// </summary>
+        /// <param name="campaign">The campaign to evaluate against the allow-list or exclude-list configuration.</param>
+        /// <returns><see langword="true"/> if the campaign should be included; otherwise, <see langword="false"/>.</returns>
         public bool IsCampaignAllowedByWhitelist(DropsCampaign campaign)
         {
             List<string> whitelist = campaign.Platform == Platform.Twitch

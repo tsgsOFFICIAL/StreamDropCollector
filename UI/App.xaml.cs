@@ -15,6 +15,9 @@ namespace UI
     /// </summary>
     public partial class App : System.Windows.Application
     {
+        /// <summary>
+        /// Gets a value indicating whether the application was launched with the <c>--debug</c> command-line flag.
+        /// </summary>
         public static bool IsDebugMode { get; private set; }
 
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
@@ -25,6 +28,9 @@ namespace UI
 
         private Mutex? _instanceMutex;
 
+        /// <summary>
+        /// Initializes the application and registers global unhandled exception handlers.
+        /// </summary>
         public App()
         {
             // Handle UI thread exceptions
@@ -34,6 +40,10 @@ namespace UI
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
         }
 
+        /// <summary>
+        /// Performs application startup initialization, including single-instance enforcement, theme loading, and logging setup.
+        /// </summary>
+        /// <param name="e">Startup event data containing command-line arguments.</param>
         protected override void OnStartup(StartupEventArgs e)
         {
             AppLogger.Initialize();

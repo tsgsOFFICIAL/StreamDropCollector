@@ -1,8 +1,11 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Windows.Data;
 
 namespace UI.Converters
 {
+    /// <summary>
+    /// Computes a pixel width from a percentage and a container width.
+    /// </summary>
     public class PercentToWidthConverter : IMultiValueConverter
     {
         public object Convert(object[] values, Type t, object p, CultureInfo c)
@@ -11,6 +14,7 @@ namespace UI.Converters
                 return percent / 100.0 * width;
             return 0.0;
         }
+
         public object[] ConvertBack(object v, Type[] t, object p, CultureInfo c) => throw new NotSupportedException();
     }
 }

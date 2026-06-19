@@ -1,9 +1,12 @@
 ﻿using Core.Interfaces;
-using Core.Enums;
 using Core.Logging;
+using Core.Enums;
 
 namespace Core.Services
 {
+    /// <summary>
+    /// Validates Kick login state by inspecting the kick.com homepage for a logged-in session.
+    /// </summary>
     public class KickLoginService : LoginServiceBase
     {
         public override async Task ValidateCredentialsAsync(IWebViewHost host)

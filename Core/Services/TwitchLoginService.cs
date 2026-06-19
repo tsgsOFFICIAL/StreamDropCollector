@@ -4,6 +4,9 @@ using Core.Logging;
 
 namespace Core.Services
 {
+    /// <summary>
+    /// Validates Twitch login state by inspecting the twitch.tv homepage for a logged-in session.
+    /// </summary>
     public class TwitchLoginService : LoginServiceBase
     {
         public override async Task ValidateCredentialsAsync(IWebViewHost host)

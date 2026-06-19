@@ -9,8 +9,14 @@ using System.Windows;
 
 namespace UI.Views
 {
+    /// <summary>
+    /// Hidden window that hosts a WebView2 control for background platform login, API capture, and scripted automation.
+    /// </summary>
     public partial class HiddenWebViewHost : Window, IWebViewHost, IDisposable
     {
+        /// <summary>
+        /// Gets the underlying WebView2 control exposed by this host.
+        /// </summary>
         public WebView2 WebView => WebViewControl;
         private WebView2 WebViewControl => WebViewElement;
 

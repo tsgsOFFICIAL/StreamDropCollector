@@ -8,8 +8,7 @@ namespace Core.Services
     /// <summary>
     /// Provides methods for retrieving active drops campaigns from supported streaming platforms.
     /// </summary>
-    /// <remarks>This service currently supports retrieving campaigns from Kick. Support for additional
-    /// platforms, such as Twitch, may be added in the future.</remarks>
+    /// <remarks>Delegates to platform-specific providers and streams results as each platform completes.</remarks>
     public class DropsService
     {
         private readonly KickDropsProvider _kickProvider = new();

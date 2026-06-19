@@ -4,6 +4,9 @@ using Core.Enums;
 
 namespace UI.Converters
 {
+    /// <summary>
+    /// Maps a <see cref="Platform"/> value to the application resource key for its brand brush.
+    /// </summary>
     public class PlatformToBrushKeyConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>

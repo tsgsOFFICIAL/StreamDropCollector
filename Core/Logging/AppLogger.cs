@@ -6,15 +6,28 @@ using Core.Managers;
 
 namespace Core.Logging
 {
+    /// <summary>
+    /// Provides file-based application logging with optional verbose debug output.
+    /// </summary>
     public static class AppLogger
     {
         private static readonly object _sync = new();
         private static string? _logFilePath;
 
+        /// <summary>
+        /// Gets the directory path where daily log files are stored.
+        /// </summary>
         public static string LogDirectoryPath => Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector", "logs");
 
+        /// <summary>
+        /// Gets the path to the current daily log file, or <see langword="null"/> if the logger has not been initialized.
+        /// </summary>
         public static string? LogFilePath => _logFilePath;
 
+        /// <summary>
+        /// Initializes the logger and creates the daily log file if it does not already exist.
+        /// </summary>
+        /// <remarks>Subsequent calls have no effect once initialization has completed.</remarks>
         public static void Initialize()
         {
             lock (_sync)
@@ -33,8 +46,18 @@ namespace Core.Logging
             }
         }
 
+        /// <summary>
+        /// Writes an informational message to the log.
+        /// </summary>
+        /// <param name="scope">A short category identifying the source of the message.</param>
+        /// <param name="message">The message text to record.</param>
         public static void Info(string scope, string message) => Write("INFO", scope, message);
 
+        /// <summary>
+        /// Writes a debug message to the log when verbose debug logging is enabled.
+        /// </summary>
+        /// <param name="scope">A short category identifying the source of the message.</param>
+        /// <param name="message">The message text to record.</param>
         public static void Debug(string scope, string message)
         {
             if (!IsVerboseDebugEnabled())
@@ -43,8 +66,19 @@ namespace Core.Logging
             Write("DEBUG", scope, message);
         }
 
+        /// <summary>
+        /// Writes a warning message to the log.
+        /// </summary>
+        /// <param name="scope">A short category identifying the source of the message.</param>
+        /// <param name="message">The message text to record.</param>
         public static void Warn(string scope, string message) => Write("WARN", scope, message);
 
+        /// <summary>
+        /// Writes an error message to the log, optionally including exception details.
+        /// </summary>
+        /// <param name="scope">A short category identifying the source of the message.</param>
+        /// <param name="message">The message text to record.</param>
+        /// <param name="ex">An optional exception whose type and message are appended to the log entry.</param>
         public static void Error(string scope, string message, Exception? ex = null)
         {
             if (ex == null)

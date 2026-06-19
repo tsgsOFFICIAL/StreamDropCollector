@@ -4,6 +4,9 @@ using System.Windows.Data;
 
 namespace UI.Converters
 {
+    /// <summary>
+    /// Selects a deterministic avatar background brush from a color index.
+    /// </summary>
     public sealed class StreamerAvatarBrushConverter : IValueConverter
     {
         private static readonly System.Windows.Media.Brush[] Palette =

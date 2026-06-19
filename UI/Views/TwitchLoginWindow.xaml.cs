@@ -7,6 +7,9 @@ namespace UI.Views
     /// </summary>
     public partial class TwitchLoginWindow : Window
     {
+        /// <summary>
+        /// Initializes the Twitch login window and navigates to the Twitch login page when loaded.
+        /// </summary>
         public TwitchLoginWindow()
         {
             InitializeComponent();

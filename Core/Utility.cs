@@ -8,12 +8,15 @@ using System.IO;
 
 namespace Core
 {
+    /// <summary>
+    /// Provides cross-platform helpers for launching URLs, resolving executable paths, and command binding.
+    /// </summary>
     public static class Utility
     {
         /// <summary>
-        /// Launch a web URL on Windows, Linux and OSX
+        /// Launches a web URL in the system's default browser on Windows, Linux, and macOS.
         /// </summary>
-        /// <param Name="url">The URL to open in the standard browser</param>
+        /// <param name="url">The URL to open in the default browser.</param>
         public static void LaunchWeb(string url)
         {
             try
@@ -23,7 +26,7 @@ namespace Core
             catch (Exception ex)
             {
                 AppLogger.Warn("Utility", $"Process.Start direct launch failed for url '{url}'. Falling back by platform. {ex.Message}");
-                // Hack for running the above line in DOTNET Core...
+                // Process.Start(url) can fail on .NET Core; use platform-specific shell commands as fallback.
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
                     url = url.Replace("&", "^&");
@@ -87,6 +90,10 @@ namespace Core
             }
         }
 
+        /// <summary>
+        /// Gets the full path to the running application executable.
+        /// </summary>
+        /// <returns>The absolute path to the current process executable, or a best-effort fallback path when the main module is unavailable.</returns>
         public static string GetExePath()
         {
             string? exeLocation = Process.GetCurrentProcess().MainModule?.FileName;
@@ -97,10 +104,27 @@ namespace Core
             return exeLocation ?? $"{Path.Combine(executingDir, executingName)}.exe";
         }
 
+        /// <summary>
+        /// Represents an asynchronous command that can be bound to UI actions.
+        /// </summary>
+        /// <typeparam name="T">The type of command parameter passed to the execute delegate.</typeparam>
+        /// <param name="executeAsync">The asynchronous action invoked when the command executes.</param>
         public class RelayCommand<T>(Func<T?, Task> executeAsync) : ICommand
         {
+            /// <summary>
+            /// Occurs when changes occur that affect whether the command should execute.
+            /// </summary>
             public event EventHandler? CanExecuteChanged;
+            /// <summary>
+            /// Determines whether the command can execute in its current state.
+            /// </summary>
+            /// <param name="parameter">The command parameter.</param>
+            /// <returns>Always <see langword="true"/> for this command implementation.</returns>
             public bool CanExecute(object? parameter) => true;
+            /// <summary>
+            /// Invokes the asynchronous execute delegate for the command.
+            /// </summary>
+            /// <param name="parameter">The command parameter. When it is of type <typeparamref name="T"/>, it is passed to the delegate; otherwise, <see langword="default"/> is used.</param>
             public async void Execute(object? parameter) => await executeAsync(parameter is T t ? t : default);
         }
     }
