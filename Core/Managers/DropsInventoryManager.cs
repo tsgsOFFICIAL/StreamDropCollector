@@ -1,14 +1,13 @@
-﻿using Core.Enums;
-using Core.Interfaces;
-using Core.Logging;
-using Core.Models;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Text;
-using System.Text.Json;
-using System.Timers;
-using System.Windows;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Core.Stores;
+using Core.Interfaces;
+using System.Windows;
+using System.Timers;
+using Core.Logging;
+using Core.Mining;
+using Core.Models;
+using Core.Enums;
 
 namespace Core.Managers
 {
@@ -102,12 +101,8 @@ namespace Core.Managers
         private DropsCampaign? _currentKickCampaign;
         private IGqlService? _twitchGqlService;
 
-        private string? _pinnedCampaignId; // Used to track if the user has manually pinned a campaign to mine regardless of order
-
-        private static readonly string _pinnedCampaignCacheFilePath = Path.Combine(
-            Environment.ExpandEnvironmentVariables("%APPDATA%"),
-            "Stream Drop Collector",
-            "PinnedCampaignCache.json");
+        private readonly PinnedCampaignStore _pinnedCampaignStore = new();
+        private readonly LastMinedStreamersStore _lastMinedStreamers = new();
 
         private int _twitchMinedSeconds;
         private int _kickMinedSeconds;
@@ -128,16 +123,8 @@ namespace Core.Managers
         private readonly SemaphoreSlim _startMiningLock = new(1, 1);
         private CancellationTokenSource? _startMiningCts;
         private bool _isPaused;
-        private readonly object _lastStreamerSync = new();
-        private readonly Dictionary<string, string> _lastTwitchStreamers = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, string> _lastKickStreamers = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _campaignSnapshotSync = new();
         private List<DropsCampaign> _lastKnownCampaigns = new();
-
-        private static readonly string _lastMinedStreamersFilePath = Path.Combine(
-            Environment.ExpandEnvironmentVariables("%APPDATA%"),
-            "Stream Drop Collector",
-            "LastMinedStreamers.json");
 
         private static bool IsVerboseDebugEnabled => UISettingsManager.Instance.VerboseDebugLogging;
 
@@ -163,8 +150,7 @@ namespace Core.Managers
                 return;
 
             AppLogger.Info("Miner", $"User manually switched to campaign '{campaign.Name}' ({campaign.Id}).");
-            _pinnedCampaignId = campaign.Id;
-            SavePinnedCampaignToDisk();
+            _pinnedCampaignStore.SetCampaignId(campaign.Id);
             await StartMiningStreams(true);
         });
 
@@ -177,8 +163,6 @@ namespace Core.Managers
         /// only be created internally within the class.</remarks>
         private DropsInventoryManager()
         {
-            LoadLastMinedStreamers();
-            LoadPinnedCampaignFromDisk();
             UISettingsManager.Instance.MiningPriorityModeChanged += OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
 
@@ -865,7 +849,7 @@ namespace Core.Managers
 
                         AppLogger.Debug("TwitchSelection", $"[DropsInventoryManager] Mining Twitch stream: {twitchUrl}");
                         AppLogger.Info("TwitchSelection", $"Selected Twitch stream '{twitchUrl}' for campaign '{bestTwitch.Name}' ({bestTwitch.Id}).");
-                        RememberLastStreamerUrl(Platform.Twitch, bestTwitch.Slug, twitchUrl);
+                        _lastMinedStreamers.Remember(Platform.Twitch, bestTwitch.Slug, twitchUrl);
 
                         DropsReward? soonestTwitch = bestTwitch.Rewards
                             .Where(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes)
@@ -964,7 +948,7 @@ namespace Core.Managers
 
                         AppLogger.Debug("KickSelection", $"[DropsInventoryManager] Mining Kick stream: {kickUrl}");
                         AppLogger.Info("KickSelection", $"Selected Kick stream '{kickUrl}' for campaign '{bestKick.Name}' ({bestKick.Id}).");
-                        RememberLastStreamerUrl(Platform.Kick, bestKick.Slug, kickUrl);
+                        _lastMinedStreamers.Remember(Platform.Kick, bestKick.Slug, kickUrl);
 
                         DropsReward? soonestKick = bestKick.Rewards
                             .Where(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes)
@@ -1190,7 +1174,7 @@ namespace Core.Managers
                     {
                         if (twitchShowingAd && !string.IsNullOrWhiteSpace(_currentTwitchCampaign?.Slug))
                         {
-                            ForgetLastStreamerUrl(Platform.Twitch, _currentTwitchCampaign!.Slug);
+                            _lastMinedStreamers.Forget(Platform.Twitch, _currentTwitchCampaign!.Slug);
                             AppLogger.Warn("HealthCheck", $"Twitch ad detected for campaign '{_currentTwitchCampaign.Name}'. Forgetting remembered streamer to force a switch.");
                         }
 
@@ -1223,61 +1207,15 @@ namespace Core.Managers
         /// percentage, the campaign closest to earning its next unclaimed reward is selected.</returns>
         private Task<DropsCampaign?> SelectBestCampaign(List<DropsCampaign> campaigns)
         {
-            // Honor manual override from SwitchCampaignCommand
-            if (_pinnedCampaignId != null)
-            {
-                DropsCampaign? pinned = campaigns.FirstOrDefault(c => c.Id == _pinnedCampaignId);
+            CampaignSelectionResult result = CampaignPrioritizer.SelectBest(
+                campaigns,
+                _pinnedCampaignStore.CampaignId,
+                UISettingsManager.Instance.MiningPriorityMode);
 
-                if (pinned != null)
-                {
-                    AppLogger.Info("Selection", $"Pinned campaign '{pinned.Name}' selected via manual override.");
-                    return Task.FromResult<DropsCampaign?>(pinned);
-                }
+            if (result.PinReleased)
+                _pinnedCampaignStore.Clear();
 
-                // Campaign no longer in candidates - channels offline or all rewards claimed
-                AppLogger.Info("Selection", $"Pinned campaign '{_pinnedCampaignId}' is no longer pursuable, releasing pin.");
-                _pinnedCampaignId = null;
-                SavePinnedCampaignToDisk();
-            }
-
-            MiningPriorityMode mode = UISettingsManager.Instance.MiningPriorityMode;
-            AppLogger.Debug("Selection", $"Selecting best campaign with mode={mode}, candidates={campaigns.Count}");
-            List<DropsCampaign> prioritizedCampaigns = mode switch
-            {
-                MiningPriorityMode.EndingSoonest => [.. campaigns
-                        .OrderBy(c => c.IsGeneralDrop)
-                        .ThenBy(c => c.EndsAt)
-                        .ThenBy(c => c.Rewards
-                            .Where(r => !r.IsClaimed)
-                            .Min(r => r.RequiredMinutes - r.ProgressMinutes))],
-                MiningPriorityMode.LeastTimeToNextReward => [.. campaigns
-                        .OrderBy(c => c.IsGeneralDrop)
-                        .ThenBy(c => c.Rewards
-                            .Where(r => !r.IsClaimed)
-                            .Min(r => r.RequiredMinutes - r.ProgressMinutes))
-                        .ThenByDescending(c => c.CompletionPercentage())],
-                MiningPriorityMode.HighestCompletion => [.. campaigns
-                        .OrderBy(c => c.IsGeneralDrop)
-                        .ThenByDescending(c => c.CompletionPercentage())
-                        .ThenBy(c => c.EndsAt)
-                        .ThenBy(c => c.Rewards
-                            .Where(r => !r.IsClaimed)
-                            .Min(r => r.RequiredMinutes - r.ProgressMinutes))],
-                _ => [.. campaigns
-                        .OrderBy(c => c.IsGeneralDrop)
-                        .ThenByDescending(c => c.CompletionPercentage())
-                        .ThenBy(c => c.Rewards
-                            .Where(r => !r.IsClaimed)
-                            .Min(r => r.RequiredMinutes - r.ProgressMinutes))],
-            };
-
-            DropsCampaign? selected = prioritizedCampaigns.FirstOrDefault();
-            if (selected == null)
-                AppLogger.Warn("Selection", "No campaign selected after priority sort.");
-            else
-                AppLogger.Info("Selection", $"Selected campaign '{selected.Name}' ({selected.Id}) with mode={mode}.");
-
-            return Task.FromResult(selected);
+            return Task.FromResult(result.Campaign);
         }
         /// <summary>
         /// Attempts to set the Kick stream playback quality to the lowest available option asynchronously.
@@ -1627,7 +1565,7 @@ namespace Core.Managers
         private async Task<string> SelectKickStreamerForCampaign(DropsCampaign campaign)
         {
             string streamerUrl = string.Empty;
-            TryGetLastStreamerUrl(Platform.Kick, campaign.Slug, out string? rememberedKickUrl);
+            _lastMinedStreamers.TryGet(Platform.Kick, campaign.Slug, out string? rememberedKickUrl);
 
             string getStreamerCategoryJs = @"
                 (() => {
@@ -1783,7 +1721,7 @@ namespace Core.Managers
         private async Task<string> SelectTwitchStreamerForCampaign(DropsCampaign campaign)
         {
             string streamerUrl = string.Empty;
-            TryGetLastStreamerUrl(Platform.Twitch, campaign.Slug, out string? rememberedTwitchUrl);
+            _lastMinedStreamers.TryGet(Platform.Twitch, campaign.Slug, out string? rememberedTwitchUrl);
 
             string getStreamerCategoryHrefJs = @"
                 (() => {
@@ -1969,233 +1907,6 @@ namespace Core.Managers
         }
 
         /// <summary>
-        /// Attempts to retrieve the last known streamer URL for the specified platform and campaign slug.
-        /// </summary>
-        /// <remarks>This method is thread-safe. The returned URL may be null if no streamer has been
-        /// recorded for the given campaign slug.</remarks>
-        /// <param name="platform">The platform for which to retrieve the last streamer URL. Must be a valid value of the Platform enumeration.</param>
-        /// <param name="campaignSlug">The campaign identifier used to look up the streamer URL. Cannot be null, empty, or whitespace.</param>
-        /// <param name="url">When this method returns, contains the last known streamer URL if found; otherwise, null.</param>
-        /// <returns>true if a valid streamer URL was found for the specified platform and campaign slug; otherwise, false.</returns>
-        private bool TryGetLastStreamerUrl(Platform platform, string? campaignSlug, out string? url)
-        {
-            url = null;
-            if (string.IsNullOrWhiteSpace(campaignSlug))
-                return false;
-
-            lock (_lastStreamerSync)
-            {
-                Dictionary<string, string> source = platform == Platform.Twitch ? _lastTwitchStreamers : _lastKickStreamers;
-                if (!source.TryGetValue(campaignSlug, out string? remembered) || string.IsNullOrWhiteSpace(remembered))
-                    return false;
-
-                url = remembered;
-                return true;
-            }
-        }
-        /// <summary>
-        /// Stores the last mined streamer URL for the specified platform and campaign if the provided values are
-        /// valid.
-        /// </summary>
-        /// <remarks>If the campaign slug or streamer URL is invalid, the method does not update the
-        /// stored value. Updates are persisted only if the value changes.</remarks>
-        /// <param name="platform">The platform for which to record the last mined streamer URL. Determines whether Twitch or Kick is
-        /// updated.</param>
-        /// <param name="campaignSlug">The unique identifier for the campaign. Cannot be null, empty, or whitespace.</param>
-        /// <param name="streamerUrl">The URL of the streamer to remember. Cannot be null, empty, or whitespace.</param>
-        private void RememberLastStreamerUrl(Platform platform, string? campaignSlug, string? streamerUrl)
-        {
-            if (string.IsNullOrWhiteSpace(campaignSlug) || string.IsNullOrWhiteSpace(streamerUrl))
-                return;
-
-            bool changed = false;
-
-            lock (_lastStreamerSync)
-            {
-                Dictionary<string, string> target = platform == Platform.Twitch ? _lastTwitchStreamers : _lastKickStreamers;
-                if (!target.TryGetValue(campaignSlug, out string? existing) || !string.Equals(existing, streamerUrl, StringComparison.OrdinalIgnoreCase))
-                {
-                    target[campaignSlug] = streamerUrl;
-                    changed = true;
-                }
-            }
-
-            if (changed)
-                SaveLastMinedStreamers();
-        }
-        /// <summary>
-        /// Removes the remembered streamer URL for the specified platform and campaign, if present.
-        /// </summary>
-        /// <param name="platform">The platform whose remembered streamer collection should be updated.</param>
-        /// <param name="campaignSlug">The campaign slug key associated with the remembered streamer.</param>
-        private void ForgetLastStreamerUrl(Platform platform, string? campaignSlug)
-        {
-            if (string.IsNullOrWhiteSpace(campaignSlug))
-                return;
-
-            bool removed;
-            lock (_lastStreamerSync)
-            {
-                Dictionary<string, string> target = platform == Platform.Twitch ? _lastTwitchStreamers : _lastKickStreamers;
-                removed = target.Remove(campaignSlug);
-            }
-
-            if (removed)
-            {
-                SaveLastMinedStreamers();
-                AppLogger.Info("Selection", $"Forgot remembered streamer for platform={platform}, campaignSlug='{campaignSlug}'.");
-            }
-        }
-        /// <summary>
-        /// Loads the last mined streamers from persistent storage and updates the internal state.
-        /// </summary>
-        /// <remarks>This method reads streamer information from a file and updates the Twitch and Kick
-        /// streamer lists. If the file does not exist or contains invalid data, the lists are not modified. The
-        /// operation is thread-safe and logs informational or warning messages based on the outcome.</remarks>
-        private void LoadLastMinedStreamers()
-        {
-            try
-            {
-                if (!File.Exists(_lastMinedStreamersFilePath))
-                    return;
-
-                string json = File.ReadAllText(_lastMinedStreamersFilePath);
-                LastMinedStreamersState? state = JsonSerializer.Deserialize<LastMinedStreamersState>(json);
-                if (state == null)
-                    return;
-
-                lock (_lastStreamerSync)
-                {
-                    _lastTwitchStreamers.Clear();
-                    _lastKickStreamers.Clear();
-
-                    foreach ((string key, string value) in state.TwitchBySlug)
-                    {
-                        if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value))
-                            _lastTwitchStreamers[key] = value;
-                    }
-
-                    foreach ((string key, string value) in state.KickBySlug)
-                    {
-                        if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value))
-                            _lastKickStreamers[key] = value;
-                    }
-                }
-
-                AppLogger.Info("StreamSelection", $"Loaded remembered streamers. twitch={_lastTwitchStreamers.Count}, kick={_lastKickStreamers.Count}");
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Warn("StreamSelection", $"Failed loading remembered streamers. {ex.Message}");
-            }
-        }
-        /// <summary>
-        /// Persists the current state of last mined streamers to disk in JSON format.
-        /// </summary>
-        /// <remarks>This method serializes the last mined Twitch and Kick streamers and writes them to
-        /// the configured file path. If the target directory does not exist, it is created. Any errors during the save
-        /// operation are logged as warnings. The method is thread-safe and should be called when the state needs to be
-        /// updated on disk.</remarks>
-        private void SaveLastMinedStreamers()
-        {
-            try
-            {
-                LastMinedStreamersState snapshot;
-
-                lock (_lastStreamerSync)
-                {
-                    snapshot = new LastMinedStreamersState
-                    {
-                        TwitchBySlug = _lastTwitchStreamers.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase),
-                        KickBySlug = _lastKickStreamers.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase)
-                    };
-                }
-
-                string? directory = Path.GetDirectoryName(_lastMinedStreamersFilePath);
-                if (!string.IsNullOrWhiteSpace(directory))
-                    Directory.CreateDirectory(directory);
-
-                string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_lastMinedStreamersFilePath, json);
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Warn("StreamSelection", $"Failed saving remembered streamers. {ex.Message}");
-            }
-        }
-
-        private void LoadPinnedCampaignFromDisk()
-        {
-            try
-            {
-                if (!File.Exists(_pinnedCampaignCacheFilePath))
-                    return;
-
-                string json = File.ReadAllText(_pinnedCampaignCacheFilePath, Encoding.UTF8);
-                PinnedCampaignCacheEntry? entry = JsonSerializer.Deserialize<PinnedCampaignCacheEntry>(json);
-
-                if (entry != null && !string.IsNullOrWhiteSpace(entry.CampaignId))
-                {
-                    _pinnedCampaignId = entry.CampaignId;
-                    AppLogger.Info("Inventory", $"[PinnedCampaign] Restored pinned campaign '{_pinnedCampaignId}' from disk.");
-                }
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Warn("Inventory", $"[PinnedCampaign] Failed to load cache. {ex.Message}");
-            }
-        }
-
-        private void SavePinnedCampaignToDisk()
-        {
-            try
-            {
-                string? directory = Path.GetDirectoryName(_pinnedCampaignCacheFilePath);
-                if (!string.IsNullOrWhiteSpace(directory))
-                    Directory.CreateDirectory(directory);
-
-                string json = JsonSerializer.Serialize(
-                    new PinnedCampaignCacheEntry { CampaignId = _pinnedCampaignId },
-                    new JsonSerializerOptions { WriteIndented = true });
-
-                File.WriteAllText(_pinnedCampaignCacheFilePath, json, Encoding.UTF8);
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Warn("Inventory", $"[PinnedCampaign] Failed to save cache. {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Serializable cache entry for the user-pinned mining campaign.
-        /// </summary>
-        private sealed class PinnedCampaignCacheEntry
-        {
-            /// <summary>
-            /// Gets or sets the identifier of the pinned campaign, or null when no campaign is pinned.
-            /// </summary>
-            public string? CampaignId { get; set; }
-        }
-
-        /// <summary>
-        /// Represents the state containing mappings of streamer slugs to their Twitch and Kick usernames.
-        /// </summary>
-        /// <remarks>This class is used to track the last mined streamers for each platform. The
-        /// dictionaries are case-insensitive with respect to streamer slugs.</remarks>
-        private sealed class LastMinedStreamersState
-        {
-            /// <summary>
-            /// Gets or sets Twitch streamer logins keyed by campaign slug.
-            /// </summary>
-            public Dictionary<string, string> TwitchBySlug { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-
-            /// <summary>
-            /// Gets or sets Kick streamer logins keyed by campaign slug.
-            /// </summary>
-            public Dictionary<string, string> KickBySlug { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
         /// Extracts the streamer name from the specified Twitch or Kick channel URL.
         /// </summary>
         /// <remarks>This method expects the URL path to be in the format "/{streamerName}". If the URL is
@@ -2218,59 +1929,6 @@ namespace Core.Managers
                 AppLogger.Warn("StreamSelection", $"Failed extracting streamer name from url '{url}'. {ex.Message}");
                 return string.Empty;
             }
-        }
-    }
-
-    /// <summary>
-    /// Provides extension methods for evaluating progress and completion metrics on DropsCampaign instances.
-    /// </summary>
-    /// <remarks>These methods assist in determining reward claim status and calculating aggregate progress
-    /// for campaigns. All methods require a non-null DropsCampaign instance as input.</remarks>
-    public static class DropsCampaignExtensions
-    {
-        /// <summary>
-        /// Determines whether the specified campaign contains any rewards that have not yet been claimed and still
-        /// require additional mine progress.
-        /// </summary>
-        /// <param name="campaign">The campaign to evaluate for unclaimed rewards with remaining progress requirements. Cannot be null.</param>
-        /// <returns>true if at least one reward in the campaign is unclaimed and still has progress remaining;
-        /// otherwise, false.</returns>
-        public static bool HasProgressToMake(this DropsCampaign campaign)
-        {
-            if (UISettingsManager.Instance.AutoClaimRewards)
-                return campaign.Rewards.Any(r => !r.IsClaimed);
-            else
-                return campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes);
-        }
-
-        /// <summary>
-        /// Determines whether the specified campaign contains any rewards that are fully progressed and waiting to be claimed.
-        /// </summary>
-        /// <param name="campaign">The campaign to evaluate for ready-to-claim rewards. Cannot be null.</param>
-        /// <returns>true if at least one unclaimed reward in the campaign has met or exceeded its required progress;
-        /// otherwise, false.</returns>
-        public static bool HasReadyToClaimRewards(this DropsCampaign campaign)
-        {
-            return campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes);
-        }
-
-        /// <summary>
-        /// Calculates the overall completion percentage of all rewards in the specified campaign that require progress.
-        /// </summary>
-        /// <remarks>Only rewards with a positive required minutes value are considered in the
-        /// calculation. The percentage is based on the ratio of progress minutes to required minutes for each valid
-        /// reward.</remarks>
-        /// <param name="campaign">The campaign for which to calculate the completion percentage. Cannot be null.</param>
-        /// <returns>A value between 0 and 100 representing the average completion percentage of all rewards with required
-        /// progress. Returns 0 if there are no such rewards.</returns>
-        public static double CompletionPercentage(this DropsCampaign campaign)
-        {
-            IEnumerable<DropsReward> valid = campaign.Rewards.Where(r => r.RequiredMinutes > 0);
-
-            if (!valid.Any())
-                return 0;
-
-            return valid.Average(r => (double)r.ProgressMinutes / r.RequiredMinutes) * 100;
         }
     }
 }
