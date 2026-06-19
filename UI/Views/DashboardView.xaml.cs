@@ -146,15 +146,15 @@ namespace UI.Views
                             break;
                         case "Starting":
                             MinerStatus = "Starting";
-                            MinerStatusDetails = "Finding stream(s) to watch";
+                            MinerStatusDetails = "Finding streams to mine";
                             break;
                         case "Evaluating":
                             MinerStatus = "Evaluating";
-                            MinerStatusDetails = "Checking stream(s) for drops eligibility";
+                            MinerStatusDetails = "Checking streams for drops eligibility";
                             break;
                         case "Mining":
                             MinerStatus = "Mining";
-                            MinerStatusDetails = "Watching stream(s) to earn drops";
+                            MinerStatusDetails = "Mining streams to earn drops";
                             break;
                     }
                 });
@@ -164,7 +164,7 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickProgress.WatchedChannel = channel;
+                    KickProgress.MinedChannel = channel;
                 });
             };
 
@@ -172,7 +172,7 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchProgress.WatchedChannel = channel;
+                    TwitchProgress.MinedChannel = channel;
                 });
             };
 
@@ -284,8 +284,8 @@ namespace UI.Views
             await _loadDropsSemaphore.WaitAsync();
             try
             {
-                await DropsInventoryManager.Instance.PauseWatchingAsync();
-                AppLogger.Info("Dashboard", "Watcher paused for campaign refresh.");
+                await DropsInventoryManager.Instance.PauseMiningAsync();
+                AppLogger.Info("Dashboard", "Miner paused for campaign refresh.");
 
                 using CancellationTokenSource cts = new CancellationTokenSource();
                 _currentLoadCts = cts;
@@ -318,7 +318,7 @@ namespace UI.Views
 
                 AppLogger.Info("Dashboard", $"Campaign load completed. totalCampaigns={allCampaigns.Count}, twitchStatus={_twitchService.Status}, kickStatus={_kickService.Status}");
 
-                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns.AsReadOnly(), _twitchGqlService, startWatching: false);
+                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns.AsReadOnly(), _twitchGqlService, startMining: false);
 
                 MinerStatus = "Idle";
                 MinerStatusDetails = $"{_activeCampaigns.Count} active campaigns loaded";
@@ -339,8 +339,8 @@ namespace UI.Views
             {
                 _loadDropsSemaphore.Release();
                 _currentLoadCts = null;
-                await DropsInventoryManager.Instance.ResumeWatchingAsync();
-                AppLogger.Info("Dashboard", "Watcher resumed after campaign refresh.");
+                await DropsInventoryManager.Instance.ResumeMiningAsync();
+                AppLogger.Info("Dashboard", "Miner resumed after campaign refresh.");
             }
         }
         /// <summary>

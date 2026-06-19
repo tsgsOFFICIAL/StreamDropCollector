@@ -22,7 +22,7 @@
                 <controls:HelpSectionCard Title="Getting Started">
                     <TextBlock Style="{StaticResource BodyText}">
                         <Run Text="1. Log in to your Twitch &amp; Kick accounts to enable drops tracking." Foreground="{DynamicResource AccentBrush}"/><LineBreak/>
-                        <Run Text="2. Head to the Dashboard to watch your miner status and campaign progress in real time." Foreground="{DynamicResource TextMutedBrush}"/><LineBreak/>
+                        <Run Text="2. Head to the Dashboard to view your miner status and campaign progress in real time." Foreground="{DynamicResource TextMutedBrush}"/><LineBreak/>
                         <Run Text="3. Use the sidebar to switch between Inventory, Settings, and this Help page." Foreground="{DynamicResource TextMutedBrush}"/>
                     </TextBlock>
                 </controls:HelpSectionCard>

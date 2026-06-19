@@ -10,7 +10,7 @@ namespace UI.Controls
             DependencyProperty.Register(nameof(BadgeText), typeof(string), typeof(StatusBadge), new PropertyMetadata(string.Empty));
 
         public static readonly DependencyProperty VariantProperty =
-            DependencyProperty.Register(nameof(Variant), typeof(StatusBadgeVariant), typeof(StatusBadge), new PropertyMetadata(StatusBadgeVariant.Watching));
+            DependencyProperty.Register(nameof(Variant), typeof(StatusBadgeVariant), typeof(StatusBadge), new PropertyMetadata(StatusBadgeVariant.Mining));
 
         public string BadgeText
         {

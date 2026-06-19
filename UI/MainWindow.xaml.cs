@@ -139,7 +139,7 @@ namespace UI
                             "Settings.json",
                             "sha_cache.tsgs",
                             "GqlHashCache.json",
-                            "LastWatchedStreamers.json",
+                            "LastMinedStreamers.json",
                             "PinnedCampaignCache.json"
                         ];
 

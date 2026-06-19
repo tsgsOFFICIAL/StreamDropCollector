@@ -1,7 +1,7 @@
 # StreamDropCollector
 
 **A fully automated, open-source drops miner for Twitch.tv and Kick.com**  
-Watch streams in the background, earn campaign rewards, and claim them automatically - all without lifting a finger.
+Mine streams in the background, earn campaign rewards, and claim them automatically - all without lifting a finger.
 
 [![Issues](https://img.shields.io/github/issues/tsgsOFFICIAL/StreamDropCollector)](https://github.com/tsgsOFFICIAL/StreamDropCollector/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/tsgsOFFICIAL/StreamDropCollector)](https://github.com/tsgsOFFICIAL/StreamDropCollector/commits/master)
@@ -21,7 +21,7 @@ Watch streams in the background, earn campaign rewards, and claim them automatic
 - Auto-claiming: Detects and claims ready rewards instantly
 - Lowest quality mode: Sets streams to minimum quality for minimal resource usage
 - Mature content bypass: Handles age gates automatically
-- Live progress tracking: Real-time percentage and watched channel display
+- Live progress tracking: Real-time percentage and mined channel display
 - Clean modern UI: Built with WPF, dark mode, responsive cards
 - Background operation: Runs quietly while you do whatever you want
 

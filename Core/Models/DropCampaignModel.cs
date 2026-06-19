@@ -36,7 +36,7 @@ namespace Core.Models
     /// <param name="Rewards">A read-only list of rewards available in this campaign. Cannot be null or empty.</param>
     /// <param name="Platform">The platform on which the campaign is available.</param>
     /// <param name="ConnectUrls">A read-only list of URLs that users can use to connect their accounts for eligibility. Cannot be null.</param>
-    /// <param name="IsCurrentCampaign">true if this campaign is currently being watched; otherwise, false. Defaults to false.</param>
+    /// <param name="IsCurrentCampaign">true if this campaign is currently being mined; otherwise, false. Defaults to false.</param>
     public record DropsCampaign(
         string Id,
         string Name,

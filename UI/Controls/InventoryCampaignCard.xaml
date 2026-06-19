@@ -40,20 +40,20 @@
                         <Run Text="{Binding EndsAt, Mode=OneWay, StringFormat=MMM dd • HH:mm}"/>
                     </TextBlock>
 
-                    <controls:StatusBadge BadgeText="WATCHING"
-                                          Variant="{x:Static models:StatusBadgeVariant.Watching}"
+                    <controls:StatusBadge BadgeText="MINING"
+                                          Variant="{x:Static models:StatusBadgeVariant.Mining}"
                                           Margin="12,0,0,0"
                                           Visibility="{Binding IsCurrentCampaign, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 </StackPanel>
 
-                <Button Content="▶  Watch this campaign instead"
+                <Button Content="▶  Mine this campaign instead"
                         Margin="0,12,0,0"
                         Padding="12,6"
                         HorizontalAlignment="Left"
                         Command="{Binding DataContext.SwitchCampaignCommand, RelativeSource={RelativeSource AncestorType=UserControl, AncestorLevel=2}}"
                         CommandParameter="{Binding}">
                     <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource WatchCampaignButtonStyle}">
+                        <Style TargetType="Button" BasedOn="{StaticResource MineCampaignButtonStyle}">
                             <Style.Triggers>
                                 <MultiDataTrigger>
                                     <MultiDataTrigger.Conditions>

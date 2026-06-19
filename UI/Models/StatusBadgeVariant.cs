@@ -2,7 +2,7 @@ namespace UI.Models
 {
     public enum StatusBadgeVariant
     {
-        Watching,
+        Mining,
         Claimed
     }
 }

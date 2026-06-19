@@ -34,25 +34,25 @@ namespace Core.Managers
         public event Action<string, string?>? TwitchDropChanged;
         public event Action<string, string?>? KickDropChanged;
 
-        // Currently watched campaigns
+        // Currently mined campaigns
         private DropsCampaign? _currentTwitchCampaign;
-        private string? _currentTwitchLogin; // login of the Twitch streamer currently being watched
+        private string? _currentTwitchLogin; // login of the Twitch streamer currently being mined
         private string? _lastTwitchDropId; // id of the last reward reported via TwitchDropChanged
         private string? _lastKickDropId;   // id of the last reward reported via KickDropChanged
         private DropsCampaign? _currentKickCampaign;
         private IGqlService? _twitchGqlService;
 
-        private string? _pinnedCampaignId; // Used to track if the user has manually pinned a campaign to watch regardless of order
+        private string? _pinnedCampaignId; // Used to track if the user has manually pinned a campaign to mine regardless of order
 
         private static readonly string _pinnedCampaignCacheFilePath = Path.Combine(
             Environment.ExpandEnvironmentVariables("%APPDATA%"),
             "Stream Drop Collector",
             "PinnedCampaignCache.json");
 
-        private int _twitchWatchedSeconds;
-        private int _kickWatchedSeconds;
-        private int _twitchDropWatchedSeconds;
-        private int _kickDropWatchedSeconds;
+        private int _twitchMinedSeconds;
+        private int _kickMinedSeconds;
+        private int _twitchDropMinedSeconds;
+        private int _kickDropMinedSeconds;
 
         private bool _lastKnownKickOnlineState;
         private bool _lastKnownTwitchOnlineState;
@@ -65,8 +65,8 @@ namespace Core.Managers
         private int _twitchAppliedMinuteBucket;
         private int _kickAppliedMinuteBucket;
 
-        private readonly SemaphoreSlim _startWatchingLock = new(1, 1);
-        private CancellationTokenSource? _startWatchingCts;
+        private readonly SemaphoreSlim _startMiningLock = new(1, 1);
+        private CancellationTokenSource? _startMiningCts;
         private bool _isPaused;
         private readonly object _lastStreamerSync = new();
         private readonly Dictionary<string, string> _lastTwitchStreamers = new(StringComparer.OrdinalIgnoreCase);
@@ -74,10 +74,10 @@ namespace Core.Managers
         private readonly object _campaignSnapshotSync = new();
         private List<DropsCampaign> _lastKnownCampaigns = new();
 
-        private static readonly string _lastWatchedStreamersFilePath = Path.Combine(
+        private static readonly string _lastMinedStreamersFilePath = Path.Combine(
             Environment.ExpandEnvironmentVariables("%APPDATA%"),
             "Stream Drop Collector",
-            "LastWatchedStreamers.json");
+            "LastMinedStreamers.json");
 
         private static bool IsVerboseDebugEnabled => UISettingsManager.Instance.VerboseDebugLogging;
 
@@ -93,7 +93,7 @@ namespace Core.Managers
         }
 
         /// <summary>
-        /// switches the currently watched campaign to the specified campaign, if it is not null and the miner is not paused. This command is intended to be bound to UI elements that allow the user to manually select a campaign to watch. When executed, it updates the pinned campaign ID and restarts the stream watching process to reflect the new selection. If the command is invoked while the miner is paused or with a null campaign, it will have no effect.
+        /// switches the currently mined campaign to the specified campaign, if it is not null and the miner is not paused. This command is intended to be bound to UI elements that allow the user to manually select a campaign to mine. When executed, it updates the pinned campaign ID and restarts the stream mining process to reflect the new selection. If the command is invoked while the miner is paused or with a null campaign, it will have no effect.
         /// </summary>
         public ICommand SwitchCampaignCommand => new Utility.RelayCommand<DropsCampaign>(async campaign =>
         {
@@ -103,7 +103,7 @@ namespace Core.Managers
             AppLogger.Info("Miner", $"User manually switched to campaign '{campaign.Name}' ({campaign.Id}).");
             _pinnedCampaignId = campaign.Id;
             SavePinnedCampaignToDisk();
-            await StartWatchingStreams(true);
+            await StartMiningStreams(true);
         });
 
 
@@ -115,7 +115,7 @@ namespace Core.Managers
         /// only be created internally within the class.</remarks>
         private DropsInventoryManager()
         {
-            LoadLastWatchedStreamers();
+            LoadLastMinedStreamers();
             LoadPinnedCampaignFromDisk();
             UISettingsManager.Instance.MiningPriorityModeChanged += OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
@@ -175,7 +175,7 @@ namespace Core.Managers
                 }
 
                 AppLogger.Debug("Miner", $"Immediate re-evaluation starting after priority mode change. activeCampaigns={ActiveCampaigns.Count}");
-                await StartWatchingStreams(true);
+                await StartMiningStreams(true);
                 AppLogger.Info("Miner", "Immediate re-evaluation completed after priority mode change.");
             }
             catch (Exception ex)
@@ -221,7 +221,7 @@ namespace Core.Managers
                 }
 
                 AppLogger.Debug("Miner", $"Immediate re-evaluation starting after whitelist change. activeCampaigns={ActiveCampaigns.Count}");
-                await StartWatchingStreams(true);
+                await StartMiningStreams(true);
                 AppLogger.Info("Miner", "Immediate re-evaluation completed after whitelist change.");
             }
             catch (Exception ex)
@@ -334,7 +334,7 @@ namespace Core.Managers
         /// <summary>
         /// Handles the timer tick event to update live progress for active Twitch and Kick campaigns.
         /// </summary>
-        /// <remarks>This method increments the watched time for each active campaign and raises the
+        /// <remarks>This method increments the mined time for each active campaign and raises the
         /// corresponding progress changed events. It is intended to be used as an event handler for timer-based
         /// progress updates.</remarks>
         /// <param name="sender">The source of the event, typically the timer that triggered the tick.</param>
@@ -344,18 +344,18 @@ namespace Core.Managers
             DropsCampaign? currentTwitchCampaign = _currentTwitchCampaign;
             if (currentTwitchCampaign != null)
             {
-                _twitchWatchedSeconds++;
-                _twitchDropWatchedSeconds++;
+                _twitchMinedSeconds++;
+                _twitchDropMinedSeconds++;
 
                 DropsReward? nextTwitchReward = currentTwitchCampaign.Rewards
                     .Where(r => !r.IsClaimed)
                     .OrderBy(r => r.RequiredMinutes)
                     .FirstOrDefault();
 
-                VerboseLog("DropPointer", $"Twitch nextReward={nextTwitchReward?.Name ?? "none"}, nextRewardId={nextTwitchReward?.Id ?? "none"}, requiredMinutes={nextTwitchReward?.RequiredMinutes ?? 0}, dropWatchedSeconds={_twitchDropWatchedSeconds}");
+                VerboseLog("DropPointer", $"Twitch nextReward={nextTwitchReward?.Name ?? "none"}, nextRewardId={nextTwitchReward?.Id ?? "none"}, requiredMinutes={nextTwitchReward?.RequiredMinutes ?? 0}, dropMinedSeconds={_twitchDropMinedSeconds}");
                 RaiseTwitchDropChangedIfNeeded(nextTwitchReward);
 
-                int twitchMinuteBucket = _twitchWatchedSeconds / 60;
+                int twitchMinuteBucket = _twitchMinedSeconds / 60;
                 if (twitchMinuteBucket > _twitchAppliedMinuteBucket)
                 {
                     int minutesToApply = twitchMinuteBucket - _twitchAppliedMinuteBucket;
@@ -364,26 +364,26 @@ namespace Core.Managers
                 }
 
                 byte twitchCampPct = CalculateLiveCampaignProgress(currentTwitchCampaign);
-                byte twitchDropPct = CalculateLiveDropProgress(currentTwitchCampaign, _twitchDropWatchedSeconds);
-                VerboseLog("LiveProgress", $"Twitch tick campaignId={currentTwitchCampaign.Id}, campaignWatchedSeconds={_twitchWatchedSeconds}, dropWatchedSeconds={_twitchDropWatchedSeconds}, campaignPct={twitchCampPct}, dropPct={twitchDropPct}");
+                byte twitchDropPct = CalculateLiveDropProgress(currentTwitchCampaign, _twitchDropMinedSeconds);
+                VerboseLog("LiveProgress", $"Twitch tick campaignId={currentTwitchCampaign.Id}, campaignMinedSeconds={_twitchMinedSeconds}, dropMinedSeconds={_twitchDropMinedSeconds}, campaignPct={twitchCampPct}, dropPct={twitchDropPct}");
                 TwitchProgressChanged?.Invoke(twitchCampPct, twitchDropPct);
             }
 
             DropsCampaign? currentKickCampaign = _currentKickCampaign;
             if (currentKickCampaign != null)
             {
-                _kickWatchedSeconds++;
-                _kickDropWatchedSeconds++;
+                _kickMinedSeconds++;
+                _kickDropMinedSeconds++;
 
                 DropsReward? nextKickReward = currentKickCampaign.Rewards
                     .Where(r => !r.IsClaimed)
                     .OrderBy(r => r.RequiredMinutes)
                     .FirstOrDefault();
 
-                VerboseLog("DropPointer", $"Kick nextReward={nextKickReward?.Name ?? "none"}, nextRewardId={nextKickReward?.Id ?? "none"}, requiredMinutes={nextKickReward?.RequiredMinutes ?? 0}, dropWatchedSeconds={_kickDropWatchedSeconds}");
+                VerboseLog("DropPointer", $"Kick nextReward={nextKickReward?.Name ?? "none"}, nextRewardId={nextKickReward?.Id ?? "none"}, requiredMinutes={nextKickReward?.RequiredMinutes ?? 0}, dropMinedSeconds={_kickDropMinedSeconds}");
                 RaiseKickDropChangedIfNeeded(nextKickReward);
 
-                int kickMinuteBucket = _kickWatchedSeconds / 60;
+                int kickMinuteBucket = _kickMinedSeconds / 60;
                 if (kickMinuteBucket > _kickAppliedMinuteBucket)
                 {
                     int minutesToApply = kickMinuteBucket - _kickAppliedMinuteBucket;
@@ -392,8 +392,8 @@ namespace Core.Managers
                 }
 
                 byte kickCampPct = CalculateLiveCampaignProgress(currentKickCampaign);
-                byte kickDropPct = CalculateLiveDropProgress(currentKickCampaign, _kickDropWatchedSeconds);
-                VerboseLog("LiveProgress", $"Kick tick campaignId={currentKickCampaign.Id}, campaignWatchedSeconds={_kickWatchedSeconds}, dropWatchedSeconds={_kickDropWatchedSeconds}, campaignPct={kickCampPct}, dropPct={kickDropPct}");
+                byte kickDropPct = CalculateLiveDropProgress(currentKickCampaign, _kickDropMinedSeconds);
+                VerboseLog("LiveProgress", $"Kick tick campaignId={currentKickCampaign.Id}, campaignMinedSeconds={_kickMinedSeconds}, dropMinedSeconds={_kickDropMinedSeconds}, campaignPct={kickCampPct}, dropPct={kickDropPct}");
                 KickProgressChanged?.Invoke(kickCampPct, kickDropPct);
             }
         }
@@ -413,10 +413,10 @@ namespace Core.Managers
         /// </summary>
         /// <remarks>This method clears the current active campaigns and repopulates the list with
         /// eligible campaigns from the provided collection. The update is performed on the application's UI thread.
-        /// After updating, the method initiates stream watching for the active campaigns.</remarks>
+        /// After updating, the method initiates stream mining for the active campaigns.</remarks>
         /// <param name="campaigns">A collection of <see cref="DropsCampaign"/> objects to evaluate and update as active campaigns. Only
         /// campaigns that have progress to make, have started, and have not yet ended are considered.</param>
-        public void UpdateCampaigns(IEnumerable<DropsCampaign> campaigns, IGqlService? twitchGqlService, bool startWatching = true)
+        public void UpdateCampaigns(IEnumerable<DropsCampaign> campaigns, IGqlService? twitchGqlService, bool startMining = true)
         {
             _twitchGqlService = twitchGqlService;
             List<DropsCampaign> allCampaigns = campaigns.ToList();
@@ -450,44 +450,44 @@ namespace Core.Managers
                 UpdateCurrentSelectionFlags();
             });
 
-            if (startWatching && !_isPaused)
-                _ = StartWatchingStreams(); // Fire and forget - will handle its own loop
+            if (startMining && !_isPaused)
+                _ = StartMiningStreams(); // Fire and forget - will handle its own loop
         }
         /// <summary>
-        /// Temporarily pauses stream watching and waits for any active watch cycle to exit.
+        /// Temporarily pauses stream mining and waits for any active mine cycle to exit.
         /// </summary>
-        public async Task PauseWatchingAsync()
+        public async Task PauseMiningAsync()
         {
             _isPaused = true;
-            _startWatchingCts?.Cancel();
+            _startMiningCts?.Cancel();
 
             _recheckTimer?.Stop();
             _streamHealthTimer?.Stop();
             _liveProgressTimer.Stop();
 
-            await _startWatchingLock.WaitAsync();
-            _startWatchingLock.Release();
+            await _startMiningLock.WaitAsync();
+            _startMiningLock.Release();
         }
         /// <summary>
-        /// Resumes stream watching if it was previously paused.
+        /// Resumes stream mining if it was previously paused.
         /// </summary>
-        public async Task ResumeWatchingAsync()
+        public async Task ResumeMiningAsync()
         {
             if (!_isPaused)
                 return;
 
             _isPaused = false;
-            await StartWatchingStreams();
+            await StartMiningStreams();
         }
         /// <summary>
         /// Calculates the overall progress percentage for a campaign using a hybrid approach:
         /// - Full credit for the required time of all claimed rewards
-        /// - Plus progress from current watched time toward the remaining unclaimed rewards
+        /// - Plus progress from current mined time toward the remaining unclaimed rewards
         /// - Divided by the total required time across ALL rewards in the campaign.
         /// This gives a more "completionist" view of how much of the entire event is effectively done.
         /// </summary>
         /// <param name="campaign">The campaign containing the rewards for which progress is being calculated. Cannot be null.</param>
-        /// <param name="totalWatchedSeconds">The total number of seconds watched by the user toward earning drops. Must be greater than or
+        /// <param name="totalMinedSeconds">The total number of seconds mined by the user toward earning drops. Must be greater than or
         /// equal to 0.</param>
         /// <returns>A value between 0 and 100 representing the percentage of overall campaign completion.
         /// Returns 100 if all rewards are already claimed or if total required time is zero.</returns>
@@ -513,10 +513,10 @@ namespace Core.Managers
         /// Calculates the progress percentage toward the next unclaimed live drop reward in the specified campaign.
         /// </summary>
         /// <param name="campaign">The drops campaign containing the list of rewards and their claim status.</param>
-        /// <param name="totalWatchedSeconds">The total number of seconds the user has watched, used to determine progress toward the next reward.</param>
+        /// <param name="totalMinedSeconds">The total number of seconds the user has mined, used to determine progress toward the next reward.</param>
         /// <returns>A value between 0 and 100 representing the percentage of progress toward the next unclaimed reward. Returns
         /// 100 if all rewards have been claimed.</returns>
-        private static byte CalculateLiveDropProgress(DropsCampaign? campaign, int totalWatchedSeconds)
+        private static byte CalculateLiveDropProgress(DropsCampaign? campaign, int totalMinedSeconds)
         {
             if (campaign == null)
                 return 0;
@@ -536,43 +536,43 @@ namespace Core.Managers
 
             int requiredSeconds = nextReward.RequiredMinutes * 60;
 
-            int effectiveProgressSeconds = Math.Clamp(totalWatchedSeconds, 0, requiredSeconds);
+            int effectiveProgressSeconds = Math.Clamp(totalMinedSeconds, 0, requiredSeconds);
             double percentage = (double)effectiveProgressSeconds / requiredSeconds * 100;
             byte result = (byte)Math.Clamp((int)Math.Floor(percentage), 0, 100);
 
             VerboseLog(
                 "RewardProgress",
-                $"campaignId={campaign.Id}, campaignName='{campaign.Name}', rewardsUnclaimed={unclaimedRewards.Count}, nextRewardId={nextReward.Id}, nextRewardName='{nextReward.Name}', requiredSeconds={requiredSeconds}, totalWatchedSeconds={totalWatchedSeconds}, effectiveProgressSeconds={effectiveProgressSeconds}, computedPct={result}");
+                $"campaignId={campaign.Id}, campaignName='{campaign.Name}', rewardsUnclaimed={unclaimedRewards.Count}, nextRewardId={nextReward.Id}, nextRewardName='{nextReward.Name}', requiredSeconds={requiredSeconds}, totalMinedSeconds={totalMinedSeconds}, effectiveProgressSeconds={effectiveProgressSeconds}, computedPct={result}");
 
             return result;
         }
         /// <summary>
         /// Initiates monitoring of active campaign streams to progress eligible rewards on supported platforms.
         /// </summary>
-        /// <remarks>This method evaluates all active campaigns and begins watching streams on platforms
-        /// such as Twitch and Kick if progress can be made. It periodically re-evaluates which streams to watch based
+        /// <remarks>This method evaluates all active campaigns and begins mining streams on platforms
+        /// such as Twitch and Kick if progress can be made. It periodically re-evaluates which streams to mine based
         /// on reward progress and campaign status. If no campaigns are eligible for progress, stream monitoring is
         /// stopped. The method is safe to call repeatedly; any previous monitoring timers are stopped and disposed
         /// before starting new ones.</remarks>
         /// <returns>A task that represents the asynchronous operation of starting and managing stream monitoring.</returns>
-        public async Task StartWatchingStreams(bool restartedInternally = false)
+        public async Task StartMiningStreams(bool restartedInternally = false)
         {
-            await _startWatchingLock.WaitAsync();
+            await _startMiningLock.WaitAsync();
             try
             {
-                VerboseLog("StartWatching",
-                    $"ENTERING StartWatchingStreams | restarted={restartedInternally} | " +
+                VerboseLog("StartMining",
+                    $"ENTERING StartMiningStreams | restarted={restartedInternally} | " +
                     $"paused={_isPaused} | activeCampaigns={ActiveCampaigns.Count} | " +
                     $"twitchCurrent={_currentTwitchCampaign?.Id ?? "null"} | " +
                     $"kickCurrent={_currentKickCampaign?.Id ?? "null"} | " +
-                    $"twitchSeconds={_twitchWatchedSeconds} | twitchApplied={_twitchAppliedMinuteBucket}");
+                    $"twitchSeconds={_twitchMinedSeconds} | twitchApplied={_twitchAppliedMinuteBucket}");
 
                 if (_isPaused)
                     return;
 
-                _startWatchingCts?.Cancel();
-                _startWatchingCts = new CancellationTokenSource();
-                CancellationToken token = _startWatchingCts.Token;
+                _startMiningCts?.Cancel();
+                _startMiningCts = new CancellationTokenSource();
+                CancellationToken token = _startMiningCts.Token;
 
                 // Immediately stop the live progress timer to prevent ticks during unstable state
                 _liveProgressTimer?.Stop();
@@ -589,13 +589,13 @@ namespace Core.Managers
                 _lastKickDropId = null;
                 KickDropChanged?.Invoke(string.Empty, null);
                 KickProgressChanged?.Invoke(0, 0);
-                _twitchAppliedMinuteBucket = _twitchWatchedSeconds / 60;
-                _kickAppliedMinuteBucket = _kickWatchedSeconds / 60;
+                _twitchAppliedMinuteBucket = _twitchMinedSeconds / 60;
+                _kickAppliedMinuteBucket = _kickMinedSeconds / 60;
 
-                VerboseLog("StartWatching", $"AFTER reset | twitchApplied={_twitchAppliedMinuteBucket} | kickApplied={_kickAppliedMinuteBucket}");
+                VerboseLog("StartMining", $"AFTER reset | twitchApplied={_twitchAppliedMinuteBucket} | kickApplied={_kickAppliedMinuteBucket}");
 
-                AppLogger.Debug("Miner", "[DropsInventoryManager] Starting stream watching process...");
-                AppLogger.Info("Miner", $"StartWatchingStreams invoked. restartedInternally={restartedInternally}, activeCampaigns={ActiveCampaigns.Count}, paused={_isPaused}");
+                AppLogger.Debug("Miner", "[DropsInventoryManager] Starting stream mining process...");
+                AppLogger.Info("Miner", $"StartMiningStreams invoked. restartedInternally={restartedInternally}, activeCampaigns={ActiveCampaigns.Count}, paused={_isPaused}");
 
                 if (!restartedInternally)
                     MinerStatusChanged?.Invoke("Starting");
@@ -612,7 +612,7 @@ namespace Core.Managers
 
                 if (!campaignSnapshot.Any())
                 {
-                    AppLogger.Debug("Miner", "[DropsInventoryManager] No active campaigns with progress to make. Stopping stream watching.");
+                    AppLogger.Debug("Miner", "[DropsInventoryManager] No active campaigns with progress to make. Stopping stream mining.");
                     AppLogger.Info("Miner", "No active campaigns found during start; switching to Idle.");
                     MinerStatusChanged?.Invoke("Idle");
                     _currentTwitchCampaign = null;
@@ -679,10 +679,10 @@ namespace Core.Managers
                 {
                     if (readyToClaimOnlyCampaigns.Any())
                     {
-                        AppLogger.Info("Miner", $"No remaining watch progress remains; {readyToClaimOnlyCampaigns.Count} campaign(s) are waiting for manual claim.");
+                        AppLogger.Info("Miner", $"No remaining mine progress remains; {readyToClaimOnlyCampaigns.Count} campaign(s) are waiting for manual claim.");
                     }
 
-                    AppLogger.Debug("Miner", "[DropsInventoryManager] No campaigns with progress to make after claim. Stopping stream watching.");
+                    AppLogger.Debug("Miner", "[DropsInventoryManager] No campaigns with progress to make after claim. Stopping stream mining.");
                     AppLogger.Info("Miner", "No campaigns with progress after claim pass; switching to Idle.");
                     MinerStatusChanged?.Invoke("Idle");
                     _currentTwitchCampaign = null;
@@ -769,7 +769,7 @@ namespace Core.Managers
                         UpdateCurrentSelectionFlags();
 
                         // Sync baseline NOW - right after selection, before any further logic
-                        _twitchWatchedSeconds = bestTwitch.Rewards
+                        _twitchMinedSeconds = bestTwitch.Rewards
                             .Sum(r => Math.Min(r.ProgressMinutes, r.RequiredMinutes) * 60);
 
                         DropsReward? nextTwitchReward = bestTwitch.Rewards
@@ -780,25 +780,25 @@ namespace Core.Managers
                         int twitchMinutesBeforeNextReward = bestTwitch.Rewards
                             .Where(r => !r.IsClaimed && r.RequiredMinutes < nextTwitchReward!.RequiredMinutes)
                             .Sum(r => r.RequiredMinutes);
-                        _twitchDropWatchedSeconds = Math.Max(0, (nextTwitchReward?.ProgressMinutes ?? 0) - twitchMinutesBeforeNextReward) * 60;
+                        _twitchDropMinedSeconds = Math.Max(0, (nextTwitchReward?.ProgressMinutes ?? 0) - twitchMinutesBeforeNextReward) * 60;
 
-                        _twitchAppliedMinuteBucket = _twitchWatchedSeconds / 60;
+                        _twitchAppliedMinuteBucket = _twitchMinedSeconds / 60;
 
                         VerboseLog("SelectionBaseline",
                             $"Twitch baseline SET | " +
                             $"campaignId={bestTwitch.Id} | " +
-                            $"watchedSeconds={_twitchWatchedSeconds} | " +
-                            $"dropWatchedSeconds={_twitchDropWatchedSeconds} | " +
+                            $"minedSeconds={_twitchMinedSeconds} | " +
+                            $"dropMinedSeconds={_twitchDropMinedSeconds} | " +
                             $"appliedBucket={_twitchAppliedMinuteBucket}");
 
-                        VerboseLog("SelectionBaseline", $"Twitch campaignId={bestTwitch.Id}, campaignWatchedSecondsBaseline={_twitchWatchedSeconds}, dropWatchedSecondsBaseline={_twitchDropWatchedSeconds}, nextRewardId={nextTwitchReward?.Id ?? "none"}, unclaimedRewards={bestTwitch.Rewards.Count(r => !r.IsClaimed)}");
+                        VerboseLog("SelectionBaseline", $"Twitch campaignId={bestTwitch.Id}, campaignMinedSecondsBaseline={_twitchMinedSeconds}, dropMinedSecondsBaseline={_twitchDropMinedSeconds}, nextRewardId={nextTwitchReward?.Id ?? "none"}, unclaimedRewards={bestTwitch.Rewards.Count(r => !r.IsClaimed)}");
 
                         byte initialTwitchPct = CalculateLiveCampaignProgress(bestTwitch);
-                        byte initialTwitchDropPct = CalculateLiveDropProgress(bestTwitch, _twitchDropWatchedSeconds);
+                        byte initialTwitchDropPct = CalculateLiveDropProgress(bestTwitch, _twitchDropMinedSeconds);
                         TwitchProgressChanged?.Invoke(initialTwitchPct, initialTwitchDropPct);
                         RaiseTwitchDropChangedIfNeeded(nextTwitchReward);
 
-                        AppLogger.Debug("TwitchSelection", $"[DropsInventoryManager] Watching Twitch stream: {twitchUrl}");
+                        AppLogger.Debug("TwitchSelection", $"[DropsInventoryManager] Mining Twitch stream: {twitchUrl}");
                         AppLogger.Info("TwitchSelection", $"Selected Twitch stream '{twitchUrl}' for campaign '{bestTwitch.Name}' ({bestTwitch.Id}).");
                         RememberLastStreamerUrl(Platform.Twitch, bestTwitch.Slug, twitchUrl);
 
@@ -875,7 +875,7 @@ namespace Core.Managers
                         _lastKnownKickOnlineState = true;
                         UpdateCurrentSelectionFlags();
 
-                        _kickWatchedSeconds = bestKick.Rewards
+                        _kickMinedSeconds = bestKick.Rewards
                             .Sum(r => Math.Min(r.ProgressMinutes, r.RequiredMinutes) * 60);
 
                         DropsReward? nextKickReward = bestKick.Rewards
@@ -886,18 +886,18 @@ namespace Core.Managers
                         int kickMinutesBeforeNextReward = bestKick.Rewards
                             .Where(r => !r.IsClaimed && r.RequiredMinutes < nextKickReward!.RequiredMinutes)
                             .Sum(r => r.RequiredMinutes);
-                        _kickDropWatchedSeconds = Math.Max(0, (nextKickReward?.ProgressMinutes ?? 0) - kickMinutesBeforeNextReward) * 60;
+                        _kickDropMinedSeconds = Math.Max(0, (nextKickReward?.ProgressMinutes ?? 0) - kickMinutesBeforeNextReward) * 60;
 
-                        _kickAppliedMinuteBucket = _kickWatchedSeconds / 60;
+                        _kickAppliedMinuteBucket = _kickMinedSeconds / 60;
 
-                        VerboseLog("SelectionBaseline", $"Kick campaignId={bestKick.Id}, campaignWatchedSecondsBaseline={_kickWatchedSeconds}, dropWatchedSecondsBaseline={_kickDropWatchedSeconds}, nextRewardId={nextKickReward?.Id ?? "none"}, unclaimedRewards={bestKick.Rewards.Count(r => !r.IsClaimed)}");
+                        VerboseLog("SelectionBaseline", $"Kick campaignId={bestKick.Id}, campaignMinedSecondsBaseline={_kickMinedSeconds}, dropMinedSecondsBaseline={_kickDropMinedSeconds}, nextRewardId={nextKickReward?.Id ?? "none"}, unclaimedRewards={bestKick.Rewards.Count(r => !r.IsClaimed)}");
 
                         byte initialKickPct = CalculateLiveCampaignProgress(bestKick);
-                        byte initialKickDropPct = CalculateLiveDropProgress(bestKick, _kickDropWatchedSeconds);
+                        byte initialKickDropPct = CalculateLiveDropProgress(bestKick, _kickDropMinedSeconds);
                         KickProgressChanged?.Invoke(initialKickPct, initialKickDropPct);
                         RaiseKickDropChangedIfNeeded(nextKickReward);
 
-                        AppLogger.Debug("KickSelection", $"[DropsInventoryManager] Watching Kick stream: {kickUrl}");
+                        AppLogger.Debug("KickSelection", $"[DropsInventoryManager] Mining Kick stream: {kickUrl}");
                         AppLogger.Info("KickSelection", $"Selected Kick stream '{kickUrl}' for campaign '{bestKick.Name}' ({bestKick.Id}).");
                         RememberLastStreamerUrl(Platform.Kick, bestKick.Slug, kickUrl);
 
@@ -941,7 +941,7 @@ namespace Core.Managers
                     _recheckTimer?.Stop();
                     AppLogger.Debug("Miner", "[DropsInventoryManager] Re-evaluating streams for active campaigns.");
                     AppLogger.Info("Miner", "Scheduled re-evaluation triggered.");
-                    await StartWatchingStreams(true);
+                    await StartMiningStreams(true);
                 };
                 _recheckTimer.AutoReset = false;
                 _recheckTimer.Start();
@@ -953,7 +953,7 @@ namespace Core.Managers
             }
             finally
             {
-                _startWatchingLock.Release();
+                _startMiningLock.Release();
             }
         }
         /// <summary>
@@ -1138,7 +1138,7 @@ namespace Core.Managers
                         AppLogger.Debug("HealthCheck", "Stream unhealthy -> forcing re-evaluation");
                         AppLogger.Warn("HealthCheck", $"Forcing re-evaluation. twitchOnline={twitchOnline}, twitchCategoryOk={twitchCorrectCategory}, twitchAd={twitchShowingAd}, kickOnline={kickOnline}, kickCategoryOk={kickCorrectCategory}");
                         _streamHealthTimer?.Stop();
-                        await StartWatchingStreams(true); // This will restart everything safely
+                        await StartMiningStreams(true); // This will restart everything safely
                     }
                 });
             };
@@ -1929,12 +1929,12 @@ namespace Core.Managers
             }
         }
         /// <summary>
-        /// Stores the last watched streamer URL for the specified platform and campaign if the provided values are
+        /// Stores the last mined streamer URL for the specified platform and campaign if the provided values are
         /// valid.
         /// </summary>
         /// <remarks>If the campaign slug or streamer URL is invalid, the method does not update the
         /// stored value. Updates are persisted only if the value changes.</remarks>
-        /// <param name="platform">The platform for which to record the last watched streamer URL. Determines whether Twitch or Kick is
+        /// <param name="platform">The platform for which to record the last mined streamer URL. Determines whether Twitch or Kick is
         /// updated.</param>
         /// <param name="campaignSlug">The unique identifier for the campaign. Cannot be null, empty, or whitespace.</param>
         /// <param name="streamerUrl">The URL of the streamer to remember. Cannot be null, empty, or whitespace.</param>
@@ -1956,7 +1956,7 @@ namespace Core.Managers
             }
 
             if (changed)
-                SaveLastWatchedStreamers();
+                SaveLastMinedStreamers();
         }
         /// <summary>
         /// Removes the remembered streamer URL for the specified platform and campaign, if present.
@@ -1977,25 +1977,25 @@ namespace Core.Managers
 
             if (removed)
             {
-                SaveLastWatchedStreamers();
+                SaveLastMinedStreamers();
                 AppLogger.Info("Selection", $"Forgot remembered streamer for platform={platform}, campaignSlug='{campaignSlug}'.");
             }
         }
         /// <summary>
-        /// Loads the last watched streamers from persistent storage and updates the internal state.
+        /// Loads the last mined streamers from persistent storage and updates the internal state.
         /// </summary>
         /// <remarks>This method reads streamer information from a file and updates the Twitch and Kick
         /// streamer lists. If the file does not exist or contains invalid data, the lists are not modified. The
         /// operation is thread-safe and logs informational or warning messages based on the outcome.</remarks>
-        private void LoadLastWatchedStreamers()
+        private void LoadLastMinedStreamers()
         {
             try
             {
-                if (!File.Exists(_lastWatchedStreamersFilePath))
+                if (!File.Exists(_lastMinedStreamersFilePath))
                     return;
 
-                string json = File.ReadAllText(_lastWatchedStreamersFilePath);
-                LastWatchedStreamersState? state = JsonSerializer.Deserialize<LastWatchedStreamersState>(json);
+                string json = File.ReadAllText(_lastMinedStreamersFilePath);
+                LastMinedStreamersState? state = JsonSerializer.Deserialize<LastMinedStreamersState>(json);
                 if (state == null)
                     return;
 
@@ -2025,33 +2025,33 @@ namespace Core.Managers
             }
         }
         /// <summary>
-        /// Persists the current state of last watched streamers to disk in JSON format.
+        /// Persists the current state of last mined streamers to disk in JSON format.
         /// </summary>
-        /// <remarks>This method serializes the last watched Twitch and Kick streamers and writes them to
+        /// <remarks>This method serializes the last mined Twitch and Kick streamers and writes them to
         /// the configured file path. If the target directory does not exist, it is created. Any errors during the save
         /// operation are logged as warnings. The method is thread-safe and should be called when the state needs to be
         /// updated on disk.</remarks>
-        private void SaveLastWatchedStreamers()
+        private void SaveLastMinedStreamers()
         {
             try
             {
-                LastWatchedStreamersState snapshot;
+                LastMinedStreamersState snapshot;
 
                 lock (_lastStreamerSync)
                 {
-                    snapshot = new LastWatchedStreamersState
+                    snapshot = new LastMinedStreamersState
                     {
                         TwitchBySlug = _lastTwitchStreamers.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase),
                         KickBySlug = _lastKickStreamers.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase)
                     };
                 }
 
-                string? directory = Path.GetDirectoryName(_lastWatchedStreamersFilePath);
+                string? directory = Path.GetDirectoryName(_lastMinedStreamersFilePath);
                 if (!string.IsNullOrWhiteSpace(directory))
                     Directory.CreateDirectory(directory);
 
                 string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_lastWatchedStreamersFilePath, json);
+                File.WriteAllText(_lastMinedStreamersFilePath, json);
             }
             catch (Exception ex)
             {
@@ -2109,9 +2109,9 @@ namespace Core.Managers
         /// <summary>
         /// Represents the state containing mappings of streamer slugs to their Twitch and Kick usernames.
         /// </summary>
-        /// <remarks>This class is used to track the last watched streamers for each platform. The
+        /// <remarks>This class is used to track the last mined streamers for each platform. The
         /// dictionaries are case-insensitive with respect to streamer slugs.</remarks>
-        private sealed class LastWatchedStreamersState
+        private sealed class LastMinedStreamersState
         {
             public Dictionary<string, string> TwitchBySlug { get; set; } = new(StringComparer.OrdinalIgnoreCase);
             public Dictionary<string, string> KickBySlug { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -2152,7 +2152,7 @@ namespace Core.Managers
     {
         /// <summary>
         /// Determines whether the specified campaign contains any rewards that have not yet been claimed and still
-        /// require additional watch progress.
+        /// require additional mine progress.
         /// </summary>
         /// <param name="campaign">The campaign to evaluate for unclaimed rewards with remaining progress requirements. Cannot be null.</param>
         /// <returns>true if at least one reward in the campaign is unclaimed and still has progress remaining;

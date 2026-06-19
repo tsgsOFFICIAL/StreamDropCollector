@@ -56,11 +56,11 @@ namespace UI.Models
             set { _dropImageUrl = value; OnPropertyChanged(); }
         }
 
-        private string _watchedChannel = string.Empty;
-        public string WatchedChannel
+        private string _minedChannel = string.Empty;
+        public string MinedChannel
         {
-            get => _watchedChannel;
-            set { _watchedChannel = value; OnPropertyChanged(); }
+            get => _minedChannel;
+            set { _minedChannel = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
