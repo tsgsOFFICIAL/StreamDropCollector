@@ -8,9 +8,9 @@
              d:DesignHeight="100" d:DesignWidth="100"
              x:Name="Root">
 
-    <Border Width="{Binding ImageWidth, ElementName=Root}"
+    <Border x:Name="ImageBorder"
+            Width="{Binding ImageWidth, ElementName=Root}"
             Height="{Binding ImageHeight, ElementName=Root}"
-            CornerRadius="{Binding CornerRadius, ElementName=Root}"
             ClipToBounds="True">
         <Border.Background>
             <SolidColorBrush Color="{DynamicResource CardBackgroundColor}"/>
