@@ -1,7 +1,7 @@
 using Core.Models;
 using Core.Enums;
 
-namespace UI.Helpers
+namespace Core.Helpers
 {
     /// <summary>
     /// Extracts eligible streamer channel logins from campaign connect URLs.

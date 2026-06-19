@@ -5,8 +5,8 @@ using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows;
+using Core.Helpers;
 using Core.Models;
-using UI.Helpers;
 using UI.Models;
 
 namespace UI.Controls
