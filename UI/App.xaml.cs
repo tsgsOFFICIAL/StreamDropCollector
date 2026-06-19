@@ -59,7 +59,7 @@ namespace UI
 
             base.OnStartup(e);
 
-            IsDebugMode = e.Args.Contains("-debug");
+            IsDebugMode = e.Args.Contains("--debug");
 
             Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
