@@ -1566,9 +1566,17 @@ namespace Core.Managers
 
             string getStreamerCategoryJs = @"
                 (() => {
-                    const categoryElement = document.querySelector("".text-primary-base"");
-                    return categoryElement ? categoryElement.href.trim() : '';
-                })();
+                    const categoryLinks = document.querySelectorAll('a[href*=""/category/""]');
+
+                        if (categoryLinks.length === 0)
+                        {
+                            return '';
+                        }
+
+                        const categoryElement = categoryLinks[0];
+
+                        return categoryElement.href.trim();
+                    })();
             ";
             string getFirstStreamerFromDirectoryJs;
 
