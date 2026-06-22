@@ -78,7 +78,6 @@ namespace Core.Mining
             _timer = null;
         }
 
-        /// <inheritdoc />
         public void Dispose() => Stop();
     }
 }
