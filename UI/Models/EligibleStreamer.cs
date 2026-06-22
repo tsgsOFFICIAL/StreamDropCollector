@@ -26,7 +26,7 @@ namespace UI.Models
         public string Login { get; }
 
         /// <summary>Display name shown on the chip.</summary>
-        public string Name { get; }
+        public string Name { get; private set; }
 
         /// <summary>Avatar fallback initials derived from the login.</summary>
         public string Initials { get; }
@@ -81,6 +81,23 @@ namespace UI.Models
 
         /// <summary>Chip opacity; reduced when the streamer is offline.</summary>
         public double ChipOpacity => IsLive ? 1.0 : 0.78;
+
+        /// <summary>
+        /// Updates the chip label from platform channel metadata when available.
+        /// </summary>
+        /// <param name="displayName">Display name from the platform API (e.g. Kick <c>user.username</c>).</param>
+        public void SetDisplayName(string? displayName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+                return;
+
+            string normalized = displayName.Trim();
+            if (string.Equals(Name, normalized, StringComparison.Ordinal))
+                return;
+
+            Name = normalized;
+            OnPropertyChanged(nameof(Name));
+        }
 
         private bool _isClickable;
 

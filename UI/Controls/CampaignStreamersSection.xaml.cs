@@ -6,7 +6,9 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows;
 using Core.Helpers;
+using Core.Managers;
 using Core.Models;
+using Core.Enums;
 using UI.Models;
 
 namespace UI.Controls
@@ -156,6 +158,19 @@ namespace UI.Controls
         {
             InitializeComponent();
             DataContextChanged += OnSectionDataContextChanged;
+            DropsInventoryManager.Instance.KickStreamerMetadataChanged += OnKickStreamerMetadataChanged;
+            Unloaded += (_, _) => DropsInventoryManager.Instance.KickStreamerMetadataChanged -= OnKickStreamerMetadataChanged;
+        }
+
+        private void OnKickStreamerMetadataChanged(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshots)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_campaign?.Platform != Platform.Kick)
+                    return;
+
+                ApplyChannelMetadata(snapshots);
+            });
         }
 
         private void OnSectionDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -192,16 +207,48 @@ namespace UI.Controls
         }
 
         /// <summary>
-        /// Applies profile image URLs from platform channel metadata once the live/channel API layer is wired up.
+        /// Applies Kick channel metadata (profile image, live state, display name) to eligible streamer chips.
         /// </summary>
-        /// <param name="profileImagesByLogin">Profile image URLs keyed by channel login.</param>
-        public void ApplyProfileImages(IReadOnlyDictionary<string, string?> profileImagesByLogin)
+        /// <param name="snapshotsByLogin">Channel snapshots keyed by login slug.</param>
+        public void ApplyChannelMetadata(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshotsByLogin)
         {
+            if (snapshotsByLogin.Count == 0 || _allStreamers.Count == 0)
+                return;
+
+            bool anyChanged = false;
+
             foreach (EligibleStreamer streamer in _allStreamers)
             {
-                if (profileImagesByLogin.TryGetValue(streamer.Login, out string? profileImageUrl))
-                    streamer.ProfileImageUrl = profileImageUrl;
+                if (!TryGetSnapshot(snapshotsByLogin, streamer.Login, out LiveChannelSnapshot? snapshot)
+                    || snapshot is null)
+                    continue;
+
+                streamer.ProfileImageUrl = snapshot.ProfileImageUrl;
+                streamer.IsLive = snapshot.IsLive;
+                streamer.SetDisplayName(snapshot.DisplayName);
+                anyChanged = true;
             }
+
+            if (!anyChanged)
+                return;
+
+            UpdateLiveCount();
+            RefreshPreview();
+            if (IsExpanded)
+                RefreshFiltered();
+            else
+                UpdateClosedFooter();
+        }
+
+        private static bool TryGetSnapshot(
+            IReadOnlyDictionary<string, LiveChannelSnapshot> snapshotsByLogin,
+            string login,
+            out LiveChannelSnapshot? snapshot)
+        {
+            if (snapshotsByLogin.TryGetValue(login, out snapshot))
+                return true;
+
+            return snapshotsByLogin.TryGetValue(login.ToLowerInvariant(), out snapshot);
         }
 
         private void LoadCampaign(DropsCampaign? campaign)
@@ -220,6 +267,9 @@ namespace UI.Controls
                 foreach (string login in EligibleStreamerParser.ParseChannelLogins(campaign))
                     _allStreamers.Add(new EligibleStreamer(login));
             }
+
+            if (campaign?.Platform == Platform.Kick)
+                ApplyChannelMetadata(DropsInventoryManager.Instance.KickStreamerMetadata);
 
             OnPropertyChanged(nameof(HasStreamers));
             OnPropertyChanged(nameof(NeedsCollapse));
@@ -276,6 +326,9 @@ namespace UI.Controls
             OnPropertyChanged(nameof(ShowEmptyFilteredMessage));
             UpdateExpandedFooter(query);
         }
+
+        private void UpdateLiveCount() =>
+            LiveCount = _allStreamers.Count(s => s.IsLive);
 
         private void UpdateClosedFooter()
         {
