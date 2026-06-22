@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using Core.Services.Mining.Kick;
 using System.Windows.Input;
 using Core.Services.Mining;
+using Core.Services.Mining.Twitch;
 using Core.Mining.Twitch;
 using Core.Mining.Kick;
 using Core.Interfaces;
@@ -11,6 +13,7 @@ using Core.Stores;
 using Core.Mining;
 using Core.Models;
 using Core.Enums;
+using Core.Helpers;
 
 namespace Core.Managers
 {
@@ -73,6 +76,11 @@ namespace Core.Managers
         public event Action<string>? KickChannelChanged;
 
         /// <summary>
+        /// Occurs when Kick channel metadata (live state, profile images) is refreshed for eligible streamers.
+        /// </summary>
+        public event Action<IReadOnlyDictionary<string, LiveChannelSnapshot>>? KickStreamerMetadataChanged;
+
+        /// <summary>
         /// Occurs when the Twitch campaign being mined changes.
         /// </summary>
         /// <remarks>Arguments are the campaign display name and game image URL. An empty name with a null URL means the selection was cleared.</remarks>
@@ -106,8 +114,8 @@ namespace Core.Managers
         private readonly PlatformProgressState _kickProgress = new();
         private readonly PinnedCampaignStore _pinnedCampaignStore = new();
         private readonly LastMinedStreamersStore _lastMinedStreamers = new();
-        private readonly ITwitchLiveChannelApi _twitchLiveChannelApi = new MockTwitchLiveChannelApi();
-        private readonly IKickLiveChannelApi _kickLiveChannelApi = new MockKickLiveChannelApi();
+        private ITwitchLiveChannelApi _twitchLiveChannelApi = null!;
+        private IKickLiveChannelApi _kickLiveChannelApi = null!;
         private readonly MiningOrchestrator _miningOrchestrator = new();
         private readonly StreamHealthMonitor _streamHealthMonitor = new();
         private KickStreamerSelector? _kickStreamerSelector;
@@ -125,6 +133,17 @@ namespace Core.Managers
         private bool _isPaused;
         private readonly object _campaignSnapshotSync = new();
         private List<DropsCampaign> _lastKnownCampaigns = new();
+
+        private readonly SemaphoreSlim _kickMetadataLock = new(1, 1);
+        private readonly System.Timers.Timer _kickMetadataTimer = new(TimeSpan.FromSeconds(45).TotalMilliseconds);
+        private int _kickMetadataRefreshScheduled;
+        private IReadOnlyDictionary<string, LiveChannelSnapshot> _kickStreamerMetadata =
+            new Dictionary<string, LiveChannelSnapshot>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets the most recently fetched Kick streamer metadata keyed by channel login.
+        /// </summary>
+        public IReadOnlyDictionary<string, LiveChannelSnapshot> KickStreamerMetadata => _kickStreamerMetadata;
 
         private static bool IsVerboseDebugEnabled => UISettingsManager.Instance.VerboseDebugLogging;
 
@@ -168,6 +187,11 @@ namespace Core.Managers
 
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
             _liveProgressTimer.AutoReset = true;
+
+            _kickMetadataTimer.Elapsed += (_, _) => ScheduleKickStreamerMetadataRefresh();
+            _kickMetadataTimer.AutoReset = true;
+            _kickMetadataTimer.Start();
+
             RefreshMiningServices();
         }
 
@@ -351,10 +375,102 @@ namespace Core.Managers
             TwitchWebView = twitch ?? throw new ArgumentNullException(nameof(twitch));
             KickWebView = kick ?? throw new ArgumentNullException(nameof(kick));
             RefreshMiningServices();
+            ScheduleKickStreamerMetadataRefresh();
+        }
+
+        /// <summary>
+        /// Debounces a background refresh of Kick streamer live state and profile images for inventory UI chips.
+        /// </summary>
+        public void ScheduleKickStreamerMetadataRefresh()
+        {
+            if (KickWebView == null)
+                return;
+
+            if (Interlocked.CompareExchange(ref _kickMetadataRefreshScheduled, 1, 0) != 0)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(400);
+                    await RefreshKickStreamerMetadataAsync();
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when superseded.
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("KickMetadata", $"Streamer metadata refresh failed: {ex.Message}");
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _kickMetadataRefreshScheduled, 0);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Fetches Kick channel snapshots for all eligible streamers across active Kick campaigns.
+        /// </summary>
+        public async Task RefreshKickStreamerMetadataAsync(CancellationToken ct = default)
+        {
+            if (KickWebView == null)
+                return;
+
+            List<DropsCampaign> kickCampaigns = await Application.Current.Dispatcher.InvokeAsync(() =>
+                ActiveCampaigns.Where(c => c.Platform == Platform.Kick).ToList());
+
+            HashSet<string> logins = new(StringComparer.OrdinalIgnoreCase);
+            foreach (DropsCampaign campaign in kickCampaigns)
+            {
+                foreach (string login in EligibleStreamerParser.ParseChannelLogins(campaign))
+                    logins.Add(login);
+            }
+
+            if (logins.Count == 0)
+            {
+                _kickStreamerMetadata = new Dictionary<string, LiveChannelSnapshot>(StringComparer.OrdinalIgnoreCase);
+                Application.Current.Dispatcher.Invoke(() =>
+                    KickStreamerMetadataChanged?.Invoke(_kickStreamerMetadata));
+                return;
+            }
+
+            await _kickMetadataLock.WaitAsync(ct);
+            try
+            {
+                Dictionary<string, LiveChannelSnapshot> snapshots = new(StringComparer.OrdinalIgnoreCase);
+
+                foreach (string login in logins)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    LiveChannelSnapshot? snapshot = await _kickLiveChannelApi.GetChannelAsync(login, ct);
+                    if (snapshot != null)
+                        snapshots[login] = snapshot;
+                }
+
+                _kickStreamerMetadata = snapshots;
+
+                AppLogger.Debug(
+                    "KickMetadata",
+                    $"Refreshed {snapshots.Count}/{logins.Count} Kick streamer snapshots ({snapshots.Values.Count(s => s.IsLive)} live).");
+
+                IReadOnlyDictionary<string, LiveChannelSnapshot> published = _kickStreamerMetadata;
+                Application.Current.Dispatcher.Invoke(() =>
+                    KickStreamerMetadataChanged?.Invoke(published));
+            }
+            finally
+            {
+                _kickMetadataLock.Release();
+            }
         }
 
         private void RefreshMiningServices()
         {
+            _kickLiveChannelApi = new KickLiveChannelApi(() => KickWebView);
+            _twitchLiveChannelApi = new TwitchLiveChannelApi(() => TwitchWebView);
             _kickStreamerSelector = new KickStreamerSelector(_kickLiveChannelApi, _lastMinedStreamers);
             _twitchStreamerSelector = new TwitchStreamerSelector(_twitchLiveChannelApi, _lastMinedStreamers);
         }
@@ -391,6 +507,8 @@ namespace Core.Managers
 
                 _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
             });
+
+            ScheduleKickStreamerMetadataRefresh();
 
             if (startMining && !_isPaused)
                 _ = StartMiningStreams(); // Fire and forget - will handle its own loop

@@ -130,6 +130,18 @@ namespace Core.Interfaces
         /// </summary>
         Task<string> ExecuteScriptAsync(string script);
         /// <summary>
+        /// Runs an async JavaScript function body in the page and waits for a <c>postMessage</c> result (or timeout).
+        /// </summary>
+        /// <remarks>
+        /// Use this instead of <see cref="ExecuteScriptAsync"/> when the script performs async work (e.g. <c>fetch</c>).
+        /// The caller may await from any thread; completion is signaled by a WebView message event.
+        /// </remarks>
+        /// <param name="asyncScriptBody">Statements inside an async function. Use <c>return</c> to send back a stringifiable value.</param>
+        /// <param name="timeoutMs">Maximum time to wait for the script result.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The script result string when successful; otherwise null on error or timeout.</returns>
+        Task<string?> ExecuteAsyncScriptAsync(string asyncScriptBody, int timeoutMs = 20000, CancellationToken ct = default);
+        /// <summary>
         /// Waits asynchronously for a navigation event to complete.
         /// </summary>
         /// <returns>A task that represents the asynchronous wait operation. The task completes when the navigation has finished.</returns>

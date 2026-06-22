@@ -14,11 +14,64 @@ namespace UI.Views
     /// </summary>
     public partial class HiddenWebViewHost : Window, IWebViewHost, IDisposable
     {
+        private int _asyncScriptHandlerAttached;
+        private readonly SemaphoreSlim _uiOperationLock = new(1, 1);
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<AsyncScriptResponse>> _pendingAsyncScripts = new();
+
         /// <summary>
         /// Gets the underlying WebView2 control exposed by this host.
         /// </summary>
         public WebView2 WebView => WebViewControl;
         private WebView2 WebViewControl => WebViewElement;
+
+        private sealed class AsyncScriptResponse
+        {
+            public bool Ok { get; init; }
+            public string? Result { get; init; }
+            public string? Error { get; init; }
+        }
+
+        private async Task RunOnUiAsync(Func<Task> action)
+        {
+            if (WebView.Dispatcher.CheckAccess())
+                await action();
+            else
+                await (await WebView.Dispatcher.InvokeAsync(action));
+        }
+
+        private async Task<T> RunOnUiAsync<T>(Func<Task<T>> action)
+        {
+            if (WebView.Dispatcher.CheckAccess())
+                return await action();
+
+            return await (await WebView.Dispatcher.InvokeAsync(action));
+        }
+
+        private async Task RunExclusiveUiAsync(Func<Task> action)
+        {
+            await _uiOperationLock.WaitAsync();
+            try
+            {
+                await RunOnUiAsync(action);
+            }
+            finally
+            {
+                _uiOperationLock.Release();
+            }
+        }
+
+        private async Task<T> RunExclusiveUiAsync<T>(Func<Task<T>> action)
+        {
+            await _uiOperationLock.WaitAsync();
+            try
+            {
+                return await RunOnUiAsync(action);
+            }
+            finally
+            {
+                _uiOperationLock.Release();
+            }
+        }
 
         /// <summary>
         /// Initializes a new instance of the HiddenWebViewHost class with a fully hidden and non-interactive window.
@@ -47,15 +100,16 @@ namespace UI.Views
         /// shown (but remain hidden to the user) to complete initialization. Call this method before performing
         /// operations that require the WebView2 environment to be ready.</remarks>
         /// <returns>A task that represents the asynchronous initialization operation.</returns>
-        public async Task EnsureInitializedAsync()
+        public Task EnsureInitializedAsync() =>
+            RunExclusiveUiAsync(EnsureInitializedCoreAsync);
+
+        private async Task EnsureInitializedCoreAsync()
         {
-            // Must be called on UI Dispatcher thread. Ensure window is shown (invisible) so HwndHost can be created.
             if (!IsVisible)
                 Show();
 
             Owner = System.Windows.Application.Current.MainWindow;
 
-            // Ensure CoreWebView2 environment is ready
             await WebView.EnsureCoreWebView2Async();
 
             WebView.CoreWebView2.IsMuted = true;
@@ -890,17 +944,14 @@ namespace UI.Views
         /// web view signals that navigation has finished.</remarks>
         /// <param name="url">The destination URL to navigate to. Cannot be null or empty.</param>
         /// <returns>A task that represents the asynchronous navigation operation.</returns>
-        public async Task NavigateAsync(string url)
-        {
-            // Force fresh navigation every time
-            string forcedUrl = $"{url}{(url.Contains('?') ? "&" : "?")}forceReload={DateTimeOffset.Now.ToUnixTimeMilliseconds()}";
-
-            WebView.Source = new Uri(forcedUrl);
-
-            // Still wait for it (in case it's a real nav)
-            await WaitForNavigationAsync();
-            await WaitForDomReadyAsync();
-        }
+        public Task NavigateAsync(string url) =>
+            RunExclusiveUiAsync(async () =>
+            {
+                string forcedUrl = $"{url}{(url.Contains('?') ? "&" : "?")}forceReload={DateTimeOffset.Now.ToUnixTimeMilliseconds()}";
+                WebView.Source = new Uri(forcedUrl);
+                await WaitForNavigationCoreAsync();
+                await WaitForDomReadyCoreAsync();
+            });
         /// <summary>
         /// Executes the specified JavaScript code asynchronously in the context of the current web page.
         /// </summary>
@@ -910,11 +961,160 @@ namespace UI.Views
         /// <param name="script">The JavaScript code to execute. Cannot be null.</param>
         /// <returns>A task that represents the asynchronous operation. The task result contains a JSON-encoded string
         /// representing the return value of the executed script.</returns>
-        public async Task<string> ExecuteScriptAsync(string script)
+        public Task<string> ExecuteScriptAsync(string script) =>
+            RunExclusiveUiAsync(async () =>
+                await WebView.CoreWebView2.ExecuteScriptAsync(script));
+
+        private void EnsureAsyncScriptMessageHandler()
         {
-            // ExecuteScriptAsync returns a JSON string literal: e.g. "\"{...}\""
-            return await WebView.CoreWebView2.ExecuteScriptAsync(script);
+            if (Interlocked.CompareExchange(ref _asyncScriptHandlerAttached, 1, 0) != 0)
+                return;
+
+            WebView.CoreWebView2.WebMessageReceived += OnAsyncScriptWebMessageReceived;
         }
+
+        private void OnAsyncScriptWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                string message = e.TryGetWebMessageAsString() ?? "";
+                if (string.IsNullOrWhiteSpace(message))
+                    return;
+
+                using JsonDocument doc = JsonDocument.Parse(message);
+                JsonElement root = doc.RootElement;
+
+                if (!root.TryGetProperty("id", out JsonElement idElement))
+                    return;
+
+                string? correlationId = idElement.GetString();
+                if (string.IsNullOrWhiteSpace(correlationId))
+                    return;
+
+                if (!_pendingAsyncScripts.TryRemove(correlationId, out TaskCompletionSource<AsyncScriptResponse>? tcs))
+                    return;
+
+                bool ok = root.TryGetProperty("ok", out JsonElement okElement) && okElement.GetBoolean();
+                string? result = root.TryGetProperty("result", out JsonElement resultElement)
+                    ? resultElement.GetString()
+                    : null;
+                string? error = root.TryGetProperty("error", out JsonElement errorElement)
+                    ? errorElement.GetString()
+                    : null;
+
+                tcs.TrySetResult(new AsyncScriptResponse
+                {
+                    Ok = ok,
+                    Result = result,
+                    Error = error
+                });
+            }
+            catch
+            {
+                // Ignore unrelated or malformed postMessage payloads.
+            }
+        }
+
+        /// <summary>
+        /// Runs an async JavaScript function body in the page and waits for a postMessage result (or timeout).
+        /// </summary>
+        /// <remarks>
+        /// WebView2's <see cref="CoreWebView2.ExecuteScriptAsync"/> does not await promises. This method fires an async
+        /// IIFE that posts its result back via <c>window.chrome.webview.postMessage</c>, allowing callers on any thread
+        /// to await completion through a <see cref="TaskCompletionSource"/>.
+        /// </remarks>
+        /// <param name="asyncScriptBody">Statements inside an async function. Use <c>return</c> to send back a stringifiable value.</param>
+        /// <param name="timeoutMs">Maximum time to wait for the script result.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The script result string when successful; otherwise null on error or timeout.</returns>
+        public async Task<string?> ExecuteAsyncScriptAsync(string asyncScriptBody, int timeoutMs = 20000, CancellationToken ct = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(asyncScriptBody);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(timeoutMs);
+
+            string correlationId = Guid.NewGuid().ToString("N");
+            TaskCompletionSource<AsyncScriptResponse> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pendingAsyncScripts[correlationId] = tcs;
+
+            using CancellationTokenRegistration cancellationRegistration = ct.Register(() =>
+            {
+                if (_pendingAsyncScripts.TryRemove(correlationId, out TaskCompletionSource<AsyncScriptResponse>? pending))
+                    pending.TrySetCanceled(ct);
+            });
+
+            string script = $@"
+                (async () => {{
+                    try {{
+                        const __sdcResult = await (async () => {{
+                            {asyncScriptBody}
+                        }})();
+
+                        const __sdcPayload = typeof __sdcResult === 'string'
+                            ? __sdcResult
+                            : JSON.stringify(__sdcResult);
+
+                        window.chrome.webview.postMessage(JSON.stringify({{
+                            id: {JsonSerializer.Serialize(correlationId)},
+                            ok: true,
+                            result: __sdcPayload
+                        }}));
+                    }} catch (err) {{
+                        window.chrome.webview.postMessage(JSON.stringify({{
+                            id: {JsonSerializer.Serialize(correlationId)},
+                            ok: false,
+                            error: err?.message || 'Unknown JS error'
+                        }}));
+                    }}
+                }})();
+            ";
+
+            try
+            {
+                await _uiOperationLock.WaitAsync(ct);
+                try
+                {
+                    await RunOnUiAsync(async () =>
+                    {
+                        await EnsureInitializedCoreAsync();
+                        EnsureAsyncScriptMessageHandler();
+                        await WebView.CoreWebView2.ExecuteScriptAsync(script);
+                    });
+                }
+                finally
+                {
+                    _uiOperationLock.Release();
+                }
+
+                Task completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs, ct));
+                if (completed != tcs.Task)
+                {
+                    _pendingAsyncScripts.TryRemove(correlationId, out _);
+                    AppLogger.Warn("WebViewAsync", $"Async script timed out after {timeoutMs}ms.");
+                    return null;
+                }
+
+                AsyncScriptResponse response = await tcs.Task;
+                if (!response.Ok)
+                {
+                    AppLogger.Warn("WebViewAsync", $"Async script failed: {response.Error}");
+                    return null;
+                }
+
+                return response.Result;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                _pendingAsyncScripts.TryRemove(correlationId, out _);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _pendingAsyncScripts.TryRemove(correlationId, out _);
+                AppLogger.Warn("WebViewAsync", $"ExecuteAsyncScriptAsync exception: {ex.Message}");
+                return null;
+            }
+        }
+
         /// <summary>
         /// Asynchronously waits for the next navigation to complete in the associated WebView control.
         /// </summary>
@@ -923,9 +1123,12 @@ namespace UI.Views
         /// not initiate navigation; it only observes completion.</remarks>
         /// <returns>A task that completes when the next navigation has finished. The task completes successfully when navigation
         /// is complete.</returns>
-        public Task WaitForNavigationAsync()
+        public Task WaitForNavigationAsync() =>
+            RunOnUiAsync(WaitForNavigationCoreAsync);
+
+        private Task WaitForNavigationCoreAsync()
         {
-            TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             void handler(object? s, CoreWebView2NavigationCompletedEventArgs e)
             {
@@ -943,15 +1146,15 @@ namespace UI.Views
         /// only after the DOM has finished loading. This is particularly useful when interacting with dynamic content
         /// or scripts that depend on the DOM being fully constructed.</remarks>
         /// <returns>A task that completes when the DOM is in a ready state.</returns>
-        public async Task WaitForDomReadyAsync()
+        public Task WaitForDomReadyAsync() =>
+            RunOnUiAsync(WaitForDomReadyCoreAsync);
+
+        private async Task WaitForDomReadyCoreAsync()
         {
             while (true)
             {
-                string result = await WebView.ExecuteScriptAsync(
-                    "document.readyState"
-                );
+                string result = await WebView.CoreWebView2.ExecuteScriptAsync("document.readyState");
 
-                // result comes back as a quoted string: "\"complete\""
                 if (result.Contains("complete", StringComparison.OrdinalIgnoreCase))
                     break;
 
