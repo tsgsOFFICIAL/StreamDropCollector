@@ -68,7 +68,19 @@ namespace UI
         private static readonly System.Timers.Timer _evictionTimer;
 
         // -- Static Initializer ------------------------------------------------
-        
+        static ImageEx()
+        {
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122 Safari/537.36");
+
+            Directory.CreateDirectory(CacheDir);
+
+            _evictionTimer = new System.Timers.Timer(EvictionInterval.TotalMilliseconds)
+            {
+                AutoReset = true
+            };
+            _evictionTimer.Elapsed += (_, _) => RunEviction();
+            _evictionTimer.Start();
+        }
 
         // -- Property Changed Handler ------------------------------------------
         private static async void OnSourceUrlChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
