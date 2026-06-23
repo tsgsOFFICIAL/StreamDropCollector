@@ -3,11 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:UI"
              xmlns:converters="clr-namespace:UI.Converters"
-             StartupUri="MainWindow.xaml">
+>
     <Application.Resources>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <converters:PercentToWidthConverter x:Key="PercentToWidthConverter"/>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+        <converters:ResourceKeyToBrushConverter x:Key="ResourceKeyToBrushConverter"/>
+        <converters:PlatformToBrushKeyConverter x:Key="PlatformToBrushKeyConverter"/>
+        <converters:StringToImageSourceConverter x:Key="StringToImageSourceConverter"/>
+        <converters:StreamerAvatarBrushConverter x:Key="StreamerAvatarBrushConverter"/>
     </Application.Resources>
 </Application>

@@ -9,8 +9,7 @@ namespace Core.Models
     /// <param name="Name">The display name of the reward.</param>
     /// <param name="ImageUrl">The URL of the image representing the reward, or null if no image is available.</param>
     /// <param name="RequiredMinutes">The total number of minutes required to earn the reward.</param>
-    /// <param name="ProgressMinutes">The number of minutes of progress accumulated toward earning the reward API Based. Defaults to 0.</param>
-    /// <param name="ProgressMinutes">The number of minutes of progress accumulated toward earning the reward Mutable for display. Defaults to 0.</param>
+    /// <param name="ProgressMinutes">The number of minutes of progress accumulated toward earning the reward. Defaults to 0.</param>
     /// <param name="IsClaimed">true if the reward has been claimed; otherwise, false. Defaults to false.</param>
     /// <param name="DropInstanceId">The identifier of the specific drop instance associated with this reward, or null if not applicable.</param>
     /// <param name="IsCurrentReward">true if this reward is currently being progressed; otherwise, false. Defaults to false.</param>
@@ -29,6 +28,7 @@ namespace Core.Models
     /// <param name="Id">The unique identifier for the drops campaign.</param>
     /// <param name="Name">The display name of the drops campaign.</param>
     /// <param name="Slug">A URL-friendly identifier for the campaign, often used in API endpoints or web URLs.</param>
+    /// <param name="GameId">The platform game identifier when available (Twitch Helix game id from drops inventory).</param>
     /// <param name="GameName">The name of the game associated with the campaign.</param>
     /// <param name="GameImageUrl">The URL of the image representing the game. Can be null if no image is available.</param>
     /// <param name="StartsAt">The date and time when the campaign becomes active, in UTC.</param>
@@ -36,11 +36,13 @@ namespace Core.Models
     /// <param name="Rewards">A read-only list of rewards available in this campaign. Cannot be null or empty.</param>
     /// <param name="Platform">The platform on which the campaign is available.</param>
     /// <param name="ConnectUrls">A read-only list of URLs that users can use to connect their accounts for eligibility. Cannot be null.</param>
-    /// <param name="IsCurrentCampaign">true if this campaign is currently being watched; otherwise, false. Defaults to false.</param>
+    /// <param name="IsGeneralDrop">true if the campaign is a general (non-game-specific) drop event; otherwise, false.</param>
+    /// <param name="IsCurrentCampaign">true if this campaign is currently being mined; otherwise, false. Defaults to false.</param>
     public record DropsCampaign(
         string Id,
         string Name,
         string Slug,
+        string? GameId,
         string GameName,
         string? GameImageUrl,
         DateTimeOffset StartsAt,
@@ -51,6 +53,9 @@ namespace Core.Models
         bool IsGeneralDrop,
         bool IsCurrentCampaign = false)
     {
+        /// <summary>
+        /// Gets a value indicating whether every reward in the campaign has been claimed.
+        /// </summary>
         public bool AllRewardsClaimed => Rewards.All(r => r.IsClaimed);
     }
 }

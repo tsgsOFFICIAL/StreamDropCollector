@@ -1,0 +1,416 @@
+﻿<UserControl x:Class="UI.Controls.CampaignStreamersSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:UI.Converters"
+             xmlns:controls="clr-namespace:UI.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="220" d:DesignWidth="700"
+             x:Name="Root">
+
+    <UserControl.Resources>
+        <converters:StreamerAvatarBrushConverter x:Key="StreamerAvatarBrushConverter"/>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+        <Style x:Key="StreamerChipBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource InsetBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="15"/>
+            <Setter Property="Padding" Value="4,4,10,4"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="MaxWidth" Value="140"/>
+            <Setter Property="Opacity" Value="{Binding ChipOpacity}"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsClickable}" Value="True">
+                    <Setter Property="Cursor" Value="Hand"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsClickable}" Value="True"/>
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StreamerChipNameStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsClickable}" Value="True"/>
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StreamerTileBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="6,6,8,6"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="MinWidth" Value="130"/>
+            <Setter Property="Opacity" Value="{Binding ChipOpacity}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StreamerTileNameStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="StreamerChipTemplate">
+            <Border Style="{StaticResource StreamerChipBorderStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <Grid Width="22" Height="22" Margin="0,0,6,0">
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasProfileImage}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Ellipse Width="22" Height="22"
+                                     Fill="{Binding AvatarColorIndex, Converter={StaticResource StreamerAvatarBrushConverter}}">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                                <Setter Property="Opacity" Value="0.6"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding Initials}"
+                                       FontSize="9"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <controls:RoundedImage SourceUrl="{Binding ProfileImageUrl}"
+                                               ImageWidth="22"
+                                               ImageHeight="22"
+                                               CornerRadius="11"
+                                               Visibility="{Binding HasProfileImage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <controls:RoundedImage.Style>
+                                <Style TargetType="controls:RoundedImage">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                            <Setter Property="Opacity" Value="0.6"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </controls:RoundedImage.Style>
+                        </controls:RoundedImage>
+                        <Ellipse Width="8" Height="8"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Bottom"
+                                 Margin="0,0,-1,-1"
+                                 Stroke="{DynamicResource InsetBackgroundBrush}"
+                                 StrokeThickness="2">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#5A5A5A"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLive}" Value="True">
+                                            <Setter Property="Fill" Value="#FF4D4D"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                    </Grid>
+                    <TextBlock Text="{Binding Name}" Style="{StaticResource StreamerChipNameStyle}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StreamerTileTemplate">
+            <Border Style="{StaticResource StreamerTileBorderStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <Grid Width="28" Height="28" Margin="0,0,8,0">
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasProfileImage}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Ellipse Width="28" Height="28"
+                                     Fill="{Binding AvatarColorIndex, Converter={StaticResource StreamerAvatarBrushConverter}}">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                                <Setter Property="Opacity" Value="0.6"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding Initials}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <controls:RoundedImage SourceUrl="{Binding ProfileImageUrl}"
+                                               ImageWidth="28"
+                                               ImageHeight="28"
+                                               CornerRadius="14"
+                                               Visibility="{Binding HasProfileImage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <controls:RoundedImage.Style>
+                                <Style TargetType="controls:RoundedImage">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                            <Setter Property="Opacity" Value="0.6"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </controls:RoundedImage.Style>
+                        </controls:RoundedImage>
+                        <Ellipse Width="9" Height="9"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Bottom"
+                                 Margin="0,0,-1,-1"
+                                 Stroke="{DynamicResource CardBackgroundBrush}"
+                                 StrokeThickness="2">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#5A5A5A"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLive}" Value="True">
+                                            <Setter Property="Fill" Value="#FF4D4D"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                    </Grid>
+                    <TextBlock Text="{Binding Name}" Style="{StaticResource StreamerTileNameStyle}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel x:Name="ContentHost"
+                DataContext="{Binding ElementName=Root}"
+                Visibility="{Binding HasStreamers, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Border BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Margin="0,16,0,0"
+                Padding="0,14,0,0">
+            <StackPanel>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Eligible streamers"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock FontSize="13"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="6,0,0,0">
+                            <Run Text="("/>
+                            <Run Text="{Binding TotalCount, Mode=OneWay}"/>
+                            <Run Text=")"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Margin="16,0,0,0"
+                                Visibility="{Binding ShowsLiveUi, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Ellipse Width="8" Height="8" Fill="#FF4D4D" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center">
+                            <Run Text="{Binding LiveCount, Mode=OneWay}" FontWeight="Bold" Foreground="#FF4D4D"/>
+                            <Run Text=" live now"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+
+                <WrapPanel PreviewMouseLeftButtonDown="OnPreviewChipsMouseDown">
+                    <ItemsControl ItemsSource="{Binding PreviewChips}"
+                                  ItemTemplate="{StaticResource StreamerChipTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+
+                    <Button Content="{Binding MoreButtonText}"
+                            Margin="0,0,0,6"
+                            VerticalAlignment="Center"
+                            Click="OnMoreButtonClick"
+                            Visibility="{Binding ShowExpandedPanel, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource StreamerMoreButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                        <Setter Property="Background" Value="#1F00FF9D"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="Tag" Value="Expanded"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                        <Setter Property="Tag" Value="{x:Null}"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <Button.ToolTip>
+                            <ToolTip Content="{Binding MoreButtonTooltip}"/>
+                        </Button.ToolTip>
+                    </Button>
+                </WrapPanel>
+
+                <Border Visibility="{Binding IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Background="{DynamicResource InsetBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="0,10,0,0"
+                        ClipToBounds="True">
+                    <StackPanel>
+                        <Border Background="#1E1E1E"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="12,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0" Margin="0,0,10,0">
+                                    <TextBox Style="{StaticResource StreamerSearchTextBoxStyle}"
+                                             Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBlock Text="Search streamers…"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               Margin="8,0,0,0"
+                                               VerticalAlignment="Center"
+                                               IsHitTestVisible="False">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SearchQuery}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+
+                                <Button Grid.Column="1"
+                                        Content="Live only"
+                                        Margin="0,0,6,0"
+                                        Click="OnLiveFilterClick"
+                                        Visibility="{Binding ShowsLiveUi, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource StreamerFilterButtonStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FilterLiveOnly}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+
+                                <Button Grid.Column="2"
+                                        Content="All"
+                                        Click="OnAllFilterClick"
+                                        Visibility="{Binding ShowsLiveUi, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource StreamerFilterButtonStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FilterAllActive}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto" Padding="12,12,12,4">
+                            <Grid>
+                                <ItemsControl ItemsSource="{Binding FilteredStreamers}"
+                                              ItemTemplate="{StaticResource StreamerTileTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                                <TextBlock Text="No streamers match your search."
+                                           FontSize="12"
+                                           FontStyle="Italic"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Visibility="{Binding ShowEmptyFilteredMessage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <Border BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="0,1,0,0"
+                                Padding="12,8">
+                            <TextBlock Text="{Binding FooterText}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

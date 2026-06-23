@@ -4,221 +4,10 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:enums="clr-namespace:Core.Enums;assembly=Core"
+             xmlns:controls="clr-namespace:UI.Controls"
              mc:Ignorable="d"
              d:DesignHeight="900" d:DesignWidth="800"
              Background="{DynamicResource MainBackgroundBrush}">
-
-    <UserControl.Resources>
-        <!-- MODERN CHECKBOX - NOW FULLY THEMED -->
-        <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <Grid Background="Transparent">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border x:Name="CheckBoxBorder"
-                                    Width="20" Height="20"
-                                    CornerRadius="6"
-                                    BorderThickness="2"
-                                    BorderBrush="{DynamicResource BorderBrush}"
-                                    Background="{DynamicResource CardBackgroundBrush}"
-                                    Margin="0,0,12,0"
-                                    VerticalAlignment="Center">
-                                <Path x:Name="CheckMark"
-                                      Data="M 4,10 L 8,14 L 16,6"
-                                      Stroke="{DynamicResource AccentBrush}"
-                                      StrokeThickness="3"
-                                      StrokeEndLineCap="Round"
-                                      StrokeStartLineCap="Round"
-                                      Opacity="0"
-                                      Stretch="Fill"
-                                      Width="12" Height="12"/>
-                            </Border>
-                            <ContentPresenter Grid.Column="1"
-                                              VerticalAlignment="Center"
-                                              TextBlock.Foreground="{TemplateBinding Foreground}"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                <Setter TargetName="CheckBoxBorder" Property="Background" Value="#003322"/>
-                                <Setter TargetName="CheckMark" Property="Opacity" Value="1"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- NEON FLAT COMBOBOX - NOW USING DYNAMIC RESOURCES -->
-        <Style x:Key="NeonFlatComboBoxStyle" TargetType="ComboBox">
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="Padding" Value="10,0,30,0"/>
-            <Setter Property="Height" Value="40"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="SnapsToDevicePixels" Value="True"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ComboBox">
-                        <Grid>
-                            <Border x:Name="MainBorder"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8"/>
-                            <ToggleButton x:Name="ToggleButton"
-                                          Background="Transparent"
-                                          BorderBrush="Transparent"
-                                          BorderThickness="0"
-                                          Focusable="False"
-                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
-                                <ToggleButton.Template>
-                                    <ControlTemplate>
-                                        <Border Background="Transparent"/>
-                                    </ControlTemplate>
-                                </ToggleButton.Template>
-                            </ToggleButton>
-                            <ContentPresenter x:Name="ContentSite"
-                                              Margin="{TemplateBinding Padding}"
-                                              VerticalAlignment="Center"
-                                              HorizontalAlignment="Left"
-                                              Content="{TemplateBinding SelectionBoxItem}"/>
-                            <Path x:Name="Arrow"
-                                  Data="M 0,0 L 6,6 L 12,0 Z"
-                                  Fill="{DynamicResource TextMutedBrush}"
-                                  Width="10" Height="6"
-                                  HorizontalAlignment="Right"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,14,0"/>
-                            <Popup x:Name="Popup"
-                                   Placement="Bottom"
-                                   IsOpen="{TemplateBinding IsDropDownOpen}"
-                                   AllowsTransparency="True"
-                                   Focusable="False"
-                                   PopupAnimation="Slide">
-                                <Border Background="{DynamicResource CardBackgroundBrush}"
-                                        BorderBrush="{DynamicResource BorderBrush}"
-                                        BorderThickness="2"
-                                        CornerRadius="8"
-                                        MinWidth="{TemplateBinding ActualWidth}"
-                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
-                                    <ScrollViewer Padding="4" BorderThickness="0">
-                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
-                                    </ScrollViewer>
-                                </Border>
-                            </Popup>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource AccentBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsDropDownOpen" Value="True">
-                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource AccentBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="ItemContainerStyle">
-                <Setter.Value>
-                    <Style TargetType="ComboBoxItem">
-                        <Setter Property="Padding" Value="12,8"/>
-                        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ComboBoxItem">
-                                    <Border x:Name="Bd"
-                                Background="Transparent"
-                                Padding="{TemplateBinding Padding}"
-                                CornerRadius="6">
-                                        <ContentPresenter />
-                                    </Border>
-
-                                    <ControlTemplate.Triggers>
-                                        <!-- Normal hover + keyboard focus = use global hover -->
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
-                                        </Trigger>
-                                        <Trigger Property="IsKeyboardFocused" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
-                                        </Trigger>
-
-                                        <!-- Selected (no hover) -->
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ComboBoxItem.SelectedBackground}"/>
-                                            <Setter Property="Foreground" Value="{DynamicResource ComboBoxItem.SelectedForeground}"/>
-                                        </Trigger>
-
-                                        <!-- Selected + Hover = special state -->
-                                        <MultiTrigger>
-                                            <MultiTrigger.Conditions>
-                                                <Condition Property="IsSelected" Value="True"/>
-                                                <Condition Property="IsMouseOver" Value="True"/>
-                                            </MultiTrigger.Conditions>
-                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ComboBoxItem.SelectedHoverBackground}"/>
-                                        </MultiTrigger>
-
-                                        <Trigger Property="IsEnabled" Value="False">
-                                            <Setter Property="Opacity" Value="0.4"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ACCENT BUTTON - NOW-branded, stays green -->
-        <Style x:Key="AccentButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-            <Setter Property="Foreground" Value="Black"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                CornerRadius="10"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#00FFAA"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#00CC77"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </UserControl.Resources>
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -226,89 +15,53 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="Settings"
-                   FontSize="30"
-                   FontWeight="Bold"
-                   Foreground="{DynamicResource TextPrimaryBrush}"
-                   Margin="0,0,0,20"/>
+        <TextBlock Text="Settings" Style="{StaticResource PageHeader}" Margin="0,0,0,20"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,20,0">
 
-                <!-- GENERAL -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <controls:SettingsSectionCard Title="General">
                     <StackPanel>
-                        <TextBlock Text="General" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                         <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Start with Windows"
                                   Margin="0,0,0,12"/>
-
                         <CheckBox IsChecked="{Binding MinimizeToTrayOnStartup, Mode=TwoWay}"
                                   IsEnabled="{Binding StartWithWindows}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Minimize to system tray on startup"
                                   Margin="0,0,0,12"/>
-
                         <CheckBox IsChecked="{Binding RunInBackground, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Keep running when window is closed"/>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
 
-                <!-- APPEARANCE -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <controls:SettingsSectionCard Title="Appearance">
+                    <controls:SettingsLabeledRow Label="Theme" RowMargin="0,8,0,0">
+                        <ComboBox Width="200"
+                                  Style="{StaticResource NeonFlatComboBoxStyle}"
+                                  SelectedValue="{Binding Theme, Mode=TwoWay}"
+                                  SelectedValuePath="Content">
+                            <ComboBoxItem Content="Dark"/>
+                            <ComboBoxItem Content="Light"/>
+                            <ComboBoxItem Content="System"/>
+                        </ComboBox>
+                    </controls:SettingsLabeledRow>
+                </controls:SettingsSectionCard>
 
+                <controls:SettingsSectionCard Title="Updates">
                     <StackPanel>
-                        <TextBlock Text="Appearance" Foreground="{DynamicResource TextSecondaryBrush}"
-                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <TextBlock Text="Theme" Foreground="{DynamicResource TextMutedBrush}"
-                                       Width="140" VerticalAlignment="Center"/>
-                            <ComboBox Width="200"
-                                      Style="{StaticResource NeonFlatComboBoxStyle}"
-                                      SelectedValue="{Binding Theme, Mode=TwoWay}"
-                                      SelectedValuePath="Content">
-                                <ComboBoxItem Content="Dark"/>
-                                <ComboBoxItem Content="Light"/>
-                                <ComboBoxItem Content="System"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <!-- UPDATES SECTION -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                    CornerRadius="10"
-                    Padding="24"
-                    Margin="0,0,0,24"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1">
-                    <StackPanel>
-                        <!-- Header -->
-                        <TextBlock Text="Updates"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Margin="0,0,0,16"/>
-
-                        <!-- Frequency -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <TextBlock Text="Check for updates automatically"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               VerticalAlignment="Center"
-                               Margin="0,0,20,0"/>
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,20,0"/>
                             <ComboBox Width="240"
-                                 Height="40"
-                                 Style="{StaticResource NeonFlatComboBoxStyle}"
-                                 SelectedValue="{Binding UpdateFrequency, Mode=TwoWay}"
-                                 SelectedValuePath="Tag">
-                                
+                                      Height="40"
+                                      Style="{StaticResource NeonFlatComboBoxStyle}"
+                                      SelectedValue="{Binding UpdateFrequency, Mode=TwoWay}"
+                                      SelectedValuePath="Tag">
                                 <ComboBoxItem Content="Every time the app starts" Tag="{x:Static enums:UpdateFrequency.OnLaunch}"/>
                                 <ComboBoxItem Content="Daily" Tag="{x:Static enums:UpdateFrequency.Daily}"/>
                                 <ComboBoxItem Content="Weekly" Tag="{x:Static enums:UpdateFrequency.Weekly}"/>
@@ -316,42 +69,31 @@
                             </ComboBox>
                         </StackPanel>
 
-                        <!-- Status text - hidden when no update -->
                         <TextBlock Text="A new update is available, update now to experience the newest features!"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           FontSize="12"
-                           Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   FontSize="12"
+                                   Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                        <!-- Big accent button - hidden when no update -->
                         <Button Height="44"
-                            MinWidth="240"
-                            Style="{StaticResource AccentButtonStyle}"
-                            Content="Update Now"
-                            Foreground="Black"
-                            FontWeight="Bold"
-                            FontSize="13"
-                            Click="OnUpdateButtonClick"
-                            Margin="0,12,0,0"
-                            Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                MinWidth="240"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Content="Update Now"
+                                Foreground="Black"
+                                FontWeight="Bold"
+                                FontSize="13"
+                                Click="OnUpdateButtonClick"
+                                Margin="0,12,0,0"
+                                Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
 
-                <!-- DROPS BEHAVIOR -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <controls:SettingsSectionCard Title="Drops Behavior">
                     <StackPanel>
-                        <TextBlock Text="Drops Behavior" Foreground="{DynamicResource TextSecondaryBrush}"
-                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-
                         <CheckBox IsChecked="{Binding AutoClaimRewards, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Auto-claim rewards when ready"
                                   Margin="0,0,0,12"/>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                            <TextBlock Text="Mining priority" Foreground="{DynamicResource TextMutedBrush}"
-                                       Width="140" VerticalAlignment="Center"/>
+                        <controls:SettingsLabeledRow Label="Mining priority">
                             <ComboBox Width="260"
                                       Style="{StaticResource NeonFlatComboBoxStyle}"
                                       SelectedValue="{Binding MiningPriorityMode, Mode=TwoWay}"
@@ -361,131 +103,61 @@
                                 <ComboBoxItem Content="Least Time To Next Reward" Tag="{x:Static enums:MiningPriorityMode.LeastTimeToNextReward}"/>
                                 <ComboBoxItem Content="Highest Completion" Tag="{x:Static enums:MiningPriorityMode.HighestCompletion}"/>
                             </ComboBox>
-                        </StackPanel>
+                        </controls:SettingsLabeledRow>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
 
-                <!-- GAME FILTERING -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <controls:SettingsSectionCard Title="Game Filtering">
                     <StackPanel>
-                        <TextBlock Text="Game Filtering" Foreground="{DynamicResource TextSecondaryBrush}"
-                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
                         <TextBlock Text="If no games are selected, all games are allowed."
-                                   Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,12"/>
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,12"/>
 
-                        <TextBlock Text="Twitch" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                        <TextBlock Text="{Binding TwitchWhitelistSummary}" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"/>
-                        <Border Background="{DynamicResource MainBackgroundBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="8"
-                                Margin="0,0,0,6">
-                            <ListBox ItemsSource="{Binding TwitchGameFilterOptions}"
-                                     BorderThickness="0"
-                                     Background="Transparent"
-                                     MaxHeight="140">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <CheckBox Content="{Binding DisplayName}"
-                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                                  Margin="0,4,0,4"/>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </Border>
-                        <CheckBox Content="Blacklist selected games (mine everything except these)"
-                                  IsChecked="{Binding TwitchGameFilterBlacklist, Mode=TwoWay}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  Margin="0,0,0,8"/>
-                        <Button Content="Clear Twitch whitelist"
-                                Style="{StaticResource AccentButtonStyle}"
-                                HorizontalAlignment="Left"
-                                Click="OnClearTwitchWhitelistClick"
-                                Margin="0,0,0,12"/>
+                        <controls:GameFilterPanel PlatformTitle="Twitch"
+                                              WhitelistSummary="{Binding TwitchWhitelistSummary}"
+                                              GameOptions="{Binding TwitchGameFilterOptions}"
+                                              IsBlacklistMode="{Binding TwitchGameFilterBlacklistMode, Mode=TwoWay}"
+                                              ClearButtonText="Clear Twitch whitelist"
+                                              ClearButtonMargin="0,0,0,12"
+                                              ClearClick="OnClearTwitchWhitelistClick"/>
 
-                        <TextBlock Text="Kick" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                        <TextBlock Text="{Binding KickWhitelistSummary}" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"/>
-                        <Border Background="{DynamicResource MainBackgroundBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="8"
-                                Margin="0,0,0,6">
-                            <ListBox ItemsSource="{Binding KickGameFilterOptions}"
-                                     BorderThickness="0"
-                                     Background="Transparent"
-                                     MaxHeight="140">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <CheckBox Content="{Binding DisplayName}"
-                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                                  Margin="0,4,0,4"/>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </Border>
-                        <CheckBox Content="Blacklist selected games (mine everything except these)"
-                                  IsChecked="{Binding KickGameFilterBlacklist, Mode=TwoWay}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  Margin="0,0,0,8"/>
-                        <Button Content="Clear Kick whitelist"
-                                Style="{StaticResource AccentButtonStyle}"
-                                HorizontalAlignment="Left"
-                                Click="OnClearKickWhitelistClick"/>
+                        <controls:GameFilterPanel PlatformTitle="Kick"
+                                                  WhitelistSummary="{Binding KickWhitelistSummary}"
+                                                  GameOptions="{Binding KickGameFilterOptions}"
+                                                  IsBlacklistMode="{Binding KickGameFilterBlacklistMode, Mode=TwoWay}"
+                                                  ClearButtonText="Clear Kick whitelist"
+                                                  ClearClick="OnClearKickWhitelistClick"/>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
 
-                <!-- NOTIFICATIONS -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <controls:SettingsSectionCard Title="Notifications">
                     <StackPanel>
-                        <TextBlock Text="Notifications" Foreground="{DynamicResource TextSecondaryBrush}"
-                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
-
                         <CheckBox IsChecked="{Binding NotifyOnReadyToClaim, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop ready to claim (only if auto-claim is off)"
                                   Margin="0,0,0,12"
                                   IsEnabled="{Binding AutoClaimRewards, Converter={StaticResource InverseBooleanConverter}}"/>
-
                         <CheckBox IsChecked="{Binding NotifyOnAutoClaimed, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Drop successfully auto-claimed (only if auto-claim is on)"
                                   Margin="0,0,0,12"
                                   IsEnabled="{Binding AutoClaimRewards}"/>
-
                         <CheckBox IsChecked="{Binding NotifyOnNewUpdateAvailable, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="New update is available"
                                   Margin="0,0,0,12"
                                   IsEnabled="{Binding IsUpdateNotificationEnabled}"/>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
 
-                <!-- LOGS -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <controls:SettingsSectionCard Title="Logs">
                     <StackPanel>
-                        <TextBlock Text="Logs"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"
-                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
                         <TextBlock Text="Open the folder containing diagnostic logs for support tickets."
                                    Foreground="{DynamicResource TextMutedBrush}"
-                                   FontSize="13" Margin="0,0,0,12"/>
+                                   FontSize="13"
+                                   Margin="0,0,0,12"/>
 
-                        <Border Background="{DynamicResource MainBackgroundBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="12"
-                                Margin="0,0,0,12">
+                        <Border Style="{StaticResource InsetPanelBorder}" Padding="12" Margin="0,0,0,12">
                             <StackPanel>
                                 <CheckBox IsChecked="{Binding VerboseDebugLogging, Mode=TwoWay}"
                                           Style="{StaticResource ModernCheckBoxStyle}"
@@ -504,57 +176,39 @@
                                 HorizontalAlignment="Left"
                                 Click="OnOpenLogsFolderClick"/>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
 
-                <!-- DANGER ZONE -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Margin="0,0,0,24"
-                        BorderBrush="#FF5555" BorderThickness="2">
+                <controls:SettingsSectionCard Title="Accounts" IsDanger="True">
                     <StackPanel>
-                        <TextBlock Text="Accounts"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"
-                                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                         <TextBlock Text="DANGER ZONE"
-                                   Foreground="#FF5555" FontSize="16" FontWeight="Bold" Margin="0,8,0,4"/>
+                                   Foreground="#FF5555"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Margin="0,8,0,4"/>
                         <TextBlock Text="Permanently delete ALL logged-in accounts from this device"
-                                   Foreground="#FFAAAA" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                   Foreground="#FFAAAA"
+                                   FontSize="13"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"/>
                         <Button Content="Remove ALL Accounts"
-                                Background="#B33A3A"
-                                Foreground="White"
-                                FontWeight="SemiBold"
-                                Padding="28,14"
+                                Style="{StaticResource DangerButtonStyle}"
                                 HorizontalAlignment="Left"
-                                Cursor="Hand"
-                                Click="OnRemoveAllAccountsButtonClick">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
-                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#D44A4A"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Button.Template>
-                        </Button>
+                                Click="OnRemoveAllAccountsButtonClick"/>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
 
-                <!-- COMING SOON -->
-                <Border Background="{DynamicResource CardBackgroundBrush}"
-                        CornerRadius="10" Padding="24" Opacity="0.5"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <controls:SettingsSectionCard SectionMargin="0" SectionOpacity="0.5">
                     <StackPanel>
                         <TextBlock Text="Your ideas could be here! (coming soon)"
                                    Foreground="{DynamicResource TextMutedBrush}"
-                                   FontSize="16" FontStyle="Italic" Margin="0,0,0,8"/>
+                                   FontSize="16"
+                                   FontStyle="Italic"
+                                   Margin="0,0,0,8"/>
                         <TextBlock Text="Drop your suggestions, to have them implemented here"
                                    Foreground="{DynamicResource TextMutedBrush}"
                                    FontSize="13"/>
                     </StackPanel>
-                </Border>
+                </controls:SettingsSectionCard>
             </StackPanel>
         </ScrollViewer>
     </Grid>

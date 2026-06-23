@@ -28,4 +28,5 @@
     
     <SolidColorBrush x:Key="AccentBrush"              Color="#00FF9D"/>
     <SolidColorBrush x:Key="SecondaryAccentBrush"     Color="#3BAFFF"/>
+    <SolidColorBrush x:Key="InsetBackgroundBrush"    Color="#222222"/>
 </ResourceDictionary>

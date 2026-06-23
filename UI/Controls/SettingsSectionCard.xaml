@@ -1,0 +1,34 @@
+﻿<UserControl x:Class="UI.Controls.SettingsSectionCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="200" d:DesignWidth="600"
+             x:Name="Root">
+
+    <Border Margin="{Binding SectionMargin, ElementName=Root}"
+            Opacity="{Binding SectionOpacity, ElementName=Root}"
+            Background="{DynamicResource CardBackgroundBrush}"
+            CornerRadius="10"
+            Padding="24"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsDanger, ElementName=Root}" Value="True">
+                        <Setter Property="BorderBrush" Value="#FF5555"/>
+                        <Setter Property="BorderThickness" Value="2"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+        <StackPanel>
+            <TextBlock Text="{Binding Title, ElementName=Root}"
+                       Style="{StaticResource SettingsSectionTitle}"
+                       Visibility="{Binding Title, ElementName=Root, Converter={StaticResource StringToVisibilityConverter}}"/>
+            <ContentPresenter Content="{Binding SectionContent, ElementName=Root}"/>
+        </StackPanel>
+    </Border>
+</UserControl>

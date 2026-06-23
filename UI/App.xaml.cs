@@ -15,6 +15,9 @@ namespace UI
     /// </summary>
     public partial class App : System.Windows.Application
     {
+        /// <summary>
+        /// Gets a value indicating whether the application was launched with the <c>--debug</c> command-line flag.
+        /// </summary>
         public static bool IsDebugMode { get; private set; }
 
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
@@ -25,6 +28,9 @@ namespace UI
 
         private Mutex? _instanceMutex;
 
+        /// <summary>
+        /// Initializes the application and registers global unhandled exception handlers.
+        /// </summary>
         public App()
         {
             // Handle UI thread exceptions
@@ -34,39 +40,61 @@ namespace UI
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
         }
 
+        /// <summary>
+        /// Performs application startup initialization, including single-instance enforcement, theme loading, and logging setup.
+        /// </summary>
+        /// <param name="e">Startup event data containing command-line arguments.</param>
         protected override void OnStartup(StartupEventArgs e)
         {
-            AppLogger.Initialize();
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-            FileVersionInfo localVersionInfo = FileVersionInfo.GetVersionInfo(Utility.GetExePath());
-            string versionInfo = localVersionInfo.FileVersion ?? "N/A";
-
-            // Log app startup + Version
-            AppLogger.Info("App", $"Starting StreamDropCollector version {versionInfo}");
-
+            // Auto-update passes --updating/--updated so a second process can run while the old one shuts down.
             bool ignoreMutexRule = e.Args.Any(a => a.Equals("--updating", StringComparison.OrdinalIgnoreCase) || a.Equals("--updated", StringComparison.OrdinalIgnoreCase));
 
-            _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
-
-            if (!createdNew && !ignoreMutexRule)
+            // TryOpenExisting avoids blocking on new Mutex(true, ...) when another instance already holds the lock.
+            if (!ignoreMutexRule && Mutex.TryOpenExisting(MutexName, out Mutex? existingMutex))
             {
-                // Notify existing instance
+                existingMutex.Dispose();
+                AppLogger.Initialize();
                 AppLogger.Warn("App", "Second instance detected; signaling existing instance and shutting down.");
                 TryActivateExistingInstance();
                 Shutdown();
                 return;
             }
 
+            _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
+            if (!createdNew && !ignoreMutexRule)
+            {
+                AppLogger.Initialize();
+                AppLogger.Warn("App", "Second instance detected after mutex creation; signaling existing instance and shutting down.");
+                TryActivateExistingInstance();
+                _instanceMutex.Dispose();
+                _instanceMutex = null;
+                Shutdown();
+                return;
+            }
+
+            AppLogger.Initialize();
+
+            FileVersionInfo localVersionInfo = FileVersionInfo.GetVersionInfo(Utility.GetExePath());
+            string versionInfo = localVersionInfo.FileVersion ?? "N/A";
+
+            AppLogger.Info("App", $"Starting StreamDropCollector version {versionInfo}");
+
             base.OnStartup(e);
 
-            IsDebugMode = e.Args.Contains("-debug");
+            IsDebugMode = e.Args.Contains("--debug");
 
             Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
-            // Load Colors first
+            // Load Colors and shared control styles first
             Resources.MergedDictionaries.Add(new ResourceDictionary
             {
                 Source = new Uri("/Themes/Colors.xaml", UriKind.Relative)
+            });
+            Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri("/Themes/Controls.xaml", UriKind.Relative)
             });
 
             // Load theme
@@ -83,25 +111,37 @@ namespace UI
 
             // REACT TO WINDOWS THEME CHANGE IN REAL TIME
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+
+            MainWindow mainWindow = new MainWindow();
+            mainWindow.Show();
         }
 
+        /// <summary>
+        /// Signals the running instance over a named pipe so it can restore and focus its main window.
+        /// </summary>
+        /// <remarks>Retries briefly because the pipe server starts after <see cref="MainWindow"/> loads.</remarks>
         private static void TryActivateExistingInstance()
         {
-            try
+            for (int attempt = 0; attempt < 10; attempt++)
             {
-                using NamedPipeClientStream client = new NamedPipeClientStream(
-                    ".",
-                    PipeName,
-                    PipeDirection.Out);
+                try
+                {
+                    using NamedPipeClientStream client = new NamedPipeClientStream(
+                        ".",
+                        PipeName,
+                        PipeDirection.Out,
+                        PipeOptions.None);
 
-                client.Connect(500);
-                using StreamWriter writer = new StreamWriter(client);
-                writer.WriteLine("ACTIVATE");
-                writer.Flush();
-            }
-            catch
-            {
-                // Existing instance not ready yet - safe to ignore
+                    client.Connect(300);
+                    using StreamWriter writer = new StreamWriter(client);
+                    writer.WriteLine("ACTIVATE");
+                    writer.Flush();
+                    return;
+                }
+                catch
+                {
+                    Thread.Sleep(200);
+                }
             }
         }
 
@@ -156,10 +196,29 @@ namespace UI
             }
         }
 
-        // Clean up event when app closes
+        /// <summary>
+        /// Releases the single-instance mutex and unsubscribes from system theme change notifications.
+        /// </summary>
+        /// <param name="e">Exit event data.</param>
         protected override void OnExit(ExitEventArgs e)
         {
             SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+
+            if (_instanceMutex != null)
+            {
+                try
+                {
+                    _instanceMutex.ReleaseMutex();
+                }
+                catch (System.ApplicationException)
+                {
+                    // Mutex was not owned by this thread.
+                }
+
+                _instanceMutex.Dispose();
+                _instanceMutex = null;
+            }
+
             base.OnExit(e);
         }
 

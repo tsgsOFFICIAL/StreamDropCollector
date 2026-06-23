@@ -1,6 +1,3 @@
-﻿using System.Windows.Navigation;
-using System.Windows;
-
 namespace UI.Views
 {
     /// <summary>
@@ -9,21 +6,15 @@ namespace UI.Views
     public partial class HelpView : System.Windows.Controls.UserControl
     {
         private static readonly Lazy<HelpView> _instance = new(() => new HelpView());
+
+        /// <summary>
+        /// Gets the singleton instance of the help view.
+        /// </summary>
         public static HelpView Instance => _instance.Value;
 
         private HelpView()
         {
             InitializeComponent();
-        }
-
-        private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
-        {
-            Core.Utility.LaunchWeb(e.Uri.AbsoluteUri);
-        }
-
-        private void OnBuyMeCoffeeButtonClicked(object sender, RoutedEventArgs e)
-        {
-            Core.Utility.LaunchWeb("https://ko-fi.com/tsgsOFFICIAL");
         }
     }
 }

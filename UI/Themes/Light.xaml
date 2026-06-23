@@ -27,4 +27,5 @@
     <Color x:Key="CardBackgroundColor">#FFFFFF</Color>
     <SolidColorBrush x:Key="AccentBrush"              Color="#00C878"/>
     <SolidColorBrush x:Key="SecondaryAccentBrush"     Color="#1F6FFF"/>
+    <SolidColorBrush x:Key="InsetBackgroundBrush"    Color="#F0F0F0"/>
 </ResourceDictionary>

@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
-using Core.Logging;
 using Core.Interfaces;
+using Core.Logging;
 using Core.Models;
 using Core.Enums;
 
@@ -33,7 +33,7 @@ namespace Core.Services
         {
             try
             {
-                AppLogger.Info("KickDrops", "Fetching active campaigns started.");
+                AppLogger.Debug("KickDrops", "Fetching active campaigns started.");
                 await host.EnsureInitializedAsync();
 
                 // 1. Get full campaign data (Channels, Rewards, etc.)
@@ -123,6 +123,7 @@ namespace Core.Services
                             Id: campaign.GetProperty("id").GetString()!,
                             Name: campaign.GetProperty("name").GetString()!,
                             Slug: "",
+                            GameId: null,
                             GameName: organization.GetProperty("name").GetString()!,
                             GameImageUrl: organization.GetProperty("logo_url").GetString(),
                             StartsAt: DateTimeOffset.Parse(campaign.GetProperty("starts_at").GetString()!),
@@ -139,6 +140,7 @@ namespace Core.Services
                             Id: campaign.GetProperty("id").GetString()!,
                             Name: campaign.GetProperty("name").GetString()!,
                             Slug: category.GetProperty("slug").GetString()!,
+                            GameId: null,
                             GameName: category.GetProperty("name").GetString()!,
                             GameImageUrl: category.GetProperty("image_url").GetString(),
                             StartsAt: DateTimeOffset.Parse(campaign.GetProperty("starts_at").GetString()!),
@@ -214,8 +216,7 @@ namespace Core.Services
                     }
                 }
 
-                AppLogger.Debug("KickDrops", $"LOADED {campaigns.Count} campaigns with progress");
-                AppLogger.Info("KickDrops", $"Active campaigns fetched successfully. count={campaigns.Count}");
+                AppLogger.Debug("KickDrops", $"Active campaigns fetched successfully. count={campaigns.Count}");
                 return campaigns.AsReadOnly();
             }
             catch (Exception ex)

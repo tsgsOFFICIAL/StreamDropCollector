@@ -1,0 +1,90 @@
+﻿<UserControl x:Class="UI.Controls.HelpDonationCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="300" d:DesignWidth="600"
+             HorizontalAlignment="Stretch"
+             HorizontalContentAlignment="Stretch">
+
+    <Border Background="{DynamicResource CardBackgroundBrush}"
+            HorizontalAlignment="Stretch"
+            CornerRadius="16"
+            Padding="32"
+            Margin="0,60,0,40"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1">
+        <StackPanel HorizontalAlignment="Center">
+            <TextBlock Text="FUEL THE MACHINE"
+                       FontSize="28"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource AccentBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,20">
+                <TextBlock.Effect>
+                    <DropShadowEffect Color="{DynamicResource AccentColor}"
+                                      ShadowDepth="0" BlurRadius="10" Opacity="0.69"/>
+                </TextBlock.Effect>
+            </TextBlock>
+
+            <TextBlock Text="This tool is 100% free. Always will be.&#10;But if you're farming 24/7 and want to throw some ammo at the dev..."
+                       FontSize="15"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       LineHeight="24"
+                       Margin="0,0,0,24"/>
+
+            <Button Width="380"
+                    Height="70"
+                    Cursor="Hand"
+                    Background="{DynamicResource AccentBrush}"
+                    BorderThickness="0"
+                    FontSize="22"
+                    FontWeight="Bold"
+                    Foreground="Black"
+                    Content="BUY ME A COFFEE"
+                    Click="OnBuyMeCoffeeClick">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="35"
+                                Padding="20">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Border.Effect>
+                                <DropShadowEffect Color="{DynamicResource AccentColor}"
+                                                  BlurRadius="30"
+                                                  ShadowDepth="0"
+                                                  Opacity="0.8"/>
+                            </Border.Effect>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#00FFAA"/>
+                                <Setter Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="1.05" ScaleY="1.05"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#00CC77"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <Button.RenderTransform>
+                    <ScaleTransform/>
+                </Button.RenderTransform>
+            </Button>
+
+            <TextBlock Text="Your drops. My war. Let's keep winning."
+                       FontSize="14"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       FontStyle="Italic"
+                       HorizontalAlignment="Center"
+                       Margin="0,20,0,0"/>
+        </StackPanel>
+    </Border>
+</UserControl>

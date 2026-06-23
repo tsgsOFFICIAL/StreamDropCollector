@@ -1,0 +1,31 @@
+﻿<UserControl x:Class="UI.Controls.ConnectionStatusCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:controls="clr-namespace:UI.Controls"
+             xmlns:models="clr-namespace:UI.Models"
+             mc:Ignorable="d"
+             d:DesignHeight="200" d:DesignWidth="300"
+             x:Name="Root">
+
+    <Border Background="{DynamicResource CardBackgroundBrush}"
+            Padding="20"
+            CornerRadius="8"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1">
+        <StackPanel>
+            <TextBlock Text="Connection Status" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="16"/>
+
+            <StackPanel Margin="0,10,0,0">
+                <controls:PlatformConnectionRow DataContext="{Binding TwitchConnection, ElementName=Root}"/>
+                <controls:PlatformConnectionRow DataContext="{Binding KickConnection, ElementName=Root}"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Left">
+                    <controls:PlatformLoginButton DataContext="{Binding KickConnection, ElementName=Root}" Margin="0,0,10,0" LoginClick="OnKickLoginClick"/>
+                    <controls:PlatformLoginButton DataContext="{Binding TwitchConnection, ElementName=Root}" LoginClick="OnTwitchLoginClick"/>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

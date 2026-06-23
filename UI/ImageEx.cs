@@ -4,15 +4,19 @@ using System.Security.Cryptography;
 using System.Net.Http;
 using System.Windows;
 using System.Text;
-using UI.Views;
 using System.IO;
+using UI.Views;
 
 namespace UI
 {
+    /// <summary>
+    /// Attached property helpers that load remote images into WPF <see cref="System.Windows.Controls.Image"/> controls with memory and disk caching.
+    /// </summary>
     public static class ImageEx
     {
-        // -- Dependency Property ----------------------------------------------
-
+        /// <summary>
+        /// Identifies the <see cref="SourceUrl"/> attached property used to bind a remote image URL to an image control.
+        /// </summary>
         public static readonly DependencyProperty SourceUrlProperty =
             DependencyProperty.RegisterAttached(
                 "SourceUrl",
@@ -20,14 +24,23 @@ namespace UI
                 typeof(ImageEx),
                 new PropertyMetadata(null, OnSourceUrlChanged));
 
+        /// <summary>
+        /// Sets the remote image URL attached to the specified dependency object.
+        /// </summary>
+        /// <param name="obj">The target dependency object, typically a WPF image control.</param>
+        /// <param name="value">The image URL to load.</param>
         public static void SetSourceUrl(DependencyObject obj, string value) =>
             obj.SetValue(SourceUrlProperty, value);
 
+        /// <summary>
+        /// Gets the remote image URL attached to the specified dependency object.
+        /// </summary>
+        /// <param name="obj">The target dependency object, typically a WPF image control.</param>
+        /// <returns>The attached image URL, or null if none is set.</returns>
         public static string GetSourceUrl(DependencyObject obj) =>
             (string)obj.GetValue(SourceUrlProperty);
 
         // -- Cache Config -----------------------------------------------------
-
         private static readonly string CacheDir = Path.Combine(
             Environment.ExpandEnvironmentVariables("%APPDATA%"),
             "Stream Drop Collector",
@@ -40,26 +53,21 @@ namespace UI
         private static readonly TimeSpan EvictionInterval = TimeSpan.FromHours(1);
 
         // -- Memory Cache -----------------------------------------------------
-
         private record MemoryCacheEntry(byte[] Bytes, DateTime LastAccessed);
 
         private static readonly ConcurrentDictionary<string, MemoryCacheEntry> _memoryCache = new();
 
         // -- HTTP Client (singleton - avoids socket exhaustion) ----------------
-
         private static readonly HttpClient _http = new();
 
         // -- WebView (single shared instance for fallback fetches) -------------
-
         private static HiddenWebViewHost? _sharedWebView;
         private static readonly SemaphoreSlim _webViewLock = new(1, 1);
 
         // -- Eviction Timer ----------------------------------------------------
-
         private static readonly System.Timers.Timer _evictionTimer;
 
         // -- Static Initializer ------------------------------------------------
-
         static ImageEx()
         {
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122 Safari/537.36");
@@ -75,7 +83,6 @@ namespace UI
         }
 
         // -- Property Changed Handler ------------------------------------------
-
         private static async void OnSourceUrlChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is not System.Windows.Controls.Image img)
@@ -100,7 +107,6 @@ namespace UI
         }
 
         // -- Resolution Pipeline -----------------------------------------------
-
         private static async Task<byte[]?> ResolveImageAsync(string url)
         {
             // 1. Memory cache
@@ -140,7 +146,6 @@ namespace UI
         }
 
         // -- Fetchers ----------------------------------------------------------
-
         private static async Task<byte[]?> TryHttpFetchAsync(string url)
         {
             try
@@ -177,7 +182,6 @@ namespace UI
         }
 
         // -- Cache Persistence -------------------------------------------------
-
         private static async Task PersistToCacheAsync(string url, byte[] bytes)
         {
             _memoryCache[url] = new MemoryCacheEntry(bytes, DateTime.UtcNow);
@@ -200,7 +204,6 @@ namespace UI
         }
 
         // -- Eviction ----------------------------------------------------------
-
         private static void RunEviction()
         {
             try
@@ -238,7 +241,6 @@ namespace UI
         }
 
         // -- Bitmap Application ------------------------------------------------
-
         private static async Task ApplyBytesAsync(System.Windows.Controls.Image img, byte[] bytes)
         {
             BitmapImage? bitmap = null;

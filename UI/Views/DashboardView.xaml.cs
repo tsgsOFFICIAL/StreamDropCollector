@@ -7,8 +7,10 @@ using System.Windows;
 using Core.Logging;
 using Core.Managers;
 using Core.Services;
+using Core.Services.Twitch.Helix;
 using Core.Models;
 using Core.Enums;
+using UI.Models;
 
 namespace UI.Views
 {
@@ -32,6 +34,10 @@ namespace UI.Views
         private static bool _isInitialized = false;
 
         private static readonly Lazy<DashboardView> _instance = new(() => new DashboardView());
+
+        /// <summary>
+        /// Gets the singleton instance of the dashboard view.
+        /// </summary>
         public static DashboardView Instance => _instance.Value;
 
         // Services
@@ -41,52 +47,27 @@ namespace UI.Views
 
         // Observable collection for UI binding
         private readonly ObservableCollection<DropsCampaign> _activeCampaigns = new();
+
+        /// <summary>
+        /// Gets the read-only collection of active drop campaigns shown on the dashboard.
+        /// </summary>
         public IReadOnlyCollection<DropsCampaign> ActiveCampaigns => _activeCampaigns;
 
-        // UI Properties
-        private string _twitchConnectionStatus = "Not Connected";
-        public string TwitchConnectionStatus
-        {
-            get => _twitchConnectionStatus;
-            set
-            {
-                _twitchConnectionStatus = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchConnectionColor = "Red";
-        public string TwitchConnectionColor
-        {
-            get => _twitchConnectionColor;
-            set
-            {
-                _twitchConnectionColor = value;
-                OnPropertyChanged();
-            }
-        }
+        /// <summary>
+        /// Gets the bindable Twitch account connection state for the dashboard.
+        /// </summary>
+        public PlatformConnectionState TwitchConnection { get; } = new("Twitch", "TwitchBrush", "Login Twitch");
 
-        private string _kickConnectionStatus = "Not Connected";
-        public string KickConnectionStatus
-        {
-            get => _kickConnectionStatus;
-            set
-            {
-                _kickConnectionStatus = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickConnectionColor = "Red";
-        public string KickConnectionColor
-        {
-            get => _kickConnectionColor;
-            set
-            {
-                _kickConnectionColor = value;
-                OnPropertyChanged();
-            }
-        }
+        /// <summary>
+        /// Gets the bindable Kick account connection state for the dashboard.
+        /// </summary>
+        public PlatformConnectionState KickConnection { get; } = new("Kick", "KickBrush", "Login Kick");
 
         private string _minerStatus = "Idle";
+
+        /// <summary>
+        /// Gets or sets the high-level miner status label shown on the dashboard.
+        /// </summary>
         public string MinerStatus
         {
             get => _minerStatus;
@@ -97,6 +78,10 @@ namespace UI.Views
             }
         }
         private string _minerStatusDetails = "Waiting";
+
+        /// <summary>
+        /// Gets or sets the detailed miner status message shown beneath the main status label.
+        /// </summary>
         public string MinerStatusDetails
         {
             get => _minerStatusDetails;
@@ -106,146 +91,15 @@ namespace UI.Views
                 OnPropertyChanged();
             }
         }
-        private byte _twitchCampaignProgress = 0;
-        public byte TwitchCampaignProgress
-        {
-            get => _twitchCampaignProgress;
-            set
-            {
-                _twitchCampaignProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private byte _twitchDropProgress = 0;
-        public byte TwitchDropProgress
-        {
-            get => _twitchDropProgress;
-            set
-            {
-                _twitchDropProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private byte _kickCampaignProgress = 0;
-        public byte KickCampaignProgress
-        {
-            get => _kickCampaignProgress;
-            set
-            {
-                _kickCampaignProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private byte _kickDropProgress = 0;
-        public byte KickDropProgress
-        {
-            get => _kickDropProgress;
-            set
-            {
-                _kickDropProgress = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchWatchedChannel = string.Empty;
-        public string TwitchWatchedChannel
-        {
-            get => _twitchWatchedChannel;
-            set
-            {
-                _twitchWatchedChannel = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickWatchedChannel = string.Empty;
-        public string KickWatchedChannel
-        {
-            get => _kickWatchedChannel;
-            set
-            {
-                _kickWatchedChannel = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchCampaignName = string.Empty;
-        public string TwitchCampaignName
-        {
-            get => _twitchCampaignName;
-            set
-            {
-                _twitchCampaignName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickCampaignName = string.Empty;
-        public string KickCampaignName
-        {
-            get => _kickCampaignName;
-            set
-            {
-                _kickCampaignName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchCampaignImageUrl = string.Empty;
-        public string TwitchCampaignImageUrl
-        {
-            get => _twitchCampaignImageUrl;
-            set
-            {
-                _twitchCampaignImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickCampaignImageUrl = string.Empty;
-        public string KickCampaignImageUrl
-        {
-            get => _kickCampaignImageUrl;
-            set
-            {
-                _kickCampaignImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchDropName = string.Empty;
-        public string TwitchDropName
-        {
-            get => _twitchDropName;
-            set
-            {
-                _twitchDropName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _twitchDropImageUrl = string.Empty;
-        public string TwitchDropImageUrl
-        {
-            get => _twitchDropImageUrl;
-            set
-            {
-                _twitchDropImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickDropName = string.Empty;
-        public string KickDropName
-        {
-            get => _kickDropName;
-            set
-            {
-                _kickDropName = value;
-                OnPropertyChanged();
-            }
-        }
-        private string _kickDropImageUrl = string.Empty;
-        public string KickDropImageUrl
-        {
-            get => _kickDropImageUrl;
-            set
-            {
-                _kickDropImageUrl = value;
-                OnPropertyChanged();
-            }
-        }
+        /// <summary>
+        /// Gets the bindable Twitch mining progress state for the dashboard.
+        /// </summary>
+        public PlatformProgressState TwitchProgress { get; } = new("Twitch", "TwitchBrush");
+
+        /// <summary>
+        /// Gets the bindable Kick mining progress state for the dashboard.
+        /// </summary>
+        public PlatformProgressState KickProgress { get; } = new("Kick", "KickBrush");
 
         /// <summary>
         /// Occurs when a property value changes.
@@ -276,6 +130,13 @@ namespace UI.Views
             InitializeComponent();
             DataContext = this;
 
+            TwitchConnection.LoginButtonText = "Checking...";
+            TwitchConnection.ConnectionStatus = "Checking...";
+            TwitchConnection.ConnectionColor = "Orange";
+            KickConnection.LoginButtonText = "Checking...";
+            KickConnection.ConnectionStatus = "Checking...";
+            KickConnection.ConnectionColor = "Orange";
+
             MinerStatus = "Initializing";
             MinerStatusDetails = "Please wait...";
 
@@ -291,8 +152,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchCampaignProgress = campPct;
-                    TwitchDropProgress = dropPct;
+                    TwitchProgress.CampaignProgress = campPct;
+                    TwitchProgress.DropProgress = dropPct;
                 });
             };
 
@@ -300,8 +161,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickCampaignProgress = campPct;
-                    KickDropProgress = dropPct;
+                    KickProgress.CampaignProgress = campPct;
+                    KickProgress.DropProgress = dropPct;
                 });
             };
 
@@ -317,15 +178,15 @@ namespace UI.Views
                             break;
                         case "Starting":
                             MinerStatus = "Starting";
-                            MinerStatusDetails = "Finding stream(s) to watch";
+                            MinerStatusDetails = "Finding streams to mine";
                             break;
                         case "Evaluating":
                             MinerStatus = "Evaluating";
-                            MinerStatusDetails = "Checking stream(s) for drops eligibility";
+                            MinerStatusDetails = "Checking streams for drops eligibility";
                             break;
                         case "Mining":
                             MinerStatus = "Mining";
-                            MinerStatusDetails = "Watching stream(s) to earn drops";
+                            MinerStatusDetails = "Mining streams to earn drops";
                             break;
                     }
                 });
@@ -335,7 +196,7 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickWatchedChannel = channel;
+                    KickProgress.MinedChannel = channel;
                 });
             };
 
@@ -343,7 +204,7 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchWatchedChannel = channel;
+                    TwitchProgress.MinedChannel = channel;
                 });
             };
 
@@ -351,8 +212,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickCampaignName = campaign;
-                    KickCampaignImageUrl = imageUrl ?? string.Empty;
+                    KickProgress.CampaignName = campaign;
+                    KickProgress.CampaignImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -360,8 +221,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchCampaignName = campaign;
-                    TwitchCampaignImageUrl = imageUrl ?? string.Empty;
+                    TwitchProgress.CampaignName = campaign;
+                    TwitchProgress.CampaignImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -369,8 +230,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    KickDropName = drop;
-                    KickDropImageUrl = imageUrl ?? string.Empty;
+                    KickProgress.DropName = drop;
+                    KickProgress.DropImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -378,8 +239,8 @@ namespace UI.Views
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TwitchDropName = drop;
-                    TwitchDropImageUrl = imageUrl ?? string.Empty;
+                    TwitchProgress.DropName = drop;
+                    TwitchProgress.DropImageUrl = imageUrl ?? string.Empty;
                 });
             };
 
@@ -441,22 +302,22 @@ namespace UI.Views
         /// the current loading state.
         /// </summary>
         /// <remarks>If a previous load operation is in progress, it will be canceled before starting a
-        /// new one. The method updates status properties to indicate progress and results, including error messages if
-        /// loading fails. This method should be called when the application needs to refresh the list of available
-        /// campaigns.</remarks>
+        /// new one. Campaigns from each connected platform are added to the UI as soon as that platform
+        /// responds, without waiting for all platforms to finish. This method should be called when the
+        /// application needs to refresh the list of available campaigns.</remarks>
         /// <returns>A task that represents the asynchronous operation of loading active drops campaigns.</returns>
         private async Task LoadDropsAsync()
         {
             // Cancel any previous in-flight load
             _currentLoadCts?.Cancel();
-            AppLogger.Info("Dashboard", "LoadDropsAsync invoked; previous load cancellation requested if active.");
+            AppLogger.Debug("Dashboard", "LoadDropsAsync invoked; previous load cancellation requested if active.");
 
             // Wait if another load is already running
             await _loadDropsSemaphore.WaitAsync();
             try
             {
-                await DropsInventoryManager.Instance.PauseWatchingAsync();
-                AppLogger.Info("Dashboard", "Watcher paused for campaign refresh.");
+                await DropsInventoryManager.Instance.PauseMiningAsync();
+                AppLogger.Debug("Dashboard", "Miner paused for campaign refresh.");
 
                 using CancellationTokenSource cts = new CancellationTokenSource();
                 _currentLoadCts = cts;
@@ -473,14 +334,23 @@ namespace UI.Views
                 MinerStatusDetails = "Fetching latest drops...";
 
                 _activeCampaigns.Clear();
+                List<DropsCampaign> allCampaigns = [];
 
-                IReadOnlyList<DropsCampaign> allCampaigns = await _dropsService.GetAllActiveCampaignsAsync(_kickWebView, _kickService.Status, _twitchWebView, _twitchService.Status, _twitchGqlService, cts.Token);
-                AppLogger.Info("Dashboard", $"Campaign load completed. totalCampaigns={allCampaigns.Count}, twitchStatus={_twitchService.Status}, kickStatus={_kickService.Status}");
+                // Campaigns are added to the UI as each platform responds
+                await foreach (IReadOnlyList<DropsCampaign> batch in _dropsService.GetAllActiveCampaignsAsync(
+                    _kickWebView, _kickService.Status,
+                    _twitchWebView, _twitchService.Status,
+                    _twitchGqlService, cts.Token))
+                {
+                    foreach (DropsCampaign c in batch.OrderBy(x => x.Platform).ThenBy(x => x.GameName))
+                        _activeCampaigns.Add(c);
 
-                foreach (DropsCampaign? c in allCampaigns.OrderBy(x => x.Platform).ThenBy(x => x.GameName))
-                    _activeCampaigns.Add(c);
+                    allCampaigns.AddRange(batch);
+                }
 
-                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns, _twitchGqlService, startWatching: false);
+                AppLogger.Info("Dashboard", $"Loaded {allCampaigns.Count} campaigns.");
+
+                DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns.AsReadOnly(), _twitchGqlService, startMining: false);
 
                 MinerStatus = "Idle";
                 MinerStatusDetails = $"{_activeCampaigns.Count} active campaigns loaded";
@@ -488,7 +358,7 @@ namespace UI.Views
             catch (OperationCanceledException ex) when (_currentLoadCts?.IsCancellationRequested == true)
             {
                 // Expected when a new load cancels the old one
-                AppLogger.Info("Dashboard", $"LoadDropsAsync canceled due to superseding refresh request. {ex.Message}");
+                AppLogger.Debug("Dashboard", $"LoadDropsAsync canceled due to superseding refresh request. {ex.Message}");
                 return;
             }
             catch (Exception ex)
@@ -501,8 +371,8 @@ namespace UI.Views
             {
                 _loadDropsSemaphore.Release();
                 _currentLoadCts = null;
-                await DropsInventoryManager.Instance.ResumeWatchingAsync();
-                AppLogger.Info("Dashboard", "Watcher resumed after campaign refresh.");
+                await DropsInventoryManager.Instance.ResumeMiningAsync();
+                AppLogger.Debug("Dashboard", "Miner resumed after campaign refresh.");
             }
         }
         /// <summary>
@@ -553,6 +423,9 @@ namespace UI.Views
                 _initialValidationCompleted = true;
                 DropsInventoryManager.Instance.InitializeWebViews(_twitchWebView, _kickWebView);
 
+                if (_twitchService.Status == ConnectionStatus.Connected)
+                    await EnsureTwitchHelixAsync();
+
                 // Load campaigns / drops
                 await StartAutoRefreshDropsAsync();
             }
@@ -566,30 +439,34 @@ namespace UI.Views
         /// <param name="status">The new connection status value indicating the current state of the Kick login process.</param>
         private void OnKickStatusChanged(ConnectionStatus status)
         {
+            KickConnection.LoginButtonText = "Checking...";
+
             switch (status)
             {
                 case ConnectionStatus.NotConnected:
-                    KickConnectionStatus = "Not Connected";
-                    KickConnectionColor = "Red";
-                    KickLoginButton.IsEnabled = true;
+                    KickConnection.ConnectionStatus = "Not Connected";
+                    KickConnection.ConnectionColor = "Red";
+                    KickConnection.LoginButtonText = "Login Kick";
+                    KickConnection.IsLoginEnabled = true;
                     break;
 
                 case ConnectionStatus.Validating:
-                    KickConnectionStatus = "Validating...";
-                    KickConnectionColor = "Orange";
-                    KickLoginButton.IsEnabled = false;
+                    KickConnection.ConnectionStatus = "Validating...";
+                    KickConnection.ConnectionColor = "Orange";
+                    KickConnection.IsLoginEnabled = false;
                     break;
 
                 case ConnectionStatus.Connected:
-                    KickConnectionStatus = "Connected";
-                    KickConnectionColor = "Lime";
-                    KickLoginButton.IsEnabled = false; // disable when already logged in
+                    KickConnection.ConnectionStatus = "Connected";
+                    KickConnection.ConnectionColor = "Lime";
+                    KickConnection.LoginButtonText = "Kick Logged in";
+                    KickConnection.IsLoginEnabled = false;
                     ScheduleDropsLoad();
                     break;
                 case ConnectionStatus.Connecting:
-                    KickConnectionStatus = "Connecting...";
-                    KickConnectionColor = "Yellow";
-                    KickLoginButton.IsEnabled = false;
+                    KickConnection.ConnectionStatus = "Connecting...";
+                    KickConnection.ConnectionColor = "Yellow";
+                    KickConnection.IsLoginEnabled = false;
                     break;
             }
         }
@@ -601,30 +478,35 @@ namespace UI.Views
         /// state.</param>
         private void OnTwitchStatusChanged(ConnectionStatus status)
         {
+            TwitchConnection.LoginButtonText = "Checking...";
+
             switch (status)
             {
                 case ConnectionStatus.NotConnected:
-                    TwitchConnectionStatus = "Not Connected";
-                    TwitchConnectionColor = "Red";
-                    TwitchLoginButton.IsEnabled = true;
+                    TwitchConnection.ConnectionStatus = "Not Connected";
+                    TwitchConnection.ConnectionColor = "Red";
+                    TwitchConnection.LoginButtonText = "Login Twitch";
+                    TwitchConnection.IsLoginEnabled = true;
                     break;
 
                 case ConnectionStatus.Validating:
-                    TwitchConnectionStatus = "Validating...";
-                    TwitchConnectionColor = "Orange";
-                    TwitchLoginButton.IsEnabled = false;
+                    TwitchConnection.ConnectionStatus = "Validating...";
+                    TwitchConnection.ConnectionColor = "Orange";
+                    TwitchConnection.IsLoginEnabled = false;
                     break;
 
                 case ConnectionStatus.Connected:
-                    TwitchConnectionStatus = "Connected";
-                    TwitchConnectionColor = "Lime";
-                    TwitchLoginButton.IsEnabled = false; // disable when already logged in
+                    TwitchConnection.ConnectionStatus = "Connected";
+                    TwitchConnection.ConnectionColor = "Lime";
+                    TwitchConnection.LoginButtonText = "Twitch Logged in";
+                    TwitchConnection.IsLoginEnabled = false;
+                    _ = EnsureTwitchHelixAsync();
                     ScheduleDropsLoad();
                     break;
                 case ConnectionStatus.Connecting:
-                    TwitchConnectionStatus = "Connecting...";
-                    TwitchConnectionColor = "Yellow";
-                    TwitchLoginButton.IsEnabled = false;
+                    TwitchConnection.ConnectionStatus = "Connecting...";
+                    TwitchConnection.ConnectionColor = "Yellow";
+                    TwitchConnection.IsLoginEnabled = false;
                     break;
             }
         }
@@ -649,6 +531,29 @@ namespace UI.Views
         {
             new TwitchLoginWindow().ShowDialog();
             _ = ValidateTwitchCredentialsAsync();
+        }
+
+        /// <summary>
+        /// Ensures Twitch Helix API access via device-code OAuth (separate from WebView drops login).
+        /// </summary>
+        private async Task EnsureTwitchHelixAsync()
+        {
+            if (TwitchHelixService.Instance.IsAuthenticated)
+            {
+                DropsInventoryManager.Instance.ScheduleTwitchStreamerMetadataRefresh();
+                return;
+            }
+
+            bool authenticated = await TwitchHelixService.Instance.EnsureAuthenticatedAsync(async prompt =>
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    new TwitchHelixAuthWindow(prompt).ShowDialog();
+                });
+            });
+
+            if (authenticated)
+                DropsInventoryManager.Instance.ScheduleTwitchStreamerMetadataRefresh();
         }
         #endregion
     }

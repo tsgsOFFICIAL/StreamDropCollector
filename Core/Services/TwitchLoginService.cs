@@ -4,12 +4,14 @@ using Core.Logging;
 
 namespace Core.Services
 {
+    /// <summary>
+    /// Validates Twitch login state by inspecting the twitch.tv homepage for a logged-in session.
+    /// </summary>
     public class TwitchLoginService : LoginServiceBase
     {
         public override async Task ValidateCredentialsAsync(IWebViewHost host)
         {
             AppLogger.Debug("TwitchLogin", "Validating credentials...");
-            AppLogger.Info("TwitchLogin", "Credential validation started.");
             UpdateStatus(ConnectionStatus.Connecting);
 
             if (host == null)
@@ -35,7 +37,7 @@ namespace Core.Services
             string html = await GetPageHtmlAsync(host);
             bool isLoggedIn = !html.Contains("data-a-target=\"login-button\"", StringComparison.OrdinalIgnoreCase);
 
-            AppLogger.Info("TwitchLogin", $"Credential validation completed. isLoggedIn={isLoggedIn}");
+            AppLogger.Info("TwitchLogin", isLoggedIn ? "Twitch connected." : "Twitch not logged in.");
 
             UpdateStatus(isLoggedIn ? ConnectionStatus.Connected : ConnectionStatus.NotConnected);
         }
