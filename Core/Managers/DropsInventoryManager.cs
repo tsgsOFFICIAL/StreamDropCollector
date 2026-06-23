@@ -140,7 +140,10 @@ namespace Core.Managers
 
         // Timer for live ticking
         private readonly System.Timers.Timer _liveProgressTimer = new(1000);
+        private readonly System.Timers.Timer _progressVerifyTimer = new(TimeSpan.FromMinutes(2).TotalMilliseconds);
         private System.Timers.Timer? _recheckTimer;
+        private readonly SemaphoreSlim _progressVerifyLock = new(1, 1);
+        private int _progressVerifyScheduled;
 
         private readonly SemaphoreSlim _startMiningLock = new(1, 1);
         private CancellationTokenSource? _startMiningCts;
@@ -177,11 +180,8 @@ namespace Core.Managers
         /// </summary>
         /// <param name="scope">The logical scope or category associated with the log message. Used to group related log entries.</param>
         /// <param name="message">The message to log. Should provide relevant information about the operation or event.</param>
-        private static void VerboseLog(string scope, string message)
-        {
-            if (IsVerboseDebugEnabled)
-                AppLogger.Info(scope, message);
-        }
+        private static void VerboseLog(string scope, string message) =>
+            AppLogger.Debug(scope, message);
 
         /// <summary>
         /// Gets a command that switches the currently mined campaign to the specified campaign when the miner is not paused.
@@ -212,6 +212,9 @@ namespace Core.Managers
 
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
             _liveProgressTimer.AutoReset = true;
+
+            _progressVerifyTimer.Elapsed += (_, _) => ScheduleServerProgressVerification();
+            _progressVerifyTimer.AutoReset = true;
 
             _kickMetadataTimer.Elapsed += (_, _) => ScheduleKickStreamerMetadataRefresh();
             _kickMetadataTimer.AutoReset = true;
@@ -278,7 +281,7 @@ namespace Core.Managers
 
                 AppLogger.Debug("Miner", $"Immediate re-evaluation starting after priority mode change. activeCampaigns={ActiveCampaigns.Count}");
                 await StartMiningStreams(true);
-                AppLogger.Info("Miner", "Immediate re-evaluation completed after priority mode change.");
+                AppLogger.Debug("Miner", "Immediate re-evaluation completed after priority mode change.");
             }
             catch (Exception ex)
             {
@@ -324,7 +327,7 @@ namespace Core.Managers
 
                 AppLogger.Debug("Miner", $"Immediate re-evaluation starting after whitelist change. activeCampaigns={ActiveCampaigns.Count}");
                 await StartMiningStreams(true);
-                AppLogger.Info("Miner", "Immediate re-evaluation completed after whitelist change.");
+                AppLogger.Debug("Miner", "Immediate re-evaluation completed after whitelist change.");
             }
             catch (Exception ex)
             {
@@ -576,10 +579,10 @@ namespace Core.Managers
                 _twitchStreamerMetadata = _twitchHelixService.Snapshots;
 
                 int liveCount = _twitchStreamerMetadata.Values.Count(s => s.IsLive);
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMetadata",
                     $"Refreshed {_twitchStreamerMetadata.Count}/{logins.Count} Twitch streamer snapshots ({liveCount} live).");
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMining",
                     $"Metadata refresh live={liveCount}/{logins.Count} - metadata counts live across ALL campaign streamers, not category-filtered.");
 
@@ -602,7 +605,7 @@ namespace Core.Managers
 
         private void UpdateTwitchMinedChannelWatcher(string? login)
         {
-            AppLogger.Info("TwitchMining", $"UpdateTwitchMinedChannelWatcher login={login ?? "(null)"} helixAuth={_twitchHelixService.IsAuthenticated}");
+            AppLogger.Debug("TwitchMining", $"UpdateTwitchMinedChannelWatcher login={login ?? "(null)"} helixAuth={_twitchHelixService.IsAuthenticated}");
 
             if (!_twitchHelixService.IsAuthenticated)
                 return;
@@ -723,6 +726,7 @@ namespace Core.Managers
             _recheckTimer?.Stop();
             _streamHealthMonitor.Stop();
             _liveProgressTimer.Stop();
+            _progressVerifyTimer.Stop();
             UpdateTwitchMinedChannelWatcher(null);
 
             await _startMiningLock.WaitAsync();
@@ -794,14 +798,13 @@ namespace Core.Managers
                 int twitchActive = campaignSnapshot.Count(c => c.Platform == Platform.Twitch);
                 int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake());
                 int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake());
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMining",
                     $"StartMiningStreams gates helixAuth={_twitchHelixService.IsAuthenticated} " +
                     $"twitchWebView={(TwitchWebView is null ? "null" : "ok")} kickWebView={(KickWebView is null ? "null" : "ok")} " +
                     $"twitchActive={twitchActive} twitchWithProgress={twitchWithProgress} kickWithProgress={kickWithProgress}");
 
-                AppLogger.Debug("Miner", "[DropsInventoryManager] Starting stream mining process...");
-                AppLogger.Info("Miner", $"StartMiningStreams invoked. restartedInternally={restartedInternally}, activeCampaigns={ActiveCampaigns.Count}, paused={_isPaused}");
+                AppLogger.Debug("Miner", $"StartMiningStreams invoked. restartedInternally={restartedInternally}, activeCampaigns={ActiveCampaigns.Count}, paused={_isPaused}");
 
                 if (!restartedInternally)
                     MinerStatusChanged?.Invoke("Starting");
@@ -821,7 +824,7 @@ namespace Core.Managers
 
                 if (!restartedInternally && TwitchWebView is not null)
                 {
-                    AppLogger.Info("TwitchMining", "StartMiningStreams preloading general-drop directories before campaign selection.");
+                    AppLogger.Debug("TwitchMining", "StartMiningStreams preloading general-drop directories before campaign selection.");
                     await _twitchLiveChannelApi.PreloadGeneralDropDirectoriesAsync(campaignSnapshot, token);
                 }
 
@@ -870,7 +873,7 @@ namespace Core.Managers
                     return;
                 }
 
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMining",
                     $"StartMiningStreams applying results twitch={(result.Twitch is null ? "null" : $"{result.Twitch.Login}@{result.Twitch.Campaign.Name}")} " +
                     $"kick={(result.Kick is null ? "null" : $"{result.Kick.Login}@{result.Kick.Campaign.Name}")} minerStatus={result.MinerStatus}");
@@ -881,6 +884,12 @@ namespace Core.Managers
                 StartStreamHealthMonitoring();
 
                 _liveProgressTimer?.Start();
+                _progressVerifyTimer.Start();
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(45));
+                    ScheduleServerProgressVerification();
+                });
 
                 DateTime nextCheckAt = result.NextCheckAt;
                 double delayMs = Math.Max((nextCheckAt - DateTime.Now).TotalMilliseconds, 60000);
@@ -889,14 +898,14 @@ namespace Core.Managers
                 {
                     _recheckTimer?.Stop();
                     AppLogger.Debug("Miner", "[DropsInventoryManager] Re-evaluating streams for active campaigns.");
-                    AppLogger.Info("Miner", "Scheduled re-evaluation triggered.");
+                    AppLogger.Debug("Miner", "Scheduled re-evaluation triggered.");
                     await StartMiningStreams(true);
                 };
                 _recheckTimer.AutoReset = false;
                 _recheckTimer.Start();
 
                 AppLogger.Debug("Miner", $"[DropsInventoryManager] Next stream re-evaluation in ~{delayMs / 60000:F1} minutes at {nextCheckAt:u}");
-                AppLogger.Info("Miner", $"Next re-evaluation in {delayMs / 1000:F0}s at {nextCheckAt:u}. twitchSelected={_selection.CurrentTwitchCampaign != null}, kickSelected={_selection.CurrentKickCampaign != null}");
+                AppLogger.Debug("Miner", $"Next re-evaluation in {delayMs / 1000:F0}s at {nextCheckAt:u}. twitchSelected={_selection.CurrentTwitchCampaign != null}, kickSelected={_selection.CurrentKickCampaign != null}");
 
                 MinerStatusChanged?.Invoke(result.MinerStatus);
             }
@@ -962,6 +971,119 @@ namespace Core.Managers
         }
 
         /// <summary>
+        /// Debounces a background server progress verification pass for currently mined campaigns.
+        /// </summary>
+        private void ScheduleServerProgressVerification()
+        {
+            if (_isPaused || !_liveProgressTimer.Enabled)
+                return;
+
+            if (Interlocked.CompareExchange(ref _progressVerifyScheduled, 1, 0) != 0)
+                return;
+
+            _ = Application.Current.Dispatcher.InvokeAsync(VerifyServerProgressAsync);
+        }
+
+        /// <summary>
+        /// Fetches server progress for the currently mined campaigns and realigns local counters when they differ.
+        /// </summary>
+        /// <remarks>Runs on the UI dispatcher. Uses non-navigating fetch paths so mining WebViews stay on stream.</remarks>
+        private async Task VerifyServerProgressAsync()
+        {
+            try
+            {
+                await _progressVerifyLock.WaitAsync();
+                if (_isPaused || !_liveProgressTimer.Enabled)
+                    return;
+
+                DropsCampaign? twitchCampaign = _selection.CurrentTwitchCampaign;
+                DropsCampaign? kickCampaign = _selection.CurrentKickCampaign;
+                if (twitchCampaign == null && kickCampaign == null)
+                    return;
+
+                IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> twitchProgress = new Dictionary<string, IReadOnlyList<DropsReward>>();
+                IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> kickProgress = new Dictionary<string, IReadOnlyList<DropsReward>>();
+
+                if (twitchCampaign != null && _twitchGqlService != null)
+                    twitchProgress = await ServerProgressFetcher.FetchTwitchRewardProgressAsync(_twitchGqlService, [twitchCampaign]);
+
+                if (kickCampaign != null && KickWebView != null)
+                    kickProgress = await ServerProgressFetcher.FetchKickRewardProgressAsync(KickWebView, [kickCampaign]);
+
+                bool twitchChanged = false;
+                bool kickChanged = false;
+
+                if (twitchCampaign != null
+                    && twitchProgress.TryGetValue(twitchCampaign.Id, out IReadOnlyList<DropsReward>? twitchRewards)
+                    && MiningProgressReconciler.TryReconcile(twitchCampaign, twitchRewards, _twitchProgress, out DropsCampaign updatedTwitch))
+                    twitchChanged = ApplyReconciledCampaign(updatedTwitch, Platform.Twitch);
+
+                if (kickCampaign != null
+                    && kickProgress.TryGetValue(kickCampaign.Id, out IReadOnlyList<DropsReward>? kickRewards)
+                    && MiningProgressReconciler.TryReconcile(kickCampaign, kickRewards, _kickProgress, out DropsCampaign updatedKick))
+                    kickChanged = ApplyReconciledCampaign(updatedKick, Platform.Kick);
+
+                if (twitchChanged || kickChanged)
+                    AppLogger.Info("ProgressSync", "Progress synced with server.");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("ProgressSync", $"Server progress verification failed: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _progressVerifyScheduled, 0);
+                _progressVerifyLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Writes a reconciled campaign into <see cref="ActiveCampaigns"/> and raises updated progress events.
+        /// </summary>
+        /// <param name="updatedCampaign">Campaign with server-aligned reward progress.</param>
+        /// <param name="platform">Platform whose progress events should be raised.</param>
+        /// <returns><see langword="true"/> when the campaign was found and applied to the active inventory.</returns>
+        private bool ApplyReconciledCampaign(DropsCampaign updatedCampaign, Platform platform)
+        {
+            bool applied = false;
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                DropsCampaign? existing = ActiveCampaigns.FirstOrDefault(c => c.Platform == platform && c.Id == updatedCampaign.Id);
+                if (existing == null)
+                    return;
+
+                int index = ActiveCampaigns.IndexOf(existing);
+                if (index < 0)
+                    return;
+
+                ActiveCampaigns[index] = updatedCampaign;
+
+                if (platform == Platform.Twitch && _selection.CurrentTwitchCampaign?.Id == updatedCampaign.Id)
+                    _selection.CurrentTwitchCampaign = updatedCampaign;
+                else if (platform == Platform.Kick && _selection.CurrentKickCampaign?.Id == updatedCampaign.Id)
+                    _selection.CurrentKickCampaign = updatedCampaign;
+
+                _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
+                applied = true;
+            });
+
+            if (!applied)
+                return false;
+
+            PlatformProgressState progress = platform == Platform.Twitch ? _twitchProgress : _kickProgress;
+            byte campPct = MiningProgressCalculator.CalculateLiveCampaignProgress(updatedCampaign);
+            byte dropPct = MiningProgressCalculator.CalculateLiveDropProgress(updatedCampaign, progress.DropMinedSeconds);
+
+            if (platform == Platform.Twitch)
+                TwitchProgressChanged?.Invoke(campPct, dropPct);
+            else
+                KickProgressChanged?.Invoke(campPct, dropPct);
+
+            return true;
+        }
+
+        /// <summary>
         /// Begins periodic stream health monitoring via the live-channel APIs.
         /// </summary>
         private void StartStreamHealthMonitoring()
@@ -1005,7 +1127,7 @@ namespace Core.Managers
 
             if (result.Campaign is DropsCampaign picked)
             {
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMining",
                     $"SelectBestCampaign picked='{picked.Name}' platform={picked.Platform} slug='{picked.Slug}' " +
                     $"from {campaigns.Count} candidates mode={UISettingsManager.Instance.MiningPriorityMode}");

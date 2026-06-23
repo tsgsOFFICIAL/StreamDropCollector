@@ -30,11 +30,24 @@ namespace Core.Services.Mining.Twitch
             _generalDropDirectory = new TwitchGeneralDropDirectoryClient(webViewProvider);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Fetches normalized channel metadata for a login slug via Twitch Helix.
+        /// </summary>
+        /// <param name="channelLogin">Channel login slug.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The channel snapshot, or <see langword="null"/> when the channel could not be resolved.</returns>
         public Task<LiveChannelSnapshot?> GetChannelAsync(string channelLogin, CancellationToken ct = default) =>
             _helixService.GetChannelAsync(channelLogin, ct);
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Resolves eligible channel logins for a campaign from connect URLs or general-drop directory discovery.
+        /// </summary>
+        /// <param name="campaign">Drop campaign to resolve streamers for.</param>
+        /// <param name="allowDirectoryDiscovery">
+        /// When <see langword="false"/>, general-drop campaigns return cached directory logins only (no WebView navigation).
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>Channel login slugs in viewer-rank order for general drops.</returns>
         public async Task<IReadOnlyList<string>> GetEligibleLoginsAsync(
             DropsCampaign campaign,
             bool allowDirectoryDiscovery = true,
@@ -59,7 +72,11 @@ namespace Core.Services.Mining.Twitch
             return discovered;
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Preloads directory-discovered logins for all general-drop Twitch campaigns (WebView, sequential).
+        /// </summary>
+        /// <param name="campaigns">Campaigns to inspect; only general-drop Twitch entries are discovered.</param>
+        /// <param name="ct">Cancellation token.</param>
         public async Task PreloadGeneralDropDirectoriesAsync(IReadOnlyList<DropsCampaign> campaigns, CancellationToken ct = default)
         {
             List<DropsCampaign> generalDrops = campaigns
@@ -72,7 +89,7 @@ namespace Core.Services.Mining.Twitch
             await _generalDropPreloadLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchGeneralDrop",
                     $"Preload START count={generalDrops.Count} campaigns=[{string.Join(", ", generalDrops.Select(c => c.Name))}]");
 
@@ -86,7 +103,7 @@ namespace Core.Services.Mining.Twitch
                     await GetEligibleLoginsAsync(campaign, allowDirectoryDiscovery: true, ct).ConfigureAwait(false);
                 }
 
-                AppLogger.Info("TwitchGeneralDrop", "Preload DONE");
+                AppLogger.Debug("TwitchGeneralDrop", "Preload DONE");
             }
             finally
             {
@@ -100,10 +117,16 @@ namespace Core.Services.Mining.Twitch
         public IReadOnlyList<string> GetCachedGeneralDropLogins(string campaignId) =>
             _generalDropCache.Get(campaignId);
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Picks the best live channel login for a campaign, preferring <paramref name="preferredLogin"/> when eligible.
+        /// </summary>
+        /// <param name="campaign">Drop campaign whose eligible streamers and game id are evaluated.</param>
+        /// <param name="preferredLogin">Optional login to try first (for example the last mined streamer).</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The selected login slug, or <see langword="null"/> when no eligible live streamer is found.</returns>
         public async Task<string?> SelectBestLiveLoginAsync(DropsCampaign campaign, string? preferredLogin, CancellationToken ct = default)
         {
-            AppLogger.Info(
+            AppLogger.Debug(
                 "TwitchMining",
                 $"SelectBestLiveLogin START campaign='{campaign.Name}' id={campaign.Id} slug='{campaign.Slug}' " +
                 $"gameId={campaign.GameId ?? "(none)"} isGeneralDrop={campaign.IsGeneralDrop} " +
@@ -115,13 +138,19 @@ namespace Core.Services.Mining.Twitch
             return await SelectBestNamedCampaignLoginAsync(campaign, preferredLogin, ct).ConfigureAwait(false);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Returns whether <paramref name="channelLogin"/> is live and streaming the campaign's Twitch game.
+        /// </summary>
+        /// <param name="channelLogin">Channel login slug.</param>
+        /// <param name="campaign">Drop campaign whose <see cref="DropsCampaign.GameId"/> is matched against Helix <c>game_id</c>.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns><see langword="true"/> when the channel is live and game-eligible; otherwise <see langword="false"/>.</returns>
         public async Task<bool> IsChannelEligibleAsync(string channelLogin, DropsCampaign campaign, CancellationToken ct = default)
         {
             LiveChannelSnapshot? snapshot = await _helixService.GetChannelAsync(channelLogin, ct).ConfigureAwait(false);
             bool eligible = TwitchChannelEligibility.IsEligible(snapshot, campaign);
 
-            AppLogger.Info(
+            AppLogger.Debug(
                 "TwitchMining",
                 $"IsChannelEligible login={channelLogin} campaignGameId={campaign.GameId ?? "(none)"} helixAuth={_helixService.IsAuthenticated} " +
                 $"snapshot={(snapshot is null ? "null" : $"live={snapshot.IsLive} gameId={snapshot.GameId ?? "(none)"}")} -> {eligible}");
@@ -157,12 +186,12 @@ namespace Core.Services.Mining.Twitch
 
                 if (!await IsChannelEligibleAsync(login, campaign, ct).ConfigureAwait(false))
                 {
-                    AppLogger.Info("TwitchMining", $"  general login={login} -> SKIP (Helix verify failed)");
+                    AppLogger.Debug("TwitchMining", $"  general login={login} -> SKIP (Helix verify failed)");
                     continue;
                 }
 
                 verifiedCount++;
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMining",
                     $"SelectBestLiveLogin PICKED general login={login} campaignGameId={campaign.GameId} (directory rank #{verifiedCount})");
                 return login;
@@ -194,7 +223,7 @@ namespace Core.Services.Mining.Twitch
                 return null;
             }
 
-            AppLogger.Info("TwitchMining", $"SelectBestLiveLogin candidates={logins.Count}: [{string.Join(", ", logins)}]");
+            AppLogger.Debug("TwitchMining", $"SelectBestLiveLogin candidates={logins.Count}: [{string.Join(", ", logins)}]");
 
             IEnumerable<string> ordered = BuildOrderedLogins(logins, preferredLogin);
             int liveCount = 0;
@@ -207,13 +236,13 @@ namespace Core.Services.Mining.Twitch
 
                 if (snapshot is null)
                 {
-                    AppLogger.Info("TwitchMining", $"  login={login} -> SKIP (no snapshot / Helix miss)");
+                    AppLogger.Debug("TwitchMining", $"  login={login} -> SKIP (no snapshot / Helix miss)");
                     continue;
                 }
 
                 if (!snapshot.IsLive)
                 {
-                    AppLogger.Info(
+                    AppLogger.Debug(
                         "TwitchMining",
                         $"  login={login} display='{snapshot.DisplayName}' -> SKIP offline gameId={snapshot.GameId ?? "(none)"}");
                     continue;
@@ -222,7 +251,7 @@ namespace Core.Services.Mining.Twitch
                 liveCount++;
                 if (!TwitchChannelEligibility.IsEligible(snapshot, campaign))
                 {
-                    AppLogger.Info(
+                    AppLogger.Debug(
                         "TwitchMining",
                         $"  login={login} display='{snapshot.DisplayName}' -> SKIP live but wrong game " +
                         $"campaignGameId={campaign.GameId} streamGameId={snapshot.GameId ?? "(none)"}");
@@ -230,7 +259,7 @@ namespace Core.Services.Mining.Twitch
                 }
 
                 gameMatchCount++;
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMining",
                     $"SelectBestLiveLogin PICKED login={login} display='{snapshot.DisplayName}' gameId={snapshot.GameId}");
                 return login;

@@ -132,11 +132,11 @@ namespace Core.Services.Twitch.Helix
 
             if (normalized.Count == 0)
             {
-                AppLogger.Info("TwitchHelix", "RefreshChannelsAsync SKIPPED - empty login list.");
+                AppLogger.Debug("TwitchHelix", "RefreshChannelsAsync SKIPPED - empty login list.");
                 return;
             }
 
-            AppLogger.Info("TwitchHelix", $"RefreshChannelsAsync START count={normalized.Count} logins=[{string.Join(", ", normalized.Take(20))}{(normalized.Count > 20 ? ", ..." : "")}]");
+            AppLogger.Debug("TwitchHelix", $"RefreshChannelsAsync START count={normalized.Count} logins=[{string.Join(", ", normalized.Take(20))}{(normalized.Count > 20 ? ", ..." : "")}]");
 
             await _refreshLock.WaitAsync(ct).ConfigureAwait(false);
             try
@@ -172,7 +172,7 @@ namespace Core.Services.Twitch.Helix
 
             if (string.IsNullOrWhiteSpace(channelLogin))
             {
-                AppLogger.Info("TwitchMining", "SetMinedChannelWatcher CLEAR - no mined channel.");
+                AppLogger.Debug("TwitchMining", "SetMinedChannelWatcher CLEAR - no mined channel.");
                 await _eventSubHub.ClearWatcherAsync(ct).ConfigureAwait(false);
                 return;
             }
@@ -186,7 +186,7 @@ namespace Core.Services.Twitch.Helix
                 return;
             }
 
-            AppLogger.Info("TwitchMining", $"SetMinedChannelWatcher SET login={login} broadcasterId={broadcasterId}");
+            AppLogger.Debug("TwitchMining", $"SetMinedChannelWatcher SET login={login} broadcasterId={broadcasterId}");
             await _eventSubHub.SetWatcherAsync(login, broadcasterId, ct).ConfigureAwait(false);
         }
 
@@ -205,7 +205,7 @@ namespace Core.Services.Twitch.Helix
 
             if (_cache.TryGet(login, out LiveChannelSnapshot? cached) && cached is not null)
             {
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchHelix",
                     $"GetChannelAsync CACHE HIT login={login} live={cached.IsLive} categories=[{string.Join(", ", cached.CategorySlugs)}]");
                 return cached;
@@ -217,14 +217,14 @@ namespace Core.Services.Twitch.Helix
                 return null;
             }
 
-            AppLogger.Info("TwitchHelix", $"GetChannelAsync CACHE MISS login={login} - refreshing via Helix.");
+            AppLogger.Debug("TwitchHelix", $"GetChannelAsync CACHE MISS login={login} - refreshing via Helix.");
             await RefreshChannelsAsync([login], ct).ConfigureAwait(false);
             _cache.TryGet(login, out cached);
 
             if (cached is null)
                 AppLogger.Warn("TwitchHelix", $"GetChannelAsync STILL MISSING login={login} after refresh.");
             else
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchHelix",
                     $"GetChannelAsync REFRESHED login={login} live={cached.IsLive} categories=[{string.Join(", ", cached.CategorySlugs)}]");
 
@@ -322,13 +322,13 @@ namespace Core.Services.Twitch.Helix
                 })
                 .Take(15);
 
-            AppLogger.Info(
+            AppLogger.Debug(
                 "TwitchHelix",
                 $"RefreshChannelsCore DONE requested={logins.Count} users={users.Count} live={liveCount} missingUsers={missingUsers}");
 
             if (liveCount > 0)
             {
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchHelix",
                     $"RefreshChannelsCore LIVE sample=[{string.Join(", ", liveDetails)}{(liveCount > 15 ? ", ..." : "")}]");
             }

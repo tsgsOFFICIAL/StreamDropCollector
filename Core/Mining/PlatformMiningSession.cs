@@ -14,6 +14,18 @@ namespace Core.Mining
         /// <summary>
         /// Attempts to select an eligible stream for the given platform campaigns.
         /// </summary>
+        /// <param name="platform">Platform being evaluated (Twitch or Kick).</param>
+        /// <param name="selectionLogScope">Log scope label used for non-Twitch selection traces.</param>
+        /// <param name="candidates">Campaigns with remaining progress for this platform.</param>
+        /// <param name="selectBestCampaignAsync">Chooses the next campaign to try from the remaining candidate list.</param>
+        /// <param name="selectUrlAsync">Resolves a stream URL for the chosen campaign.</param>
+        /// <param name="isChannelEligibleAsync">Verifies the channel is live and playing the correct game/category.</param>
+        /// <param name="navigateAsync">Navigates the platform WebView to the selected stream URL.</param>
+        /// <param name="prepareStreamPageAsync">Optional post-navigation setup (quality, mature gate, refresh).</param>
+        /// <param name="lastMinedStreamers">Persists the chosen stream URL for future preference.</param>
+        /// <param name="onSelectionPreview">Optional callback raised before navigation with the chosen campaign and login.</param>
+        /// <param name="cancellationToken">Cancellation token for the mining cycle.</param>
+        /// <returns>A mining result with baseline progress, or <see langword="null"/> when no stream could be selected.</returns>
         public static async Task<PlatformMiningResult?> TrySelectAsync(
             Platform platform,
             string selectionLogScope,
@@ -34,7 +46,7 @@ namespace Core.Mining
             }
 
             string logScope = platform == Platform.Twitch ? "TwitchMining" : selectionLogScope;
-            AppLogger.Info(
+            AppLogger.Debug(
                 logScope,
                 $"TrySelectAsync {platform} START candidates={candidates.Count} " +
                 $"[{string.Join(", ", candidates.Select(c => $"{c.Name}(slug={c.Slug})"))}]");
@@ -54,7 +66,7 @@ namespace Core.Mining
                     break;
                 }
 
-                AppLogger.Info(
+                AppLogger.Debug(
                     logScope,
                     $"TrySelectAsync {platform} attempt={attempt} picked campaign='{best.Name}' id={best.Id} slug='{best.Slug}' remaining={remaining.Count}");
 
@@ -73,18 +85,18 @@ namespace Core.Mining
                     continue;
                 }
 
-                AppLogger.Info(logScope, $"TrySelectAsync {platform} navigating to {streamUrl}");
+                AppLogger.Debug(logScope, $"TrySelectAsync {platform} navigating to {streamUrl}");
                 await navigateAsync(streamUrl);
                 await Task.Delay(1500, cancellationToken);
 
                 if (prepareStreamPageAsync != null)
                 {
-                    AppLogger.Info(logScope, $"TrySelectAsync {platform} preparing stream page (mature gate, quality, refresh).");
+                    AppLogger.Debug(logScope, $"TrySelectAsync {platform} preparing stream page (mature gate, quality, refresh).");
                     await prepareStreamPageAsync();
                 }
 
                 string login = StreamerUrlParser.GetLoginFromUrl(streamUrl);
-                AppLogger.Info(logScope, $"TrySelectAsync {platform} post-navigate eligibility check login={login} gameId={best.GameId ?? "(none)"} slug='{best.Slug}'");
+                AppLogger.Debug(logScope, $"TrySelectAsync {platform} post-navigate eligibility check login={login} gameId={best.GameId ?? "(none)"} slug='{best.Slug}'");
                 bool eligible = await isChannelEligibleAsync(login, best);
 
                 if (!eligible)
@@ -97,10 +109,8 @@ namespace Core.Mining
                 MiningBaseline baseline = MiningBaselineInitializer.Create(best);
                 DateTime? suggestedNextCheck = MiningBaselineInitializer.EstimateSoonestRewardCompletion(best);
 
-                AppLogger.Debug(selectionLogScope, $"Mining {platform} stream: {streamUrl}");
-                AppLogger.Info(logScope, $"TrySelectAsync {platform} SUCCESS url={streamUrl} login={login} campaign='{best.Name}' id={best.Id}");
-                AppLogger.Info(selectionLogScope, $"Selected {platform} stream '{streamUrl}' for campaign '{best.Name}' ({best.Id}).");
                 lastMinedStreamers.Remember(platform, best.Slug, streamUrl);
+                AppLogger.Info("Miner", $"{platform}: watching {login} for '{best.Name}'.");
 
                 return new PlatformMiningResult(best, streamUrl, login, baseline, suggestedNextCheck);
             }

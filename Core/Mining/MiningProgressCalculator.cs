@@ -44,9 +44,7 @@ namespace Core.Mining
 
             if (nextReward == null)
             {
-                if (UISettingsManager.Instance.VerboseDebugLogging)
-                    AppLogger.Info("RewardProgress", $"campaignId={campaign.Id}, no next unclaimed reward found; returning 0.");
-
+                AppLogger.Debug("RewardProgress", $"campaignId={campaign.Id}, no next unclaimed reward found; returning 0.");
                 return 0;
             }
 
@@ -55,12 +53,9 @@ namespace Core.Mining
             double percentage = (double)effectiveProgressSeconds / requiredSeconds * 100;
             byte result = (byte)Math.Clamp((int)Math.Floor(percentage), 0, 100);
 
-            if (UISettingsManager.Instance.VerboseDebugLogging)
-            {
-                AppLogger.Info(
-                    "RewardProgress",
-                    $"campaignId={campaign.Id}, campaignName='{campaign.Name}', rewardsUnclaimed={unclaimedRewards.Count}, nextRewardId={nextReward.Id}, nextRewardName='{nextReward.Name}', requiredSeconds={requiredSeconds}, totalMinedSeconds={totalMinedSeconds}, effectiveProgressSeconds={effectiveProgressSeconds}, computedPct={result}");
-            }
+            AppLogger.Debug(
+                "RewardProgress",
+                $"campaignId={campaign.Id}, campaignName='{campaign.Name}', rewardsUnclaimed={unclaimedRewards.Count}, nextRewardId={nextReward.Id}, nextRewardName='{nextReward.Name}', requiredSeconds={requiredSeconds}, totalMinedSeconds={totalMinedSeconds}, effectiveProgressSeconds={effectiveProgressSeconds}, computedPct={result}");
 
             return result;
         }

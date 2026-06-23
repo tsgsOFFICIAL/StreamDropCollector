@@ -9,6 +9,12 @@ namespace Core.Services.Mining.Kick
     /// </summary>
     public static class KickChannelResponseParser
     {
+        /// <summary>
+        /// Parses a Kick channel API JSON payload into a <see cref="LiveChannelSnapshot"/>.
+        /// </summary>
+        /// <param name="json">Raw JSON body from <c>GET /api/v2/channels/{slug}</c>.</param>
+        /// <param name="login">Fallback login slug when the payload omits <c>slug</c>.</param>
+        /// <returns>A normalized snapshot, or <see langword="null"/> when parsing fails.</returns>
         public static LiveChannelSnapshot? Parse(string json, string login)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -26,6 +32,12 @@ namespace Core.Services.Mining.Kick
             }
         }
 
+        /// <summary>
+        /// Parses a Kick channel API JSON root element into a <see cref="LiveChannelSnapshot"/>.
+        /// </summary>
+        /// <param name="root">Parsed JSON root from the channel API response.</param>
+        /// <param name="login">Fallback login slug when the payload omits <c>slug</c>.</param>
+        /// <returns>A normalized snapshot with live state and category slugs.</returns>
         public static LiveChannelSnapshot? Parse(JsonElement root, string login)
         {
             string? responseSlug = root.TryGetProperty("slug", out JsonElement slugElement)

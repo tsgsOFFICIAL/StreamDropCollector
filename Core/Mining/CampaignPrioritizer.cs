@@ -34,11 +34,11 @@ namespace Core.Mining
 
                 if (pinned != null)
                 {
-                    AppLogger.Info("Selection", $"Pinned campaign '{pinned.Name}' selected via manual override.");
+                    AppLogger.Debug("Selection", $"Pinned campaign '{pinned.Name}' selected via manual override.");
                     return new CampaignSelectionResult(pinned, PinReleased: false);
                 }
 
-                AppLogger.Info("Selection", $"Pinned campaign '{pinnedCampaignId}' is no longer pursuable, releasing pin.");
+                AppLogger.Debug("Selection", $"Pinned campaign '{pinnedCampaignId}' is no longer pursuable, releasing pin.");
                 return new CampaignSelectionResult(SelectByPriority(campaigns, mode), PinReleased: true);
             }
 
@@ -82,7 +82,7 @@ namespace Core.Mining
             if (selected == null)
                 AppLogger.Warn("Selection", "No campaign selected after priority sort.");
             else
-                AppLogger.Info("Selection", $"Selected campaign '{selected.Name}' ({selected.Id}) with mode={mode}.");
+                AppLogger.Debug("Selection", $"Selected campaign '{selected.Name}' ({selected.Id}) with mode={mode}.");
 
             return selected;
         }

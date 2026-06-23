@@ -16,6 +16,26 @@ namespace Core.Mining
         /// <summary>
         /// Runs one mining evaluation cycle against the provided campaign snapshot.
         /// </summary>
+        /// <param name="campaignSnapshot">Active campaigns at the start of the cycle.</param>
+        /// <param name="twitchGqlService">Twitch GQL service for claims and progress, if available.</param>
+        /// <param name="twitchWebView">Twitch WebView host used for stream navigation.</param>
+        /// <param name="kickWebView">Kick WebView host used for stream navigation.</param>
+        /// <param name="selectBestCampaignAsync">Chooses the next campaign to mine from a candidate list.</param>
+        /// <param name="selectTwitchUrlAsync">Resolves a Twitch stream URL for a campaign.</param>
+        /// <param name="selectKickUrlAsync">Resolves a Kick stream URL for a campaign.</param>
+        /// <param name="isTwitchEligibleAsync">Verifies a Twitch channel is still eligible for a campaign.</param>
+        /// <param name="isKickEligibleAsync">Verifies a Kick channel is still eligible for a campaign.</param>
+        /// <param name="navigateTwitchAsync">Navigates the Twitch WebView to a stream URL.</param>
+        /// <param name="navigateKickAsync">Navigates the Kick WebView to a stream URL.</param>
+        /// <param name="prepareTwitchStreamPageAsync">Optional Twitch post-navigation setup.</param>
+        /// <param name="prepareKickStreamPageAsync">Optional Kick post-navigation setup.</param>
+        /// <param name="lastMinedStreamers">Persists chosen stream URLs for future preference.</param>
+        /// <param name="onTwitchSelectionPreview">Raised when a Twitch stream is chosen, before navigation.</param>
+        /// <param name="onKickSelectionPreview">Raised when a Kick stream is chosen, before navigation.</param>
+        /// <param name="markRewardClaimed">Marks a reward claimed in the active inventory.</param>
+        /// <param name="updateSelectionFlags">Refreshes current-campaign highlight flags in the inventory.</param>
+        /// <param name="cancellationToken">Cancellation token for the mining cycle.</param>
+        /// <returns>Selection results, miner status, and the next scheduled re-evaluation time.</returns>
         public async Task<MiningOrchestratorResult> RunAsync(
             IReadOnlyList<DropsCampaign> campaignSnapshot,
             IGqlService? twitchGqlService,
@@ -37,7 +57,7 @@ namespace Core.Mining
             Action updateSelectionFlags,
             CancellationToken cancellationToken)
         {
-            AppLogger.Info(
+            AppLogger.Debug(
                 "TwitchMining",
                 $"MiningOrchestrator.RunAsync START snapshotCount={campaignSnapshot.Count} " +
                 $"twitchWebView={(twitchWebView is null ? "null" : "ok")} kickWebView={(kickWebView is null ? "null" : "ok")}");
@@ -73,7 +93,7 @@ namespace Core.Mining
 
             int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake());
             int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake());
-            AppLogger.Info(
+            AppLogger.Debug(
                 "TwitchMining",
                 $"MiningOrchestrator progress gate twitchWithProgress={twitchWithProgress} kickWithProgress={kickWithProgress} " +
                 $"readyToClaimOnly={readyToClaimOnlyCampaigns.Count}");
@@ -106,7 +126,7 @@ namespace Core.Mining
                 .Where(c => c.Platform == Platform.Kick && c.HasProgressToMake())
                 .ToList();
 
-            AppLogger.Info(
+            AppLogger.Debug(
                 "TwitchMining",
                 $"MiningOrchestrator twitchCandidates={twitchCampaigns.Count} kickCandidates={kickCampaigns.Count} " +
                 $"twitchCampaigns=[{string.Join(", ", twitchCampaigns.Select(c => $"{c.Name}(slug={c.Slug},id={c.Id})"))}]");
@@ -139,7 +159,7 @@ namespace Core.Mining
             if (twitchResult is null)
                 AppLogger.Warn("TwitchMining", "MiningOrchestrator twitchResult=null after TrySelectAsync.");
             else
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchMining",
                     $"MiningOrchestrator twitchResult OK campaign='{twitchResult.Campaign.Name}' login={twitchResult.Login} url={twitchResult.StreamUrl}");
 

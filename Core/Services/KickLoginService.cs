@@ -11,7 +11,7 @@ namespace Core.Services
     {
         public override async Task ValidateCredentialsAsync(IWebViewHost host)
         {
-            AppLogger.Info("KickLogin", "Credential validation started.");
+            AppLogger.Debug("KickLogin", "Validating credentials...");
             UpdateStatus(ConnectionStatus.Connecting);
 
             if (host == null)
@@ -37,7 +37,7 @@ namespace Core.Services
             string html = await GetPageHtmlAsync(host);
             bool isLoggedIn = !html.Contains("data-testid=\"login\"", StringComparison.OrdinalIgnoreCase);
 
-            AppLogger.Info("KickLogin", $"Credential validation completed. isLoggedIn={isLoggedIn}");
+            AppLogger.Info("KickLogin", isLoggedIn ? "Kick connected." : "Kick not logged in.");
 
             UpdateStatus(isLoggedIn ? ConnectionStatus.Connected : ConnectionStatus.NotConnected);
         }

@@ -15,12 +15,22 @@ namespace Core.Mining.Kick
         private readonly IKickLiveChannelApi _liveChannelApi;
         private readonly LastMinedStreamersStore _lastMinedStreamers;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="KickStreamerSelector"/> class.
+        /// </summary>
+        /// <param name="liveChannelApi">Kick live-channel API used to resolve eligible streamers.</param>
+        /// <param name="lastMinedStreamers">Store of last-mined streamer URLs per campaign slug.</param>
         public KickStreamerSelector(IKickLiveChannelApi liveChannelApi, LastMinedStreamersStore lastMinedStreamers)
         {
             _liveChannelApi = liveChannelApi;
             _lastMinedStreamers = lastMinedStreamers;
         }
 
+        /// <summary>
+        /// Selects a Kick stream URL for the campaign, preferring the last-mined streamer when still eligible.
+        /// </summary>
+        /// <param name="campaign">Kick drop campaign to mine.</param>
+        /// <returns>The stream URL, or an empty string when no eligible streamer is found.</returns>
         public async Task<string> SelectUrlAsync(DropsCampaign campaign)
         {
             _lastMinedStreamers.TryGet(Platform.Kick, campaign.Slug, out string? rememberedUrl);

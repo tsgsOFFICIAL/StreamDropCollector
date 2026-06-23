@@ -41,7 +41,7 @@ namespace Core.Services.Mining.Twitch
             {
                 ct.ThrowIfCancellationRequested();
 
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchGeneralDrop",
                     $"Directory discovery START campaign='{campaign.Name}' url={directoryUrl} limit={limit}");
 
@@ -53,7 +53,7 @@ namespace Core.Services.Mining.Twitch
                 string raw = await host.ExecuteScriptAsync(TwitchGeneralDropDirectoryScripts.GetTopStreamerLoginsJs(limit));
                 IReadOnlyList<string> logins = ParseLoginsResult(raw);
 
-                AppLogger.Info(
+                AppLogger.Debug(
                     "TwitchGeneralDrop",
                     $"Directory discovery DONE campaign='{campaign.Name}' found={logins.Count} logins=[{string.Join(", ", logins)}]");
 

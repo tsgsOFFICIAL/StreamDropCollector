@@ -54,7 +54,7 @@ namespace Core.Mining
                         if (!inventoryUpdated)
                             AppLogger.Warn("Miner", $"Failed to apply immediate claimed-state update. campaignId={parentCampaign.Id}, rewardId={item.Id}");
                         else
-                            AppLogger.Info("Miner", $"Applied immediate claimed-state update. campaignId={parentCampaign.Id}, rewardId={item.Id}");
+                            AppLogger.Debug("Miner", $"Applied immediate claimed-state update. campaignId={parentCampaign.Id}, rewardId={item.Id}");
 
                         if (UISettingsManager.Instance.NotifyOnAutoClaimed)
                             NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}");

@@ -109,7 +109,7 @@ namespace Core.Stores
             if (removed)
             {
                 Save();
-                AppLogger.Info("Selection", $"Forgot remembered streamer for platform={platform}, campaignSlug='{campaignSlug}'.");
+                AppLogger.Debug("Selection", $"Forgot remembered streamer for platform={platform}, campaignSlug='{campaignSlug}'.");
             }
         }
 
@@ -146,7 +146,7 @@ namespace Core.Stores
                     }
                 }
 
-                AppLogger.Info("StreamSelection", $"Loaded remembered streamers. twitch={_twitchBySlug.Count}, kick={_kickBySlug.Count}");
+                AppLogger.Debug("StreamSelection", $"Loaded remembered streamers. twitch={_twitchBySlug.Count}, kick={_kickBySlug.Count}");
             }
             catch (Exception ex)
             {

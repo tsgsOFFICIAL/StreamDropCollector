@@ -16,20 +16,38 @@ namespace Core.Mining
         /// </summary>
         public sealed class Host
         {
+            /// <summary>Checks whether the currently mined Twitch channel is still live and game-eligible.</summary>
             public required Func<Task<bool>> IsTwitchEligibleAsync { get; init; }
+
+            /// <summary>Checks whether the currently mined Kick channel is still live and category-eligible.</summary>
             public required Func<Task<bool>> IsKickEligibleAsync { get; init; }
+
+            /// <summary>Returns whether any Twitch campaigns still have progress to make.</summary>
             public required Func<bool> HasTwitchCampaignsWithProgress { get; init; }
+
+            /// <summary>Returns whether any Kick campaigns still have progress to make.</summary>
             public required Func<bool> HasKickCampaignsWithProgress { get; init; }
+
+            /// <summary>Gets the last known Twitch online state for the mined channel.</summary>
             public required Func<bool> GetLastKnownTwitchOnline { get; init; }
+
+            /// <summary>Gets the last known Kick online state for the mined channel.</summary>
             public required Func<bool> GetLastKnownKickOnline { get; init; }
+
+            /// <summary>Updates the cached Twitch online state after an eligibility failure.</summary>
             public required Action<bool> SetLastKnownTwitchOnline { get; init; }
+
+            /// <summary>Updates the cached Kick online state after an eligibility failure.</summary>
             public required Action<bool> SetLastKnownKickOnline { get; init; }
+
+            /// <summary>Triggers a full stream re-selection when a mined channel goes ineligible.</summary>
             public required Func<Task> RequestReevaluationAsync { get; init; }
         }
 
         /// <summary>
         /// Starts periodic health monitoring, replacing any existing timer.
         /// </summary>
+        /// <param name="host">Callbacks and state accessors used on each 30-second health tick.</param>
         public void Start(Host host)
         {
             Stop();
@@ -48,7 +66,7 @@ namespace Core.Mining
                     bool kickEligible = await host.IsKickEligibleAsync();
 
                     AppLogger.Debug("HealthCheck", $"Twitch eligible: {twitchEligible} | Kick eligible: {kickEligible}");
-                    AppLogger.Info(
+                    AppLogger.Debug(
                         "TwitchMining",
                         $"HealthCheck twitchEligible={twitchEligible} kickEligible={kickEligible} " +
                         $"twitchHasProgress={twitchHasProgress} twitchWasOnline={twitchWasOnline}");
@@ -86,6 +104,9 @@ namespace Core.Mining
             _timer = null;
         }
 
+        /// <summary>
+        /// Stops health monitoring and releases the timer.
+        /// </summary>
         public void Dispose() => Stop();
     }
 }

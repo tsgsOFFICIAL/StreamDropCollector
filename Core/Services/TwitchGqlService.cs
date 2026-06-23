@@ -11,6 +11,9 @@ using System.IO;
 
 namespace Core.Services
 {
+    /// <summary>
+    /// Twitch GraphQL client that captures auth headers from a WebView and issues drops-related GQL requests over HTTP.
+    /// </summary>
     public sealed class TwitchGqlService : IGqlService
     {
         private readonly IWebViewHost _host;
@@ -38,6 +41,11 @@ namespace Core.Services
             set => _userId = value;
         }
 
+        /// <summary>
+        /// Creates a GQL service bound to the Twitch WebView used for header capture and cookie access.
+        /// </summary>
+        /// <param name="host">WebView host for Twitch login and integrity header capture.</param>
+        /// <param name="httpClient">Optional HTTP client; a default instance is created when null.</param>
         public TwitchGqlService(IWebViewHost host, HttpClient? httpClient = null)
         {
             _host = host;
@@ -194,6 +202,13 @@ namespace Core.Services
             }
         }
 
+        /// <summary>
+        /// Batch-checks which channel logins are live and streaming the specified Twitch game slug.
+        /// </summary>
+        /// <param name="channelLogins">Channel login slugs to evaluate.</param>
+        /// <param name="gameSlug">Expected game slug from the drop campaign.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>Login slugs that are live and match the game slug.</returns>
         public async Task<List<string>> QueryLiveChannelsBySlugAsync(IReadOnlyList<string> channelLogins, string gameSlug, CancellationToken ct = default)
         {
             if (_clientId == null || _integrityToken == null)
@@ -208,7 +223,7 @@ namespace Core.Services
             List<string> liveMatches = new();
             int totalBatches = (int)Math.Ceiling(channelLogins.Count / (double)batchSize);
 
-            AppLogger.Info("TwitchGql", $"QueryLiveChannelsBySlug started. totalChannels={channelLogins.Count}, gameSlug={gameSlug}, batches={totalBatches}");
+            AppLogger.Debug("TwitchGql", $"QueryLiveChannelsBySlug started. totalChannels={channelLogins.Count}, gameSlug={gameSlug}, batches={totalBatches}");
 
             for (int i = 0; i < channelLogins.Count; i += batchSize)
             {
@@ -286,7 +301,7 @@ namespace Core.Services
                 AppLogger.Debug("TwitchGql", $"QueryLiveChannelsBySlug batch offset={i}, batchSize={batch.Count}, matchesFound={liveMatches.Count}");
             }
 
-            AppLogger.Info("TwitchGql", $"QueryLiveChannelsBySlug completed. liveMatches={liveMatches.Count}/{channelLogins.Count}");
+            AppLogger.Debug("TwitchGql", $"QueryLiveChannelsBySlug completed. liveMatches={liveMatches.Count}/{channelLogins.Count}");
             return liveMatches;
         }
         /// <summary>
@@ -302,7 +317,7 @@ namespace Core.Services
         /// reward was successfully claimed; otherwise, <see langword="false"/>.</returns>
         public async Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default)
         {
-            AppLogger.Info("TwitchGql", $"ClaimDrop started. campaignId={campaignId}, rewardId={rewardId}");
+            AppLogger.Debug("TwitchGql", $"ClaimDrop started. campaignId={campaignId}, rewardId={rewardId}");
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () => await RefreshHeadersAsync(ct));
 
             // Step 1. Construct the payload, according to the above format
@@ -365,7 +380,10 @@ namespace Core.Services
                         .GetValue<bool>()
                   ?? false;
 
-            AppLogger.Info("TwitchGql", $"ClaimDrop completed. success={isConnected}");
+            if (isConnected)
+                AppLogger.Info("TwitchGql", "Drop claimed.");
+            else
+                AppLogger.Debug("TwitchGql", "ClaimDrop returned not connected.");
 
             return isConnected;
         }
@@ -438,9 +456,80 @@ namespace Core.Services
             response.EnsureSuccessStatusCode();
 
             JsonArray responseArray = JsonNode.Parse(jsonText)!.AsArray();
-            AppLogger.Info("TwitchGql", "QueryFullDropsDashboard completed successfully.");
+            AppLogger.Debug("TwitchGql", "QueryFullDropsDashboard completed successfully.");
             return responseArray;
         }
+
+        /// <summary>
+        /// Queries only the Inventory GQL operation using cached auth headers, without touching the WebView.
+        /// </summary>
+        /// <remarks>
+        /// Intended for lightweight progress sync while a stream is being mined. Skips the call when cached
+        /// headers or the Inventory persisted-query hash are unavailable instead of refreshing headers
+        /// (which would navigate the mining WebView away from the active stream).
+        /// </remarks>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The Inventory response object, or <see langword="null"/> on skip or failure.</returns>
+        public async Task<JsonObject?> QueryInventoryProgressAsync(CancellationToken ct = default)
+        {
+            // Reuse headers captured during the last full dashboard load; never navigate here during mining.
+            if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_integrityToken) || string.IsNullOrEmpty(_accessToken))
+            {
+                AppLogger.Debug("TwitchGql", "QueryInventoryProgress skipped - cached headers unavailable.");
+                return null;
+            }
+
+            if (!TryGetCachedHash("Inventory", requireFresh: false, out string? inventoryHash))
+            {
+                AppLogger.Debug("TwitchGql", "QueryInventoryProgress skipped - Inventory hash not cached.");
+                return null;
+            }
+
+            JsonArray payload = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["operationName"] = "Inventory",
+                    ["variables"] = new JsonObject { ["fetchRewardCampaigns"] = true },
+                    ["extensions"] = new JsonObject
+                    {
+                        ["persistedQuery"] = new JsonObject
+                        {
+                            ["version"] = 1,
+                            ["sha256Hash"] = inventoryHash
+                        }
+                    }
+                }
+            };
+
+            using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql")
+            {
+                Content = JsonContent.Create(payload)
+            };
+
+            request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+            request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+            request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+            if (!string.IsNullOrEmpty(_deviceId))
+                request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+            HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
+            string jsonText = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
+            {
+                AppLogger.Warn(
+                    "TwitchGql",
+                    $"QueryInventoryProgress failed. status={(int)response.StatusCode}, hasErrors={jsonText.Contains("\"errors\"")}");
+                return null;
+            }
+
+            JsonArray? responseArray = JsonNode.Parse(jsonText)?.AsArray();
+            AppLogger.Debug("TwitchGql", "QueryInventoryProgress completed successfully.");
+            return responseArray?[0]?.AsObject();
+        }
+
         /// <summary>
         /// Retrieves detailed information for multiple Twitch drop campaigns in a single batch operation.
         /// </summary>
@@ -526,7 +615,7 @@ namespace Core.Services
             }
 
             AppLogger.Debug("TwitchGql", $"[GQL] Fetched {results.Count} campaigns with full details");
-            AppLogger.Info("TwitchGql", $"DropCampaignDetails fetch completed. totalResults={results.Count}");
+            AppLogger.Debug("TwitchGql", $"DropCampaignDetails fetch completed. totalResults={results.Count}");
             return results;
         }
         /// <summary>
@@ -765,11 +854,8 @@ namespace Core.Services
                 AppLogger.Debug("TwitchGql", $"[HashCache] {message}");
         }
 
-        private static void LogCacheInfo(string message)
-        {
-            if (UISettingsManager.Instance.VerboseDebugLogging)
-                AppLogger.Info("TwitchGql", $"[HashCache] {message}");
-        }
+        private static void LogCacheInfo(string message) =>
+            LogCacheDebug(message);
 
         private static void LogCacheWarn(string message)
         {
@@ -783,6 +869,9 @@ namespace Core.Services
             public DateTimeOffset UpdatedUtc { get; set; }
         }
 
+        /// <summary>
+        /// Releases the underlying HTTP client used for GraphQL requests.
+        /// </summary>
         public void Dispose() => _httpClient.Dispose();
     }
 }

@@ -73,7 +73,7 @@ namespace Core.Services.Twitch.Helix
                     return;
                 }
 
-                AppLogger.Info("TwitchEventSub", $"Watching mined channel {_watchedLogin} ({_watchedBroadcasterId}).");
+                AppLogger.Debug("TwitchEventSub", $"Watching mined channel {_watchedLogin} ({_watchedBroadcasterId}).");
 
                 if (_sessionId is not null)
                     await SubscribeMinedChannelAsync(_watchedBroadcasterId, _sessionId, ct).ConfigureAwait(false);
@@ -205,7 +205,7 @@ namespace Core.Services.Twitch.Helix
                         _subscriptionIds.Clear();
                     }
 
-                    AppLogger.Info("TwitchEventSub", $"Connected (session={sessionId}).");
+                    AppLogger.Debug("TwitchEventSub", $"Connected (session={sessionId}).");
                     await ResubscribeCurrentWatcherAsync(sessionId, ct).ConfigureAwait(false);
                     break;
 
@@ -218,7 +218,7 @@ namespace Core.Services.Twitch.Helix
 
                 case "session_reconnect":
                     string reconnectUrl = payload.GetProperty("session").GetProperty("reconnect_url").GetString()!;
-                    AppLogger.Info("TwitchEventSub", "Twitch requested reconnect.");
+                    AppLogger.Debug("TwitchEventSub", "Twitch requested reconnect.");
                     ClientWebSocket newSocket = new();
                     await newSocket.ConnectAsync(new Uri(reconnectUrl), ct).ConfigureAwait(false);
                     _socket.Dispose();

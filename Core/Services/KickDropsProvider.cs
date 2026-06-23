@@ -33,7 +33,7 @@ namespace Core.Services
         {
             try
             {
-                AppLogger.Info("KickDrops", "Fetching active campaigns started.");
+                AppLogger.Debug("KickDrops", "Fetching active campaigns started.");
                 await host.EnsureInitializedAsync();
 
                 // 1. Get full campaign data (Channels, Rewards, etc.)
@@ -216,8 +216,7 @@ namespace Core.Services
                     }
                 }
 
-                AppLogger.Debug("KickDrops", $"LOADED {campaigns.Count} campaigns with progress");
-                AppLogger.Info("KickDrops", $"Active campaigns fetched successfully. count={campaigns.Count}");
+                AppLogger.Debug("KickDrops", $"Active campaigns fetched successfully. count={campaigns.Count}");
                 return campaigns.AsReadOnly();
             }
             catch (Exception ex)

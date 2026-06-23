@@ -24,6 +24,16 @@ namespace Core.Interfaces
         /// dashboard data.</returns>
         Task<JsonArray> QueryFullDropsDashboardAsync(CancellationToken ct = default);
         /// <summary>
+        /// Queries only the Inventory GQL operation using cached auth headers, without touching the WebView.
+        /// Intended for lightweight progress sync while a stream is being mined.
+        /// </summary>
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>
+        /// The Inventory response object when successful; otherwise <see langword="null"/> if cached headers are
+        /// unavailable or the request fails.
+        /// </returns>
+        Task<JsonObject?> QueryInventoryProgressAsync(CancellationToken ct = default);
+        /// <summary>
         /// Asynchronously retrieves details for multiple drop campaigns in a single batch operation.
         /// </summary>
         /// <param name="requests">A read-only list of tuples, each containing a drop campaign ID and a channel login, specifying the campaigns

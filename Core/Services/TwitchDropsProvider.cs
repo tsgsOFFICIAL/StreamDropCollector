@@ -23,7 +23,7 @@ namespace Core.Services
         {
             try
             {
-                AppLogger.Info("TwitchDrops", "Fetching active campaigns started.");
+                AppLogger.Debug("TwitchDrops", "Fetching active campaigns started.");
                 await host.EnsureInitializedAsync();
 
                 JsonArray dashboard = await gql.QueryFullDropsDashboardAsync(ct);
@@ -56,7 +56,7 @@ namespace Core.Services
                     return false; // Keep
                 });
 
-                AppLogger.Info("TwitchDrops", $"Campaigns after status/account filter: count={campaigns?.Count ?? 0}");
+                AppLogger.Debug("TwitchDrops", $"Campaigns after status/account filter: count={campaigns?.Count ?? 0}");
 
                 if (campaigns == null || campaigns.Count == 0)
                 {
@@ -89,7 +89,7 @@ namespace Core.Services
                 Dictionary<string, JsonObject> campaignDetails = await gql.QueryDropCampaignDetailsBatchAsync(requests, ct);
 
                 AppLogger.Debug("TwitchDrops", $"Successfully fetched detailed data for {campaignDetails.Count} campaigns.");
-                AppLogger.Info("TwitchDrops", $"Campaign details fetched. requested={requests.Count}, received={campaignDetails.Count}");
+                AppLogger.Debug("TwitchDrops", $"Campaign details fetched. requested={requests.Count}, received={campaignDetails.Count}");
 
                 List<DropsCampaign> result = new List<DropsCampaign>();
                 foreach (JsonObject camp in campaignDetails.Values)
@@ -166,7 +166,7 @@ namespace Core.Services
                 }
 
                 // Return the new list
-                AppLogger.Info("TwitchDrops", $"Active campaigns fetched successfully. count={updatedResult.Count}");
+                AppLogger.Debug("TwitchDrops", $"Active campaigns fetched successfully. count={updatedResult.Count}");
                 return updatedResult.AsReadOnly();
             }
             catch (Exception ex)

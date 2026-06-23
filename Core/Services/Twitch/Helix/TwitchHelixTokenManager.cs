@@ -29,13 +29,13 @@ namespace Core.Services.Twitch.Helix
 
             if (savedRefreshToken is not null)
             {
-                AppLogger.Info("TwitchHelix", "Found saved Helix login, refreshing...");
+                AppLogger.Debug("TwitchHelix", "Found saved Helix login, refreshing...");
                 try
                 {
                     TwitchHelixAuthTokens refreshed = await TwitchHelixAuth.RefreshAccessTokenAsync(
                         http, clientId, savedRefreshToken, ct);
                     TwitchHelixTokenStore.SaveRefreshToken(refreshed.RefreshToken);
-                    AppLogger.Info("TwitchHelix", "Reused saved Helix login.");
+                    AppLogger.Debug("TwitchHelix", "Reused saved Helix login.");
                     return new TwitchHelixTokenManager(http, clientId, refreshed.AccessToken, refreshed.RefreshToken);
                 }
                 catch (Exception ex)
@@ -45,7 +45,7 @@ namespace Core.Services.Twitch.Helix
                 }
             }
 
-            AppLogger.Info("TwitchHelix", "Starting Twitch device-code authentication...");
+            AppLogger.Debug("TwitchHelix", "Starting Twitch device-code authentication...");
             TwitchHelixAuthTokens tokens = await TwitchHelixAuth.GetUserAccessTokenAsync(
                 http, clientId, promptAsync, ct: ct);
             TwitchHelixTokenStore.SaveRefreshToken(tokens.RefreshToken);

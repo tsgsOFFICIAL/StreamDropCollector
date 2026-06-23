@@ -310,14 +310,14 @@ namespace UI.Views
         {
             // Cancel any previous in-flight load
             _currentLoadCts?.Cancel();
-            AppLogger.Info("Dashboard", "LoadDropsAsync invoked; previous load cancellation requested if active.");
+            AppLogger.Debug("Dashboard", "LoadDropsAsync invoked; previous load cancellation requested if active.");
 
             // Wait if another load is already running
             await _loadDropsSemaphore.WaitAsync();
             try
             {
                 await DropsInventoryManager.Instance.PauseMiningAsync();
-                AppLogger.Info("Dashboard", "Miner paused for campaign refresh.");
+                AppLogger.Debug("Dashboard", "Miner paused for campaign refresh.");
 
                 using CancellationTokenSource cts = new CancellationTokenSource();
                 _currentLoadCts = cts;
@@ -348,7 +348,7 @@ namespace UI.Views
                     allCampaigns.AddRange(batch);
                 }
 
-                AppLogger.Info("Dashboard", $"Campaign load completed. totalCampaigns={allCampaigns.Count}, twitchStatus={_twitchService.Status}, kickStatus={_kickService.Status}");
+                AppLogger.Info("Dashboard", $"Loaded {allCampaigns.Count} campaigns.");
 
                 DropsInventoryManager.Instance.UpdateCampaigns(allCampaigns.AsReadOnly(), _twitchGqlService, startMining: false);
 
@@ -358,7 +358,7 @@ namespace UI.Views
             catch (OperationCanceledException ex) when (_currentLoadCts?.IsCancellationRequested == true)
             {
                 // Expected when a new load cancels the old one
-                AppLogger.Info("Dashboard", $"LoadDropsAsync canceled due to superseding refresh request. {ex.Message}");
+                AppLogger.Debug("Dashboard", $"LoadDropsAsync canceled due to superseding refresh request. {ex.Message}");
                 return;
             }
             catch (Exception ex)
@@ -372,7 +372,7 @@ namespace UI.Views
                 _loadDropsSemaphore.Release();
                 _currentLoadCts = null;
                 await DropsInventoryManager.Instance.ResumeMiningAsync();
-                AppLogger.Info("Dashboard", "Miner resumed after campaign refresh.");
+                AppLogger.Debug("Dashboard", "Miner resumed after campaign refresh.");
             }
         }
         /// <summary>

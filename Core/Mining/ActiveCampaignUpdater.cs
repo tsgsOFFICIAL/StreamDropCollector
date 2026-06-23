@@ -13,6 +13,12 @@ namespace Core.Mining
         /// <summary>
         /// Applies minute progress to a campaign in the active inventory.
         /// </summary>
+        /// <param name="activeCampaigns">Observable inventory collection to mutate on the UI thread.</param>
+        /// <param name="selection">Current mining selection context to keep in sync.</param>
+        /// <param name="platform">Platform whose campaign is being updated.</param>
+        /// <param name="campaignId">Id of the campaign receiving new minutes.</param>
+        /// <param name="minutesToAdd">Whole minutes earned since the last applied bucket.</param>
+        /// <param name="verboseLog">Optional verbose logging callback.</param>
         public void ApplyMinuteProgress(
             ObservableCollection<DropsCampaign> activeCampaigns,
             ActiveCampaignSelectionContext selection,

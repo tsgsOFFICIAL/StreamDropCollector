@@ -68,7 +68,7 @@ namespace Core.Stores
                 if (entry != null && !string.IsNullOrWhiteSpace(entry.CampaignId))
                 {
                     CampaignId = entry.CampaignId;
-                    AppLogger.Info("Inventory", $"[PinnedCampaign] Restored pinned campaign '{CampaignId}' from disk.");
+                    AppLogger.Debug("Inventory", $"[PinnedCampaign] Restored pinned campaign '{CampaignId}' from disk.");
                 }
             }
             catch (Exception ex)
