@@ -24,8 +24,8 @@ namespace Core.Mining
             Func<List<DropsCampaign>, Task<DropsCampaign?>> selectBestCampaignAsync,
             Func<DropsCampaign, Task<string>> selectTwitchUrlAsync,
             Func<DropsCampaign, Task<string>> selectKickUrlAsync,
-            Func<string, string, Task<bool>> isTwitchEligibleAsync,
-            Func<string, string, Task<bool>> isKickEligibleAsync,
+            Func<string, DropsCampaign, Task<bool>> isTwitchEligibleAsync,
+            Func<string, DropsCampaign, Task<bool>> isKickEligibleAsync,
             Func<string, Task> navigateTwitchAsync,
             Func<string, Task> navigateKickAsync,
             LastMinedStreamersStore lastMinedStreamers,
@@ -35,10 +35,16 @@ namespace Core.Mining
             Action updateSelectionFlags,
             CancellationToken cancellationToken)
         {
+            AppLogger.Info(
+                "TwitchMining",
+                $"MiningOrchestrator.RunAsync START snapshotCount={campaignSnapshot.Count} " +
+                $"twitchWebView={(twitchWebView is null ? "null" : "ok")} kickWebView={(kickWebView is null ? "null" : "ok")}");
+
             if (!campaignSnapshot.Any())
             {
                 AppLogger.Debug("Miner", "[MiningOrchestrator] No active campaigns with progress to make. Stopping stream mining.");
                 AppLogger.Info("Miner", "No active campaigns found during start; switching to Idle.");
+                AppLogger.Warn("TwitchMining", "MiningOrchestrator ABORT - campaign snapshot empty.");
                 return new MiningOrchestratorResult
                 {
                     CompletedSelectionCycle = false,
@@ -63,6 +69,13 @@ namespace Core.Mining
                 .Where(c => c.HasReadyToClaimRewards() && !c.HasProgressToMake())
                 .ToList();
 
+            int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake());
+            int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake());
+            AppLogger.Info(
+                "TwitchMining",
+                $"MiningOrchestrator progress gate twitchWithProgress={twitchWithProgress} kickWithProgress={kickWithProgress} " +
+                $"readyToClaimOnly={readyToClaimOnlyCampaigns.Count}");
+
             if (!campaignSnapshot.Any(c => c.HasProgressToMake()))
             {
                 if (readyToClaimOnlyCampaigns.Any())
@@ -70,6 +83,7 @@ namespace Core.Mining
 
                 AppLogger.Debug("Miner", "[MiningOrchestrator] No campaigns with progress to make after claim. Stopping stream mining.");
                 AppLogger.Info("Miner", "No campaigns with progress after claim pass; switching to Idle.");
+                AppLogger.Warn("TwitchMining", "MiningOrchestrator ABORT - no campaigns with HasProgressToMake().");
                 updateSelectionFlags();
 
                 return new MiningOrchestratorResult
@@ -90,8 +104,21 @@ namespace Core.Mining
                 .Where(c => c.Platform == Platform.Kick && c.HasProgressToMake())
                 .ToList();
 
+            AppLogger.Info(
+                "TwitchMining",
+                $"MiningOrchestrator twitchCandidates={twitchCampaigns.Count} kickCandidates={kickCampaigns.Count} " +
+                $"twitchCampaigns=[{string.Join(", ", twitchCampaigns.Select(c => $"{c.Name}(slug={c.Slug},id={c.Id})"))}]");
+
             PlatformMiningResult? twitchResult = null;
-            if (twitchCampaigns.Count != 0 && twitchWebView != null)
+            if (twitchCampaigns.Count == 0)
+            {
+                AppLogger.Warn("TwitchMining", "MiningOrchestrator SKIP Twitch selection - no Twitch campaigns with progress.");
+            }
+            else if (twitchWebView == null)
+            {
+                AppLogger.Warn("TwitchMining", $"MiningOrchestrator SKIP Twitch selection - twitchWebView is null ({twitchCampaigns.Count} candidates ignored).");
+            }
+            else
             {
                 twitchResult = await PlatformMiningSession.TrySelectAsync(
                     Platform.Twitch,
@@ -105,6 +132,13 @@ namespace Core.Mining
                     onTwitchSelectionPreview,
                     cancellationToken);
             }
+
+            if (twitchResult is null)
+                AppLogger.Warn("TwitchMining", "MiningOrchestrator twitchResult=null after TrySelectAsync.");
+            else
+                AppLogger.Info(
+                    "TwitchMining",
+                    $"MiningOrchestrator twitchResult OK campaign='{twitchResult.Campaign.Name}' login={twitchResult.Login} url={twitchResult.StreamUrl}");
 
             PlatformMiningResult? kickResult = null;
             if (kickCampaigns.Count != 0 && kickWebView != null)

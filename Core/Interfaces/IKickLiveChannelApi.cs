@@ -20,6 +20,6 @@ namespace Core.Interfaces
         /// <summary>
         /// Returns whether <paramref name="channelLogin"/> is live and streaming <paramref name="gameSlug"/>.
         /// </summary>
-        Task<bool> IsChannelEligibleAsync(string channelLogin, string gameSlug, CancellationToken ct = default);
+        Task<bool> IsChannelEligibleAsync(string channelLogin, DropsCampaign campaign, CancellationToken ct = default);
     }
 }

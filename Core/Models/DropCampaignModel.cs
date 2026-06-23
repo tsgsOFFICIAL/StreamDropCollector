@@ -28,6 +28,7 @@ namespace Core.Models
     /// <param name="Id">The unique identifier for the drops campaign.</param>
     /// <param name="Name">The display name of the drops campaign.</param>
     /// <param name="Slug">A URL-friendly identifier for the campaign, often used in API endpoints or web URLs.</param>
+    /// <param name="GameId">The platform game identifier when available (Twitch Helix game id from drops inventory).</param>
     /// <param name="GameName">The name of the game associated with the campaign.</param>
     /// <param name="GameImageUrl">The URL of the image representing the game. Can be null if no image is available.</param>
     /// <param name="StartsAt">The date and time when the campaign becomes active, in UTC.</param>
@@ -41,6 +42,7 @@ namespace Core.Models
         string Id,
         string Name,
         string Slug,
+        string? GameId,
         string GameName,
         string? GameImageUrl,
         DateTimeOffset StartsAt,

@@ -28,15 +28,19 @@ namespace Core.Mining.Twitch
                 ? null
                 : StreamerUrlParser.GetLoginFromUrl(rememberedUrl);
 
+            AppLogger.Info(
+                "TwitchMining",
+                $"SelectUrlAsync campaign='{campaign.Name}' slug='{campaign.Slug}' rememberedUrl={rememberedUrl ?? "(none)"} preferredLogin={preferredLogin ?? "(none)"}");
+
             string? login = await _liveChannelApi.SelectBestLiveLoginAsync(campaign, preferredLogin);
             if (string.IsNullOrWhiteSpace(login))
             {
-                AppLogger.Warn("TwitchSelection", $"No Twitch streamer resolved for campaign '{campaign.Name}'.");
+                AppLogger.Warn("TwitchMining", $"SelectUrlAsync EMPTY - no streamer for campaign '{campaign.Name}' slug='{campaign.Slug}'.");
                 return string.Empty;
             }
 
             string streamerUrl = $"https://www.twitch.tv/{login}";
-            AppLogger.Debug("TwitchSelection", $"[TwitchStreamerSelector] Selected '{streamerUrl}' for '{campaign.Name}'.");
+            AppLogger.Info("TwitchMining", $"SelectUrlAsync OK url={streamerUrl} campaign='{campaign.Name}'");
             return streamerUrl;
         }
     }

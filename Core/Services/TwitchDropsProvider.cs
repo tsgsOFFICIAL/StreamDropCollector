@@ -207,6 +207,7 @@ namespace Core.Services
 
             bool isGeneralDrop = false;
             string slug = game?["slug"]?.GetValue<string>() ?? "Unknown Game";
+            string? gameId = game?["id"]?.GetValue<string>();
 
             if (channels != null)
             {
@@ -277,6 +278,7 @@ namespace Core.Services
                 Id: id,
                 Name: name,
                 Slug: slug,
+                GameId: gameId,
                 GameName: gameName,
                 GameImageUrl: gameImage,
                 StartsAt: startsAt,

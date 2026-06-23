@@ -33,14 +33,14 @@ namespace Core.Services.Mining.Kick
                 "KickSelection",
                 ct);
 
-        public async Task<bool> IsChannelEligibleAsync(string channelLogin, string gameSlug, CancellationToken ct = default)
+        public async Task<bool> IsChannelEligibleAsync(string channelLogin, DropsCampaign campaign, CancellationToken ct = default)
         {
             LiveChannelSnapshot? snapshot = await GetOrFetchSnapshotAsync(channelLogin, ct);
-            bool eligible = LiveChannelEligibility.IsEligible(snapshot, gameSlug);
+            bool eligible = LiveChannelEligibility.IsEligible(snapshot, campaign.Slug);
 
             AppLogger.Debug(
                 "KickSelection",
-                $"IsChannelEligible login={channelLogin}, slug={gameSlug}, live={snapshot?.IsLive == true}, categories=[{string.Join(", ", snapshot?.CategorySlugs ?? [])}] -> {eligible}");
+                $"IsChannelEligible login={channelLogin}, slug={campaign.Slug}, live={snapshot?.IsLive == true}, categories=[{string.Join(", ", snapshot?.CategorySlugs ?? [])}] -> {eligible}");
 
             return eligible;
         }

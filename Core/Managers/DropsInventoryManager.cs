@@ -3,6 +3,7 @@ using Core.Services.Mining.Kick;
 using System.Windows.Input;
 using Core.Services.Mining;
 using Core.Services.Mining.Twitch;
+using Core.Services.Twitch.Helix;
 using Core.Mining.Twitch;
 using Core.Mining.Kick;
 using Core.Interfaces;
@@ -81,6 +82,14 @@ namespace Core.Managers
         public event Action<IReadOnlyDictionary<string, LiveChannelSnapshot>>? KickStreamerMetadataChanged;
 
         /// <summary>
+        /// Occurs when Twitch channel metadata (live state, profile images) is refreshed for eligible streamers.
+        /// </summary>
+        /// <remarks>
+        /// Snapshots are keyed by login slug. Also raised when EventSub updates the mined channel cache.
+        /// </remarks>
+        public event Action<IReadOnlyDictionary<string, LiveChannelSnapshot>>? TwitchStreamerMetadataChanged;
+
+        /// <summary>
         /// Occurs when the Twitch campaign being mined changes.
         /// </summary>
         /// <remarks>Arguments are the campaign display name and game image URL. An empty name with a null URL means the selection was cleared.</remarks>
@@ -114,6 +123,7 @@ namespace Core.Managers
         private readonly PlatformProgressState _kickProgress = new();
         private readonly PinnedCampaignStore _pinnedCampaignStore = new();
         private readonly LastMinedStreamersStore _lastMinedStreamers = new();
+        private readonly ITwitchHelixService _twitchHelixService = TwitchHelixService.Instance;
         private ITwitchLiveChannelApi _twitchLiveChannelApi = null!;
         private IKickLiveChannelApi _kickLiveChannelApi = null!;
         private readonly MiningOrchestrator _miningOrchestrator = new();
@@ -144,6 +154,17 @@ namespace Core.Managers
         /// Gets the most recently fetched Kick streamer metadata keyed by channel login.
         /// </summary>
         public IReadOnlyDictionary<string, LiveChannelSnapshot> KickStreamerMetadata => _kickStreamerMetadata;
+
+        private readonly SemaphoreSlim _twitchMetadataLock = new(1, 1);
+        private readonly System.Timers.Timer _twitchMetadataTimer = new(TimeSpan.FromSeconds(45).TotalMilliseconds);
+        private int _twitchMetadataRefreshScheduled;
+        private IReadOnlyDictionary<string, LiveChannelSnapshot> _twitchStreamerMetadata =
+            new Dictionary<string, LiveChannelSnapshot>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets the most recently fetched Twitch streamer metadata keyed by channel login.
+        /// </summary>
+        public IReadOnlyDictionary<string, LiveChannelSnapshot> TwitchStreamerMetadata => _twitchStreamerMetadata;
 
         private static bool IsVerboseDebugEnabled => UISettingsManager.Instance.VerboseDebugLogging;
 
@@ -191,6 +212,12 @@ namespace Core.Managers
             _kickMetadataTimer.Elapsed += (_, _) => ScheduleKickStreamerMetadataRefresh();
             _kickMetadataTimer.AutoReset = true;
             _kickMetadataTimer.Start();
+
+            _twitchMetadataTimer.Elapsed += (_, _) => ScheduleTwitchStreamerMetadataRefresh();
+            _twitchMetadataTimer.AutoReset = true;
+            _twitchMetadataTimer.Start();
+
+            _twitchHelixService.SnapshotsChanged += OnTwitchHelixSnapshotsChanged;
 
             RefreshMiningServices();
         }
@@ -376,6 +403,7 @@ namespace Core.Managers
             KickWebView = kick ?? throw new ArgumentNullException(nameof(kick));
             RefreshMiningServices();
             ScheduleKickStreamerMetadataRefresh();
+            ScheduleTwitchStreamerMetadataRefresh();
         }
 
         /// <summary>
@@ -467,10 +495,127 @@ namespace Core.Managers
             }
         }
 
+        /// <summary>
+        /// Debounces a background refresh of Twitch streamer live state and profile images for inventory UI chips.
+        /// </summary>
+        /// <remarks>No-op when Helix is not authenticated. Uses Helix REST only (no EventSub subscriptions).</remarks>
+        public void ScheduleTwitchStreamerMetadataRefresh()
+        {
+            if (!_twitchHelixService.IsAuthenticated)
+                return;
+
+            if (Interlocked.CompareExchange(ref _twitchMetadataRefreshScheduled, 1, 0) != 0)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(400);
+                    await RefreshTwitchStreamerMetadataAsync();
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when superseded.
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("TwitchMetadata", $"Streamer metadata refresh failed: {ex.Message}");
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _twitchMetadataRefreshScheduled, 0);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Fetches Twitch channel snapshots for all eligible streamers across active Twitch campaigns.
+        /// </summary>
+        /// <remarks>
+        /// Raises <see cref="TwitchStreamerMetadataChanged"/> on the UI thread when complete.
+        /// EventSub is not used for this pass; see <see cref="ITwitchHelixService.SetMinedChannelWatcherAsync"/>.
+        /// </remarks>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>A task that represents the asynchronous metadata refresh.</returns>
+        public async Task RefreshTwitchStreamerMetadataAsync(CancellationToken ct = default)
+        {
+            if (!_twitchHelixService.IsAuthenticated)
+                return;
+
+            List<DropsCampaign> twitchCampaigns = await Application.Current.Dispatcher.InvokeAsync(() =>
+                ActiveCampaigns.Where(c => c.Platform == Platform.Twitch).ToList());
+
+            HashSet<string> logins = new(StringComparer.OrdinalIgnoreCase);
+            foreach (DropsCampaign campaign in twitchCampaigns)
+            {
+                foreach (string login in EligibleStreamerParser.ParseChannelLogins(campaign))
+                    logins.Add(login);
+            }
+
+            if (logins.Count == 0)
+            {
+                _twitchStreamerMetadata = new Dictionary<string, LiveChannelSnapshot>(StringComparer.OrdinalIgnoreCase);
+                Application.Current.Dispatcher.Invoke(() =>
+                    TwitchStreamerMetadataChanged?.Invoke(_twitchStreamerMetadata));
+                return;
+            }
+
+            await _twitchMetadataLock.WaitAsync(ct);
+            try
+            {
+                await _twitchHelixService.RefreshChannelsAsync(logins, ct);
+                _twitchStreamerMetadata = _twitchHelixService.Snapshots;
+
+                int liveCount = _twitchStreamerMetadata.Values.Count(s => s.IsLive);
+                AppLogger.Info(
+                    "TwitchMetadata",
+                    $"Refreshed {_twitchStreamerMetadata.Count}/{logins.Count} Twitch streamer snapshots ({liveCount} live).");
+                AppLogger.Info(
+                    "TwitchMining",
+                    $"Metadata refresh live={liveCount}/{logins.Count} - metadata counts live across ALL campaign streamers, not category-filtered.");
+
+                IReadOnlyDictionary<string, LiveChannelSnapshot> published = _twitchStreamerMetadata;
+                Application.Current.Dispatcher.Invoke(() =>
+                    TwitchStreamerMetadataChanged?.Invoke(published));
+            }
+            finally
+            {
+                _twitchMetadataLock.Release();
+            }
+        }
+
+        private void OnTwitchHelixSnapshotsChanged(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshots)
+        {
+            _twitchStreamerMetadata = snapshots;
+            Application.Current.Dispatcher.Invoke(() =>
+                TwitchStreamerMetadataChanged?.Invoke(snapshots));
+        }
+
+        private void UpdateTwitchMinedChannelWatcher(string? login)
+        {
+            AppLogger.Info("TwitchMining", $"UpdateTwitchMinedChannelWatcher login={login ?? "(null)"} helixAuth={_twitchHelixService.IsAuthenticated}");
+
+            if (!_twitchHelixService.IsAuthenticated)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _twitchHelixService.SetMinedChannelWatcherAsync(login);
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("TwitchEventSub", $"Failed to update mined-channel watcher: {ex.Message}");
+                }
+            });
+        }
+
         private void RefreshMiningServices()
         {
             _kickLiveChannelApi = new KickLiveChannelApi(() => KickWebView);
-            _twitchLiveChannelApi = new TwitchLiveChannelApi(() => TwitchWebView);
+            _twitchLiveChannelApi = new TwitchLiveChannelApi(_twitchHelixService);
             _kickStreamerSelector = new KickStreamerSelector(_kickLiveChannelApi, _lastMinedStreamers);
             _twitchStreamerSelector = new TwitchStreamerSelector(_twitchLiveChannelApi, _lastMinedStreamers);
         }
@@ -509,6 +654,7 @@ namespace Core.Managers
             });
 
             ScheduleKickStreamerMetadataRefresh();
+            ScheduleTwitchStreamerMetadataRefresh();
 
             if (startMining && !_isPaused)
                 _ = StartMiningStreams(); // Fire and forget - will handle its own loop
@@ -524,6 +670,7 @@ namespace Core.Managers
             _recheckTimer?.Stop();
             _streamHealthMonitor.Stop();
             _liveProgressTimer.Stop();
+            UpdateTwitchMinedChannelWatcher(null);
 
             await _startMiningLock.WaitAsync();
             _startMiningLock.Release();
@@ -562,7 +709,10 @@ namespace Core.Managers
                     $"twitchSeconds={_twitchProgress.MinedSeconds} | twitchApplied={_twitchProgress.AppliedMinuteBucket}");
 
                 if (_isPaused)
+                {
+                    AppLogger.Warn("TwitchMining", "StartMiningStreams ABORT - miner is paused.");
                     return;
+                }
 
                 _startMiningCts?.Cancel();
                 _startMiningCts = new CancellationTokenSource();
@@ -588,6 +738,15 @@ namespace Core.Managers
 
                 VerboseLog("StartMining", $"AFTER reset | twitchApplied={_twitchProgress.AppliedMinuteBucket} | kickApplied={_kickProgress.AppliedMinuteBucket}");
 
+                int twitchActive = campaignSnapshot.Count(c => c.Platform == Platform.Twitch);
+                int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake());
+                int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake());
+                AppLogger.Info(
+                    "TwitchMining",
+                    $"StartMiningStreams gates helixAuth={_twitchHelixService.IsAuthenticated} " +
+                    $"twitchWebView={(TwitchWebView is null ? "null" : "ok")} kickWebView={(KickWebView is null ? "null" : "ok")} " +
+                    $"twitchActive={twitchActive} twitchWithProgress={twitchWithProgress} kickWithProgress={kickWithProgress}");
+
                 AppLogger.Debug("Miner", "[DropsInventoryManager] Starting stream mining process...");
                 AppLogger.Info("Miner", $"StartMiningStreams invoked. restartedInternally={restartedInternally}, activeCampaigns={ActiveCampaigns.Count}, paused={_isPaused}");
 
@@ -605,6 +764,7 @@ namespace Core.Managers
                 _selection.CurrentKickCampaign = null;
                 _currentTwitchLogin = null;
                 _currentKickLogin = null;
+                UpdateTwitchMinedChannelWatcher(null);
 
                 MiningOrchestratorResult result = await _miningOrchestrator.RunAsync(
                     campaignSnapshot,
@@ -614,8 +774,8 @@ namespace Core.Managers
                     SelectBestCampaign,
                     campaign => _twitchStreamerSelector!.SelectUrlAsync(campaign),
                     campaign => _kickStreamerSelector!.SelectUrlAsync(campaign),
-                    (login, slug) => _twitchLiveChannelApi.IsChannelEligibleAsync(login, slug),
-                    (login, slug) => _kickLiveChannelApi.IsChannelEligibleAsync(login, slug),
+                    (login, campaign) => _twitchLiveChannelApi.IsChannelEligibleAsync(login, campaign),
+                    (login, campaign) => _kickLiveChannelApi.IsChannelEligibleAsync(login, campaign),
                     async url => await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView!.NavigateAsync(url)),
                     async url => await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.NavigateAsync(url)),
                     _lastMinedStreamers,
@@ -635,13 +795,24 @@ namespace Core.Managers
 
                 if (!result.CompletedSelectionCycle)
                 {
+                    AppLogger.Warn(
+                        "TwitchMining",
+                        $"StartMiningStreams incomplete cycle minerStatus={result.MinerStatus} - no stream selected.");
                     MinerStatusChanged?.Invoke(result.MinerStatus);
                     _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
                     return;
                 }
 
                 if (token.IsCancellationRequested)
+                {
+                    AppLogger.Warn("TwitchMining", "StartMiningStreams ABORT - cancellation requested after orchestrator.");
                     return;
+                }
+
+                AppLogger.Info(
+                    "TwitchMining",
+                    $"StartMiningStreams applying results twitch={(result.Twitch is null ? "null" : $"{result.Twitch.Login}@{result.Twitch.Campaign.Name}")} " +
+                    $"kick={(result.Kick is null ? "null" : $"{result.Kick.Login}@{result.Kick.Campaign.Name}")} minerStatus={result.MinerStatus}");
 
                 ApplyPlatformMiningResult(result.Twitch, Platform.Twitch);
                 ApplyPlatformMiningResult(result.Kick, Platform.Kick);
@@ -679,7 +850,11 @@ namespace Core.Managers
         private void ApplyPlatformMiningResult(PlatformMiningResult? result, Platform platform)
         {
             if (result == null)
+            {
+                if (platform == Platform.Twitch)
+                    AppLogger.Warn("TwitchMining", "ApplyPlatformMiningResult Twitch=null - no stream will be watched.");
                 return;
+            }
 
             MiningBaseline baseline = result.Baseline;
             PlatformProgressState progress = platform == Platform.Twitch ? _twitchProgress : _kickProgress;
@@ -690,6 +865,7 @@ namespace Core.Managers
                     _selection.CurrentTwitchCampaign = result.Campaign;
                     _currentTwitchLogin = result.Login;
                     _lastKnownTwitchOnlineState = true;
+                    UpdateTwitchMinedChannelWatcher(result.Login);
                     progress.ApplyBaseline(baseline);
 
                     VerboseLog("SelectionBaseline",
@@ -733,10 +909,10 @@ namespace Core.Managers
             {
                 IsTwitchEligibleAsync = async () => _selection.CurrentTwitchCampaign != null
                     && !string.IsNullOrWhiteSpace(_currentTwitchLogin)
-                    && await _twitchLiveChannelApi.IsChannelEligibleAsync(_currentTwitchLogin, _selection.CurrentTwitchCampaign.Slug),
+                    && await _twitchLiveChannelApi.IsChannelEligibleAsync(_currentTwitchLogin, _selection.CurrentTwitchCampaign),
                 IsKickEligibleAsync = async () => _selection.CurrentKickCampaign != null
                     && !string.IsNullOrWhiteSpace(_currentKickLogin)
-                    && await _kickLiveChannelApi.IsChannelEligibleAsync(_currentKickLogin, _selection.CurrentKickCampaign.Slug),
+                    && await _kickLiveChannelApi.IsChannelEligibleAsync(_currentKickLogin, _selection.CurrentKickCampaign),
                 HasTwitchCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Twitch && c.HasProgressToMake()),
                 HasKickCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Kick && c.HasProgressToMake()),
                 GetLastKnownTwitchOnline = () => _lastKnownTwitchOnlineState,
@@ -765,6 +941,18 @@ namespace Core.Managers
 
             if (result.PinReleased)
                 _pinnedCampaignStore.Clear();
+
+            if (result.Campaign is DropsCampaign picked)
+            {
+                AppLogger.Info(
+                    "TwitchMining",
+                    $"SelectBestCampaign picked='{picked.Name}' platform={picked.Platform} slug='{picked.Slug}' " +
+                    $"from {campaigns.Count} candidates mode={UISettingsManager.Instance.MiningPriorityMode}");
+            }
+            else
+            {
+                AppLogger.Warn("TwitchMining", $"SelectBestCampaign returned null from {campaigns.Count} candidates.");
+            }
 
             return Task.FromResult(result.Campaign);
         }

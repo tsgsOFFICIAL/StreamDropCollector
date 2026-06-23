@@ -39,14 +39,22 @@ namespace Core.Mining
             {
                 await await Application.Current.Dispatcher.InvokeAsync(async () =>
                 {
+                    bool twitchHasProgress = host.HasTwitchCampaignsWithProgress();
+                    bool kickHasProgress = host.HasKickCampaignsWithProgress();
+                    bool twitchWasOnline = host.GetLastKnownTwitchOnline();
+                    bool kickWasOnline = host.GetLastKnownKickOnline();
+
                     bool twitchEligible = await host.IsTwitchEligibleAsync();
                     bool kickEligible = await host.IsKickEligibleAsync();
 
                     AppLogger.Debug("HealthCheck", $"Twitch eligible: {twitchEligible} | Kick eligible: {kickEligible}");
-                    AppLogger.Info("HealthCheck", $"Twitch eligible={twitchEligible}; Kick eligible={kickEligible}");
+                    AppLogger.Info(
+                        "TwitchMining",
+                        $"HealthCheck twitchEligible={twitchEligible} kickEligible={kickEligible} " +
+                        $"twitchHasProgress={twitchHasProgress} twitchWasOnline={twitchWasOnline}");
 
-                    bool twitchNeedsReevaluation = host.HasTwitchCampaignsWithProgress() && !twitchEligible && host.GetLastKnownTwitchOnline();
-                    bool kickNeedsReevaluation = host.HasKickCampaignsWithProgress() && !kickEligible && host.GetLastKnownKickOnline();
+                    bool twitchNeedsReevaluation = twitchHasProgress && !twitchEligible && twitchWasOnline;
+                    bool kickNeedsReevaluation = kickHasProgress && !kickEligible && kickWasOnline;
 
                     if (!twitchNeedsReevaluation && !kickNeedsReevaluation)
                         return;

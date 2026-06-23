@@ -7,6 +7,7 @@ using System.Windows;
 using Core.Logging;
 using Core.Managers;
 using Core.Services;
+using Core.Services.Twitch.Helix;
 using Core.Models;
 using Core.Enums;
 using UI.Models;
@@ -422,6 +423,9 @@ namespace UI.Views
                 _initialValidationCompleted = true;
                 DropsInventoryManager.Instance.InitializeWebViews(_twitchWebView, _kickWebView);
 
+                if (_twitchService.Status == ConnectionStatus.Connected)
+                    await EnsureTwitchHelixAsync();
+
                 // Load campaigns / drops
                 await StartAutoRefreshDropsAsync();
             }
@@ -496,6 +500,7 @@ namespace UI.Views
                     TwitchConnection.ConnectionColor = "Lime";
                     TwitchConnection.LoginButtonText = "Twitch Logged in";
                     TwitchConnection.IsLoginEnabled = false;
+                    _ = EnsureTwitchHelixAsync();
                     ScheduleDropsLoad();
                     break;
                 case ConnectionStatus.Connecting:
@@ -526,6 +531,29 @@ namespace UI.Views
         {
             new TwitchLoginWindow().ShowDialog();
             _ = ValidateTwitchCredentialsAsync();
+        }
+
+        /// <summary>
+        /// Ensures Twitch Helix API access via device-code OAuth (separate from WebView drops login).
+        /// </summary>
+        private async Task EnsureTwitchHelixAsync()
+        {
+            if (TwitchHelixService.Instance.IsAuthenticated)
+            {
+                DropsInventoryManager.Instance.ScheduleTwitchStreamerMetadataRefresh();
+                return;
+            }
+
+            bool authenticated = await TwitchHelixService.Instance.EnsureAuthenticatedAsync(async prompt =>
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    new TwitchHelixAuthWindow(prompt).ShowDialog();
+                });
+            });
+
+            if (authenticated)
+                DropsInventoryManager.Instance.ScheduleTwitchStreamerMetadataRefresh();
         }
         #endregion
     }

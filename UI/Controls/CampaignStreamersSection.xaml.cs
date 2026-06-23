@@ -159,14 +159,27 @@ namespace UI.Controls
             InitializeComponent();
             DataContextChanged += OnSectionDataContextChanged;
             DropsInventoryManager.Instance.KickStreamerMetadataChanged += OnKickStreamerMetadataChanged;
-            Unloaded += (_, _) => DropsInventoryManager.Instance.KickStreamerMetadataChanged -= OnKickStreamerMetadataChanged;
+            DropsInventoryManager.Instance.TwitchStreamerMetadataChanged += OnTwitchStreamerMetadataChanged;
+            Unloaded += (_, _) =>
+            {
+                DropsInventoryManager.Instance.KickStreamerMetadataChanged -= OnKickStreamerMetadataChanged;
+                DropsInventoryManager.Instance.TwitchStreamerMetadataChanged -= OnTwitchStreamerMetadataChanged;
+            };
         }
 
-        private void OnKickStreamerMetadataChanged(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshots)
+        private void OnKickStreamerMetadataChanged(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshots) =>
+            OnPlatformStreamerMetadataChanged(Platform.Kick, snapshots);
+
+        private void OnTwitchStreamerMetadataChanged(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshots) =>
+            OnPlatformStreamerMetadataChanged(Platform.Twitch, snapshots);
+
+        private void OnPlatformStreamerMetadataChanged(
+            Platform platform,
+            IReadOnlyDictionary<string, LiveChannelSnapshot> snapshots)
         {
             Dispatcher.InvokeAsync(() =>
             {
-                if (_campaign?.Platform != Platform.Kick)
+                if (_campaign?.Platform != platform)
                     return;
 
                 ApplyChannelMetadata(snapshots);
@@ -207,7 +220,7 @@ namespace UI.Controls
         }
 
         /// <summary>
-        /// Applies Kick channel metadata (profile image, live state, display name) to eligible streamer chips.
+        /// Applies channel metadata (profile image, live state, display name) to eligible streamer chips.
         /// </summary>
         /// <param name="snapshotsByLogin">Channel snapshots keyed by login slug.</param>
         public void ApplyChannelMetadata(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshotsByLogin)
@@ -270,6 +283,8 @@ namespace UI.Controls
 
             if (campaign?.Platform == Platform.Kick)
                 ApplyChannelMetadata(DropsInventoryManager.Instance.KickStreamerMetadata);
+            else if (campaign?.Platform == Platform.Twitch)
+                ApplyChannelMetadata(DropsInventoryManager.Instance.TwitchStreamerMetadata);
 
             OnPropertyChanged(nameof(HasStreamers));
             OnPropertyChanged(nameof(NeedsCollapse));
