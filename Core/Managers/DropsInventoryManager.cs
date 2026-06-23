@@ -975,7 +975,75 @@ namespace Core.Managers
         /// </summary>
         private void ScheduleServerProgressVerification()
         {
-            if (_isPaused || !_liveProgressTimer.Enabled)
+            if (KickWebView == null)
+                return false;
+
+            string js = @"
+                (() => {
+                    let headings = document.evaluate(""//span[contains(., 'LIVE')]"", document, null, XPathResult.ANY_TYPE, null );
+                    let thisHeading = headings.iterateNext();
+                    return thisHeading != null;
+                })();
+            ";
+
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView.ExecuteScriptAsync(js));
+            bool isOnline = rawResult?
+                .Trim()
+                .Trim('"')
+                .Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+
+            AppLogger.Debug("KickSelection", $"[DropsInventoryManager] Kick stream online status: {isOnline}");
+            return isOnline;
+        }
+        /// <summary>
+        /// Determines whether the current Kick stream category matches the expected category based on the active Kick
+        /// campaign slug.
+        /// </summary>
+        /// <remarks>This method retrieves the category from the Kick web view and compares it to the slug
+        /// of the current Kick campaign. Returns <see langword="false"/> if the web view is not initialized.</remarks>
+        /// <returns>A task that represents the asynchronous operation. The task result contains <see langword="true"/> if the
+        /// Kick stream category matches the current campaign slug; otherwise, <see langword="false"/>.</returns>
+        private async Task<bool> IsKickStreamCategoryCorrect()
+        {
+            if (KickWebView == null)
+                return false;
+
+            string js = @"
+                (() => {
+                    const categoryLinks = document.querySelectorAll('a[href*=""/category/""]');
+
+                        if (categoryLinks.length === 0)
+                        {
+                            return '';
+                        }
+
+                        const categoryElement = categoryLinks[0];
+
+                        return categoryElement.href.trim();
+                    })();
+                ";
+
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView.ExecuteScriptAsync(js));
+            bool isCorrect = KickCategoryHrefMatchesCampaign(rawResult, _currentKickCampaign?.Slug);
+
+            AppLogger.Debug("KickSelection", $"[DropsInventoryManager] Kick stream category correct status: {isCorrect}");
+            return isCorrect;
+        }
+        /// <summary>
+        /// Determines whether the Twitch stream is currently live by evaluating the status indicator in the embedded
+        /// web view.
+        /// </summary>
+        /// <remarks>This method relies on the presence of a specific status indicator element in the
+        /// Twitch web view. If the web view is not initialized or the indicator cannot be found, the method returns
+        /// <see langword="false"/>.</remarks>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the Twitch
+        /// stream is live; otherwise, <see langword="false"/>.</returns>
+        /// <summary>
+        /// Raises <see cref="TwitchDropChanged"/> only when the targeted reward changes, to avoid per-tick spam.
+        /// </summary>
+        private void RaiseTwitchDropChangedIfNeeded(DropsReward? reward)
+        {
+            if (reward?.Id == _lastTwitchDropId)
                 return;
 
             if (Interlocked.CompareExchange(ref _progressVerifyScheduled, 1, 0) != 0)
@@ -992,9 +1060,217 @@ namespace Core.Managers
         {
             try
             {
-                await _progressVerifyLock.WaitAsync();
-                if (_isPaused || !_liveProgressTimer.Enabled)
-                    return;
+                List<string> liveMatches = await _twitchGqlService.QueryLiveChannelsBySlugAsync(new[] { login }, slug);
+                bool eligible = liveMatches.Any(l => string.Equals(l, login, StringComparison.OrdinalIgnoreCase));
+                AppLogger.Debug("TwitchSelection", $"[GQL eligibility] login={login}, slug={slug} -> {eligible}");
+                return eligible;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("TwitchSelection", $"GQL eligibility check failed for '{login}' (slug={slug}); falling back to DOM. {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task<bool> IsTwitchStreamOnline()
+        {
+            if (TwitchWebView == null)
+                return false;
+
+            string js = @"
+                (() => {
+                    const indicator = document.querySelector("".tw-channel-status-text-indicator"");
+                    return indicator?.innerText?.trim() === ""LIVE"";
+                })();
+            ";
+
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.ExecuteScriptAsync(js));
+            bool isOnline = rawResult?
+                .Trim()
+                .Trim('"')
+                .Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+
+            AppLogger.Debug("TwitchSelection", $"[DropsInventoryManager] Twitch stream online status: {isOnline}");
+            return isOnline;
+        }
+        /// <summary>
+        /// Determines asynchronously whether a Twitch advertisement is currently being displayed in the embedded web
+        /// view.
+        /// </summary>
+        /// <remarks>This method checks for the presence of known Twitch ad indicators in the web view's
+        /// DOM. It returns <see langword="false"/> if the web view is not available.</remarks>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if a Twitch ad
+        /// is detected; otherwise, <see langword="false"/>.</returns>
+        private async Task<bool> IsTwitchShowingAd()
+        {
+            if (TwitchWebView == null)
+                return false;
+
+            string js = @"
+                (() => {
+                    const adSelectors = [
+                    '[data-a-target=""video-ad-countdown""]',
+                    '[data-a-target=""video-ad-label""]',
+                    '[data-test-selector=""ad-banner-default-text""]'
+                  ];
+
+                  // Check if ANY of these elements exist in the document
+                  return adSelectors.some(selector => 
+                    document.querySelector(selector) !== null
+                  );
+                })();
+            ";
+
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.ExecuteScriptAsync(js));
+            bool isAdShowing = rawResult?
+                .Trim()
+                .Trim('"')
+                .Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+
+            AppLogger.Debug("TwitchSelection", $"[DropsInventoryManager] Twitch showing ad status: {isAdShowing}");
+            return isAdShowing;
+        }
+        /// <summary>
+        /// Determines whether the current Twitch stream category matches the expected category for the active campaign.
+        /// </summary>
+        /// <remarks>This method retrieves the current category from the Twitch stream by executing a
+        /// JavaScript snippet in the TwitchWebView. The comparison is case-insensitive and ignores leading or trailing
+        /// whitespace. Returns <see langword="false"/> if the TwitchWebView is not initialized.</remarks>
+        /// <returns>A task that represents the asynchronous operation. The task result contains <see langword="true"/> if the
+        /// Twitch stream category matches the expected campaign category; otherwise, <see langword="false"/>.</returns>
+        private async Task<bool> IsTwitchStreamCategoryCorrect()
+        {
+            if (TwitchWebView == null)
+                return false;
+
+            string js = @"
+                (() => {
+                    const links = Array.from(document.querySelectorAll('[data-a-target=stream-game-link]'));
+                    return links
+                        .map(link => link?.href?.trim())
+                        .filter(Boolean)
+                        .join('|');
+                })();
+                ";
+
+            string rawResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView.ExecuteScriptAsync(js));
+            bool isCorrect = TwitchCategoryHrefMatchesCampaign(rawResult, _currentTwitchCampaign?.Slug);
+
+            AppLogger.Debug("TwitchSelection", $"[DropsInventoryManager] Twitch stream category correct status: {isCorrect}");
+            return isCorrect;
+        }
+        /// <summary>
+        /// Selects the appropriate Kick streamer URL for the specified drops campaign.
+        /// </summary>
+        /// <remarks>If the campaign is a general drop, the method attempts to locate a streamer whose
+        /// campaign name matches the specified campaign. Otherwise, it returns the first URL in the campaign's
+        /// connection list. The method relies on the KickWebView instance to navigate and execute JavaScript in order
+        /// to extract the streamer URL.</remarks>
+        /// <param name="campaign">The drops campaign for which to select a Kick streamer URL. Must not be null.</param>
+        /// <returns>A string containing the URL of the selected Kick streamer for the campaign. Returns a category-matching
+        /// connection URL for non-general campaigns; otherwise, the first streamer from the matching directory section,
+        /// or an empty string if no suitable streamer is found.</returns>
+        private async Task<string> SelectKickStreamerForCampaign(DropsCampaign campaign)
+        {
+            string streamerUrl = string.Empty;
+            TryGetLastStreamerUrl(Platform.Kick, campaign.Slug, out string? rememberedKickUrl);
+
+            string getStreamerCategoryJs = @"
+                (() => {
+                    const categoryLinks = document.querySelectorAll('a[href*=""/category/""]');
+
+                        if (categoryLinks.length === 0)
+                        {
+                            return '';
+                        }
+
+                        const categoryElement = categoryLinks[0];
+
+                        return categoryElement.href.trim();
+                    })();
+            ";
+            string getFirstStreamerFromDirectoryJs;
+
+            if (string.IsNullOrEmpty(campaign.Slug))
+            {
+                getFirstStreamerFromDirectoryJs = $@"
+                    (() => {{
+                        const link = document.querySelectorAll('section>div.group\\/card>a')[0].href
+                        return link ? link.trim() : '';
+                    }})();
+                ";
+            }
+            else
+            {
+                getFirstStreamerFromDirectoryJs = $@"
+                    (() => {{
+                        const titles = document.querySelectorAll('h3.text-base.font-bold.leading-5');
+                        if (titles.length === 0) return '';
+                        let targetSection = null;
+                        for (const h3 of titles) {{
+                            if (h3.innerText.includes('{campaign.Name.Replace("'", "\\'")}')) {{
+                                targetSection = h3.closest('section') || h3.parentElement.parentElement.parentElement.parentElement;
+                                break;
+                            }}
+                        }}
+                        if (!targetSection) return '';
+                        const streamGrid = targetSection.querySelector(':scope > div:nth-child(2)') || targetSection.children[1];
+                        if (!streamGrid || streamGrid.children.length === 0) return '';
+                        const firstCard = streamGrid.children[0];
+                        const link = firstCard.querySelector('a');
+                        return link ? link.href.trim() : '';
+                    }})();
+                ";
+            }
+
+            if (!campaign.IsGeneralDrop)
+            {
+                // NON-GENERAL DROPS
+                IEnumerable<string> orderedConnectUrls = campaign.ConnectUrls;
+                if (!string.IsNullOrWhiteSpace(rememberedKickUrl) && campaign.ConnectUrls.Contains(rememberedKickUrl))
+                {
+                    orderedConnectUrls = new[] { rememberedKickUrl! }
+                        .Concat(campaign.ConnectUrls)
+                        .Distinct(StringComparer.OrdinalIgnoreCase);
+                }
+
+                foreach (string connectUrl in orderedConnectUrls)
+                {
+                    await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.NavigateAsync(connectUrl));
+                    await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.WaitForNetworkIdleAsync(5000, 500));
+
+                    string categoryResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.ExecuteScriptAsync(getStreamerCategoryJs));
+
+                    if (KickCategoryHrefMatchesCampaign(categoryResult, campaign.Slug))
+                    {
+                        streamerUrl = connectUrl;
+
+                        if (!string.IsNullOrWhiteSpace(rememberedKickUrl) &&
+                            string.Equals(connectUrl, rememberedKickUrl, StringComparison.OrdinalIgnoreCase))
+                        {
+                            AppLogger.Info("KickSelection", $"Remembered Kick streamer accepted for campaign '{campaign.Name}': {connectUrl}");
+                        }
+
+                        break;
+                    }
+
+                    AppLogger.Warn("KickSelection", $"Kick URL category mismatch for campaign '{campaign.Name}'. url='{connectUrl}', category='{categoryResult.Trim('"')}', slug='{campaign.Slug}'");
+                }
+            }
+            else
+            {
+                // Step 1: Try remembered URL if available (validate category!)
+                if (!string.IsNullOrWhiteSpace(rememberedKickUrl))
+                {
+                    AppLogger.Info("KickSelection", $"Trying remembered Kick streamer for general campaign '{campaign.Name}': {rememberedKickUrl}");
+
+                    await await Application.Current.Dispatcher.InvokeAsync(async () =>
+                        await KickWebView!.NavigateAsync(rememberedKickUrl));
+
+                    await Task.Delay(1500);  // Consider → WaitForNetworkIdleAsync(5000, 500) for better sync
+
+                    string categoryResult = await await Application.Current.Dispatcher.InvokeAsync(async () =>
+                        await KickWebView!.ExecuteScriptAsync(getStreamerCategoryJs));
 
                 DropsCampaign? twitchCampaign = _selection.CurrentTwitchCampaign;
                 DropsCampaign? kickCampaign = _selection.CurrentKickCampaign;
