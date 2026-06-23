@@ -124,12 +124,16 @@ namespace Core.Managers
         private readonly PinnedCampaignStore _pinnedCampaignStore = new();
         private readonly LastMinedStreamersStore _lastMinedStreamers = new();
         private readonly ITwitchHelixService _twitchHelixService = TwitchHelixService.Instance;
+        private readonly TwitchGeneralDropDiscoveryCache _twitchGeneralDropCache = new();
         private ITwitchLiveChannelApi _twitchLiveChannelApi = null!;
         private IKickLiveChannelApi _kickLiveChannelApi = null!;
         private readonly MiningOrchestrator _miningOrchestrator = new();
         private readonly StreamHealthMonitor _streamHealthMonitor = new();
+        private readonly WebViewUiRunner _webViewUiRunner = new();
         private KickStreamerSelector? _kickStreamerSelector;
         private TwitchStreamerSelector? _twitchStreamerSelector;
+        private TwitchStreamPageReader? _twitchPageReader;
+        private KickStreamPageReader? _kickPageReader;
 
         private bool _lastKnownKickOnlineState;
         private bool _lastKnownTwitchOnlineState;
@@ -549,7 +553,11 @@ namespace Core.Managers
             HashSet<string> logins = new(StringComparer.OrdinalIgnoreCase);
             foreach (DropsCampaign campaign in twitchCampaigns)
             {
-                foreach (string login in EligibleStreamerParser.ParseChannelLogins(campaign))
+                IReadOnlyList<string> campaignLogins = await _twitchLiveChannelApi
+                    .GetEligibleLoginsAsync(campaign, allowDirectoryDiscovery: false, ct)
+                    .ConfigureAwait(false);
+
+                foreach (string login in campaignLogins)
                     logins.Add(login);
             }
 
@@ -612,12 +620,31 @@ namespace Core.Managers
             });
         }
 
+        /// <summary>
+        /// Gets eligible Twitch streamer logins for UI display (connect URLs or cached general-drop directory results).
+        /// </summary>
+        public IReadOnlyList<string> GetTwitchEligibleLoginsForCampaign(DropsCampaign campaign)
+        {
+            if (campaign.Platform != Platform.Twitch)
+                return Array.Empty<string>();
+
+            if (!campaign.IsGeneralDrop)
+                return EligibleStreamerParser.ParseChannelLogins(campaign);
+
+            if (_twitchLiveChannelApi is TwitchLiveChannelApi concrete)
+                return concrete.GetCachedGeneralDropLogins(campaign.Id);
+
+            return _twitchGeneralDropCache.Get(campaign.Id);
+        }
+
         private void RefreshMiningServices()
         {
             _kickLiveChannelApi = new KickLiveChannelApi(() => KickWebView);
-            _twitchLiveChannelApi = new TwitchLiveChannelApi(_twitchHelixService);
+            _twitchLiveChannelApi = new TwitchLiveChannelApi(_twitchHelixService, () => TwitchWebView, _twitchGeneralDropCache);
             _kickStreamerSelector = new KickStreamerSelector(_kickLiveChannelApi, _lastMinedStreamers);
             _twitchStreamerSelector = new TwitchStreamerSelector(_twitchLiveChannelApi, _lastMinedStreamers);
+            _twitchPageReader = new TwitchStreamPageReader(TwitchWebView, _webViewUiRunner);
+            _kickPageReader = new KickStreamPageReader(KickWebView, _webViewUiRunner);
         }
         /// <summary>
         /// Updates the list of active campaigns based on the specified collection.
@@ -653,11 +680,37 @@ namespace Core.Managers
                 _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
             });
 
+            SchedulePreloadTwitchGeneralDropDirectories();
             ScheduleKickStreamerMetadataRefresh();
             ScheduleTwitchStreamerMetadataRefresh();
 
             if (startMining && !_isPaused)
                 _ = StartMiningStreams(); // Fire and forget - will handle its own loop
+        }
+
+        /// <summary>
+        /// Preloads directory logins for all general-drop Twitch campaigns (UI chips). Does not run during active mining re-evaluations.
+        /// </summary>
+        public void SchedulePreloadTwitchGeneralDropDirectories()
+        {
+            if (TwitchWebView is null)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    List<DropsCampaign> snapshot = await Application.Current.Dispatcher.InvokeAsync(() =>
+                        ActiveCampaigns.Where(c => c.Platform == Platform.Twitch).ToList());
+
+                    await _twitchLiveChannelApi.PreloadGeneralDropDirectoriesAsync(snapshot);
+                    ScheduleTwitchStreamerMetadataRefresh();
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("TwitchGeneralDrop", $"General-drop preload failed: {ex.Message}");
+                }
+            });
         }
         /// <summary>
         /// Temporarily pauses stream mining and waits for any active mine cycle to exit.
@@ -766,6 +819,12 @@ namespace Core.Managers
                 _currentKickLogin = null;
                 UpdateTwitchMinedChannelWatcher(null);
 
+                if (!restartedInternally && TwitchWebView is not null)
+                {
+                    AppLogger.Info("TwitchMining", "StartMiningStreams preloading general-drop directories before campaign selection.");
+                    await _twitchLiveChannelApi.PreloadGeneralDropDirectoriesAsync(campaignSnapshot, token);
+                }
+
                 MiningOrchestratorResult result = await _miningOrchestrator.RunAsync(
                     campaignSnapshot,
                     _twitchGqlService,
@@ -778,6 +837,8 @@ namespace Core.Managers
                     (login, campaign) => _kickLiveChannelApi.IsChannelEligibleAsync(login, campaign),
                     async url => await await Application.Current.Dispatcher.InvokeAsync(async () => await TwitchWebView!.NavigateAsync(url)),
                     async url => await await Application.Current.Dispatcher.InvokeAsync(async () => await KickWebView!.NavigateAsync(url)),
+                    () => _twitchPageReader!.PrepareForMiningAsync(token),
+                    () => _kickPageReader!.PrepareForMiningAsync(token),
                     _lastMinedStreamers,
                     (campaign, login) =>
                     {

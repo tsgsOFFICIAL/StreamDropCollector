@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "UI": {
+      "commandName": "Project",
+      "commandLineArgs": "--debug"
+    }
+  }
+}

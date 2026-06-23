@@ -28,6 +28,8 @@ namespace Core.Mining
             Func<string, DropsCampaign, Task<bool>> isKickEligibleAsync,
             Func<string, Task> navigateTwitchAsync,
             Func<string, Task> navigateKickAsync,
+            Func<Task>? prepareTwitchStreamPageAsync,
+            Func<Task>? prepareKickStreamPageAsync,
             LastMinedStreamersStore lastMinedStreamers,
             Action<DropsCampaign, string> onTwitchSelectionPreview,
             Action<DropsCampaign, string> onKickSelectionPreview,
@@ -128,6 +130,7 @@ namespace Core.Mining
                     selectTwitchUrlAsync,
                     isTwitchEligibleAsync,
                     navigateTwitchAsync,
+                    prepareTwitchStreamPageAsync,
                     lastMinedStreamers,
                     onTwitchSelectionPreview,
                     cancellationToken);
@@ -151,6 +154,7 @@ namespace Core.Mining
                     selectKickUrlAsync,
                     isKickEligibleAsync,
                     navigateKickAsync,
+                    prepareKickStreamPageAsync,
                     lastMinedStreamers,
                     onKickSelectionPreview,
                     cancellationToken);

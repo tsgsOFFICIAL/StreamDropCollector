@@ -22,6 +22,7 @@ namespace Core.Mining
             Func<DropsCampaign, Task<string>> selectUrlAsync,
             Func<string, DropsCampaign, Task<bool>> isChannelEligibleAsync,
             Func<string, Task> navigateAsync,
+            Func<Task>? prepareStreamPageAsync,
             LastMinedStreamersStore lastMinedStreamers,
             Action<DropsCampaign, string>? onSelectionPreview,
             CancellationToken cancellationToken)
@@ -75,6 +76,12 @@ namespace Core.Mining
                 AppLogger.Info(logScope, $"TrySelectAsync {platform} navigating to {streamUrl}");
                 await navigateAsync(streamUrl);
                 await Task.Delay(1500, cancellationToken);
+
+                if (prepareStreamPageAsync != null)
+                {
+                    AppLogger.Info(logScope, $"TrySelectAsync {platform} preparing stream page (mature gate, quality, refresh).");
+                    await prepareStreamPageAsync();
+                }
 
                 string login = StreamerUrlParser.GetLoginFromUrl(streamUrl);
                 AppLogger.Info(logScope, $"TrySelectAsync {platform} post-navigate eligibility check login={login} gameId={best.GameId ?? "(none)"} slug='{best.Slug}'");

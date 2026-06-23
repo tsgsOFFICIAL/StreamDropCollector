@@ -182,6 +182,7 @@ namespace UI.Controls
                 if (_campaign?.Platform != platform)
                     return;
 
+                EnsureGeneralDropStreamersLoaded();
                 ApplyChannelMetadata(snapshots);
             });
         }
@@ -277,7 +278,7 @@ namespace UI.Controls
 
             if (campaign != null)
             {
-                foreach (string login in EligibleStreamerParser.ParseChannelLogins(campaign))
+                foreach (string login in ResolveEligibleLogins(campaign))
                     _allStreamers.Add(new EligibleStreamer(login));
             }
 
@@ -299,6 +300,36 @@ namespace UI.Controls
             OnPropertyChanged(nameof(MoreButtonTooltip));
             OnPropertyChanged(nameof(HiddenCount));
 
+            RefreshPreview();
+            UpdateClosedFooter();
+        }
+
+        private static IReadOnlyList<string> ResolveEligibleLogins(DropsCampaign campaign) =>
+            campaign.Platform == Platform.Twitch
+                ? DropsInventoryManager.Instance.GetTwitchEligibleLoginsForCampaign(campaign)
+                : EligibleStreamerParser.ParseChannelLogins(campaign);
+
+        private void EnsureGeneralDropStreamersLoaded()
+        {
+            if (_campaign is not { IsGeneralDrop: true, Platform: Platform.Twitch })
+                return;
+
+            if (_allStreamers.Count > 0)
+                return;
+
+            IReadOnlyList<string> logins = ResolveEligibleLogins(_campaign);
+            if (logins.Count == 0)
+                return;
+
+            foreach (string login in logins)
+                _allStreamers.Add(new EligibleStreamer(login));
+
+            OnPropertyChanged(nameof(HasStreamers));
+            OnPropertyChanged(nameof(NeedsCollapse));
+            OnPropertyChanged(nameof(ShowExpandedPanel));
+            OnPropertyChanged(nameof(ShowsLiveUi));
+            OnPropertyChanged(nameof(TotalCount));
+            OnPropertyChanged(nameof(HiddenCount));
             RefreshPreview();
             UpdateClosedFooter();
         }
