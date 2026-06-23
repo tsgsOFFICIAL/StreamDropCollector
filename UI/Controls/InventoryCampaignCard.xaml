@@ -19,7 +19,7 @@
             </Grid.ColumnDefinitions>
 
             <controls:RoundedImage SourceUrl="{Binding GameImageUrl}"
-                                   ImageWidth="100" ImageHeight="100" CornerRadius="10"/>
+                                   ImageWidth="100" ImageHeight="100" CornerRadius="10" VerticalAlignment="Top"/>
 
             <StackPanel Grid.Column="1" Margin="20,0,24,0" VerticalAlignment="Top">
                 <TextBlock Text="{Binding GameName}"
