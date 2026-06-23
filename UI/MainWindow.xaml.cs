@@ -213,7 +213,7 @@ namespace UI
                         break;
                 }
             }
-        }
+        
 
         /// <summary>
         /// Replaces the current page displayed in the main content area with the specified page, applying a fade
