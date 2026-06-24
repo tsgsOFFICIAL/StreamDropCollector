@@ -1,6 +1,7 @@
 ﻿using Core.Interfaces;
 using Core.Logging;
 using Core.Enums;
+using Core.Helpers;
 
 namespace Core.Services
 {
@@ -35,7 +36,7 @@ namespace Core.Services
             UpdateStatus(ConnectionStatus.Validating);
 
             string html = await GetPageHtmlAsync(host);
-            bool isLoggedIn = !html.Contains("data-testid=\"login\"", StringComparison.OrdinalIgnoreCase);
+            bool isLoggedIn = PlatformLoginDetector.IsLoggedInFromHtml(Platform.Kick, html);
 
             AppLogger.Info("KickLogin", isLoggedIn ? "Kick connected." : "Kick not logged in.");
 

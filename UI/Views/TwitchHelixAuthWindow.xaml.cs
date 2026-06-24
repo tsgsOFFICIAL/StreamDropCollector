@@ -1,5 +1,7 @@
-﻿using System.Windows;
+﻿using Core.Helpers;
 using Core.Models;
+using Microsoft.Web.WebView2.Core;
+using System.Windows;
 
 namespace UI.Views
 {
@@ -13,6 +15,7 @@ namespace UI.Views
     public partial class TwitchHelixAuthWindow : Window
     {
         private readonly TwitchDeviceCodePrompt _prompt;
+        private readonly CancellationTokenSource _cts = new();
 
         /// <summary>
         /// Opens the Twitch activation page so the user can approve Helix API access.
@@ -23,13 +26,40 @@ namespace UI.Views
             _prompt = prompt ?? throw new ArgumentNullException(nameof(prompt));
             InitializeComponent();
             Loaded += OnLoaded;
+            Closed += (_, _) => _cts.Cancel();
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             Loaded -= OnLoaded;
             await Web.EnsureCoreWebView2Async();
+            Web.NavigationCompleted += OnNavigationCompleted;
             Web.Source = new Uri(_prompt.ActivationUrl);
+        }
+
+        private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (!e.IsSuccess)
+                return;
+
+            Web.NavigationCompleted -= OnNavigationCompleted;
+            _ = PollAndCloseWhenAuthCompleteAsync();
+        }
+
+        private async Task PollAndCloseWhenAuthCompleteAsync()
+        {
+            try
+            {
+                bool complete = await PlatformLoginDetector.PollUntilTwitchHelixAuthCompleteAsync(
+                    script => Web.ExecuteScriptAsync(script),
+                    cancellationToken: _cts.Token);
+
+                if (complete && !_cts.IsCancellationRequested)
+                    Dispatcher.Invoke(Close);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
     }
 }

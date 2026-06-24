@@ -1,6 +1,7 @@
 ﻿using Core.Interfaces;
 using Core.Enums;
 using Core.Logging;
+using Core.Helpers;
 
 namespace Core.Services
 {
@@ -35,7 +36,7 @@ namespace Core.Services
             UpdateStatus(ConnectionStatus.Validating);
 
             string html = await GetPageHtmlAsync(host);
-            bool isLoggedIn = !html.Contains("data-a-target=\"login-button\"", StringComparison.OrdinalIgnoreCase);
+            bool isLoggedIn = PlatformLoginDetector.IsLoggedInFromHtml(Platform.Twitch, html);
 
             AppLogger.Info("TwitchLogin", isLoggedIn ? "Twitch connected." : "Twitch not logged in.");
 

@@ -1,5 +1,6 @@
-﻿using Microsoft.Web.WebView2.Core;
-using System.Text.Json;
+﻿using Core.Enums;
+using Core.Helpers;
+using Microsoft.Web.WebView2.Core;
 using System.Windows;
 
 namespace UI.Views
@@ -9,8 +10,7 @@ namespace UI.Views
     /// </summary>
     public partial class KickLoginWindow : Window
     {
-        private const string LoginSelector = "[data-testid='login']";
-        private const int PollIntervalMs = 250;
+        private readonly CancellationTokenSource _cts = new();
 
         /// <summary>
         /// Initializes the Kick login window and navigates to the Kick site when loaded.
@@ -19,6 +19,7 @@ namespace UI.Views
         {
             InitializeComponent();
             Loaded += OnLoaded;
+            Closed += (_, _) => _cts.Cancel();
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -36,33 +37,34 @@ namespace UI.Views
                 return;
 
             Web.NavigationCompleted -= OnNavigationCompleted;
-            await ClickWhenEarlyButtonReadyAsync();
+
+            try
+            {
+                await PlatformLoginDetector.ClickKickLoginWhenEarlyAsync(
+                    script => Web.ExecuteScriptAsync(script),
+                    cancellationToken: _cts.Token);
+
+                _ = PollAndCloseWhenLoggedInAsync();
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
-        private async Task ClickWhenEarlyButtonReadyAsync(int timeoutMs = 30000)
+        private async Task PollAndCloseWhenLoggedInAsync()
         {
-            string escaped = JsonSerializer.Serialize(LoginSelector);
-            string isEarlyScript = $$"""
-                (() => {
-                    const el = document.querySelector({{escaped}});
-                    if (!el) return false;
-                    const rect = el.getBoundingClientRect();
-                    return (el.textContent || '').trim().length === 0 && rect.width > 0 && rect.height > 0;
-                })()
-                """;
-            string clickScript = $"document.querySelector({escaped})?.click()";
-
-            int elapsed = 0;
-            while (elapsed < timeoutMs)
+            try
             {
-                if (await Web.ExecuteScriptAsync(isEarlyScript) == "true")
-                {
-                    await Web.ExecuteScriptAsync(clickScript);
-                    return;
-                }
+                bool loggedIn = await PlatformLoginDetector.PollUntilLoggedInAsync(
+                    script => Web.ExecuteScriptAsync(script),
+                    Platform.Kick,
+                    cancellationToken: _cts.Token);
 
-                await Task.Delay(PollIntervalMs);
-                elapsed += PollIntervalMs;
+                if (loggedIn && !_cts.IsCancellationRequested)
+                    Dispatcher.Invoke(Close);
+            }
+            catch (OperationCanceledException)
+            {
             }
         }
     }
