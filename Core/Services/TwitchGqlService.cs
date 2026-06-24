@@ -3,8 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Net.Http;
 using Core.Interfaces;
-using Core.Logging;
 using Core.Managers;
+using Core.Logging;
 using System.Net;
 using System.Text;
 using System.IO;
@@ -516,7 +516,7 @@ namespace Core.Services
             AppLogger.Debug("TwitchGql", $"DropCampaignDetails fetch completed. totalResults={results.Count}");
             return results;
         }
-        
+
         private async Task<string> GetCurrentDropCampaignDetailsHashInternalAsync(bool allowCached, CancellationToken ct = default)
         {
             const string operationName = "DropCampaignDetails";
