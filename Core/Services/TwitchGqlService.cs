@@ -203,108 +203,6 @@ namespace Core.Services
         }
 
         /// <summary>
-        /// Batch-checks which channel logins are live and streaming the specified Twitch game slug.
-        /// </summary>
-        /// <param name="channelLogins">Channel login slugs to evaluate.</param>
-        /// <param name="gameSlug">Expected game slug from the drop campaign.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>Login slugs that are live and match the game slug.</returns>
-        public async Task<List<string>> QueryLiveChannelsBySlugAsync(IReadOnlyList<string> channelLogins, string gameSlug, CancellationToken ct = default)
-        {
-            if (_clientId == null || _integrityToken == null)
-                await RefreshHeadersAsync(ct);
-
-            const string operationName = "StreamMetadata";
-            const string hash = "b57f9b910f8cd1a4659d894fe7550ccc81ec9052c01e438b290fd66a040b9b93";
-            const int batchSize = 30;
-
-            SetCachedHash(operationName, hash);
-
-            List<string> liveMatches = new();
-            int totalBatches = (int)Math.Ceiling(channelLogins.Count / (double)batchSize);
-
-            AppLogger.Debug("TwitchGql", $"QueryLiveChannelsBySlug started. totalChannels={channelLogins.Count}, gameSlug={gameSlug}, batches={totalBatches}");
-
-            for (int i = 0; i < channelLogins.Count; i += batchSize)
-            {
-                List<string> batch = channelLogins.Skip(i).Take(batchSize).ToList();
-
-                JsonArray payload = new();
-                foreach (string login in batch)
-                {
-                    payload.Add(new JsonObject
-                    {
-                        ["operationName"] = operationName,
-                        ["variables"] = new JsonObject
-                        {
-                            ["channelLogin"] = login,
-                            ["includeIsDJ"] = true
-                        },
-                        ["extensions"] = new JsonObject
-                        {
-                            ["persistedQuery"] = new JsonObject
-                            {
-                                ["version"] = 1,
-                                ["sha256Hash"] = hash
-                            }
-                        }
-                    });
-                }
-
-                using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql")
-                {
-                    Content = JsonContent.Create(payload)
-                };
-                request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
-                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
-                request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
-                if (!string.IsNullOrEmpty(_deviceId))
-                    request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
-
-                HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
-                string jsonText = await response.Content.ReadAsStringAsync(ct);
-
-                if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
-                {
-                    AppLogger.Warn("TwitchGql", $"QueryLiveChannelsBySlug batch failed at offset={i}. Refreshing headers and retrying.");
-                    await RefreshHeadersAsync(ct);
-
-                    using HttpRequestMessage retryRequest = new(HttpMethod.Post, "https://gql.twitch.tv/gql")
-                    {
-                        Content = JsonContent.Create(payload)
-                    };
-                    retryRequest.Headers.TryAddWithoutValidation("Client-ID", _clientId);
-                    retryRequest.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
-                    retryRequest.Headers.TryAddWithoutValidation("Authorization", _accessToken);
-                    if (!string.IsNullOrEmpty(_deviceId))
-                        retryRequest.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
-
-                    response = await _httpClient.SendAsync(retryRequest, ct);
-                    jsonText = await response.Content.ReadAsStringAsync(ct);
-                }
-
-                response.EnsureSuccessStatusCode();
-                JsonArray responseArray = JsonNode.Parse(jsonText)!.AsArray();
-
-                for (int j = 0; j < batch.Count; j++)
-                {
-                    JsonNode? stream = responseArray[j]?["data"]?["user"]?["stream"];
-                    if (stream == null) continue;
-
-                    string? type = stream["type"]?.GetValue<string>();
-                    string? slug = stream["game"]?["slug"]?.GetValue<string>();
-
-                    if (type == "live" && string.Equals(slug, gameSlug, StringComparison.OrdinalIgnoreCase))
-                        liveMatches.Add(batch[j]);
-                }
-
-                AppLogger.Debug("TwitchGql", $"QueryLiveChannelsBySlug batch offset={i}, batchSize={batch.Count}, matchesFound={liveMatches.Count}");
-            }
-
-            AppLogger.Debug("TwitchGql", $"QueryLiveChannelsBySlug completed. liveMatches={liveMatches.Count}/{channelLogins.Count}");
-            return liveMatches;
-        }
-        /// <summary>
         /// Attempts to claim a Twitch drop reward for the specified campaign and reward identifiers asynchronously.
         /// </summary>
         /// <remarks>Returns <see langword="false"/> if the claim request fails or if the response
@@ -618,21 +516,7 @@ namespace Core.Services
             AppLogger.Debug("TwitchGql", $"DropCampaignDetails fetch completed. totalResults={results.Count}");
             return results;
         }
-        /// <summary>
-        /// Asynchronously retrieves the SHA-256 hash of the current Twitch Drop campaign details by simulating user
-        /// interaction with the Twitch Drops campaigns page.
-        /// </summary>
-        /// <remarks>This method navigates to the Twitch Drops campaigns page, triggers the loading of
-        /// campaign details, and captures the associated GraphQL request to extract the hash. The operation may take
-        /// several seconds to complete due to required page loading and interaction delays.</remarks>
-        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
-        /// <returns>A string containing the SHA-256 hash of the current DropCampaignDetails GraphQL request.</returns>
-        /// <exception cref="InvalidOperationException">Thrown if the DropCampaignDetails hash cannot be found on the page.</exception>
-        public async Task<string> GetCurrentDropCampaignDetailsHashAsync(CancellationToken ct = default)
-        {
-            return await GetCurrentDropCampaignDetailsHashInternalAsync(allowCached: true, ct);
-        }
-
+        
         private async Task<string> GetCurrentDropCampaignDetailsHashInternalAsync(bool allowCached, CancellationToken ct = default)
         {
             const string operationName = "DropCampaignDetails";
