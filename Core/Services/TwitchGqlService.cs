@@ -5,8 +5,8 @@ using System.Net.Http;
 using Core.Interfaces;
 using Core.Managers;
 using Core.Logging;
-using System.Net;
 using System.Text;
+using System.Net;
 using System.IO;
 
 namespace Core.Services
