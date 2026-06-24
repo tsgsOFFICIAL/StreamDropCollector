@@ -312,7 +312,7 @@ namespace Core.Services.Twitch.Helix
 
             int liveCount = streams.Count;
             int missingUsers = logins.Count - users.Count;
-            var liveDetails = logins
+            IEnumerable<string> liveDetails = logins
                 .Where(login => streams.ContainsKey(login))
                 .Select(login =>
                 {
