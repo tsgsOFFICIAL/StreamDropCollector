@@ -24,10 +24,11 @@ jobs:
               run: |
                   $sha = "${{ github.sha }}".Substring(0, 7)
                   [xml]$xml = Get-Content UI/UI.csproj
-                  $baseVersion = $xml.Project.PropertyGroup.Version | Select-Object -First 1
+                  $baseVersion = $xml.Project.PropertyGroup.FileVersion | Select-Object -First 1
                   if (-not $baseVersion) { $baseVersion = "1.0.0" }
                   $nightlyVersion = "$baseVersion-nightly.$sha"
                   echo "sha_short=$sha" >> $env:GITHUB_OUTPUT
+                  echo "base_version=$baseVersion" >> $env:GITHUB_OUTPUT
                   echo "nightly_version=$nightlyVersion" >> $env:GITHUB_OUTPUT
 
             - name: Publish (Self-Contained)
@@ -36,7 +37,9 @@ jobs:
                   -c Release
                   -r win-x64
                   -p:SelfContained=true
-                  -p:Version=${{ steps.vars.outputs.nightly_version }}
+                  -p:FileVersion=${{ steps.vars.outputs.base_version }}
+                  -p:InformationalVersion=${{ steps.vars.outputs.nightly_version }}
+                  -p:IncludeSourceRevisionInInformationalVersion=false
                   -o publish/self-contained/
 
             - name: Publish (Framework-Dependent)
@@ -45,7 +48,9 @@ jobs:
                   -c Release
                   -r win-x64
                   -p:SelfContained=false
-                  -p:Version=${{ steps.vars.outputs.nightly_version }}
+                  -p:FileVersion=${{ steps.vars.outputs.base_version }}
+                  -p:InformationalVersion=${{ steps.vars.outputs.nightly_version }}
+                  -p:IncludeSourceRevisionInInformationalVersion=false
                   -o publish/framework-dependent/
 
             - name: Zip (Self-Contained)
