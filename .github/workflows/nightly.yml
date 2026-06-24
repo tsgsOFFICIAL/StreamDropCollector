@@ -1,59 +1,72 @@
 name: Nightly Build
 
 on:
-  push:
-    branches: [ master ]
+    push:
+        branches: [master]
 
 jobs:
-  build:
-    runs-on: windows-latest
-    permissions:
-      contents: write
+    build:
+        runs-on: windows-latest
+        permissions:
+            contents: write
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: "10.0.x"
 
-      - name: Publish (Self-Contained)
-        run: >
-          dotnet publish UI/UI.csproj
-          -c Release
-          -r win-x64
-          -p:SelfContained=true
-          -o publish/self-contained/
+            - name: Set nightly version
+              id: vars
+              run: |
+                  $sha = "${{ github.sha }}".Substring(0, 7)
+                  [xml]$xml = Get-Content UI/UI.csproj
+                  $baseVersion = $xml.Project.PropertyGroup.Version | Select-Object -First 1
+                  if (-not $baseVersion) { $baseVersion = "1.0.0" }
+                  $nightlyVersion = "$baseVersion-nightly.$sha"
+                  echo "sha_short=$sha" >> $env:GITHUB_OUTPUT
+                  echo "nightly_version=$nightlyVersion" >> $env:GITHUB_OUTPUT
 
-      - name: Publish (Framework-Dependent)
-        run: >
-          dotnet publish UI/UI.csproj
-          -c Release
-          -r win-x64
-          -p:SelfContained=false
-          -o publish/framework-dependent/
+            - name: Publish (Self-Contained)
+              run: >
+                  dotnet publish UI/UI.csproj
+                  -c Release
+                  -r win-x64
+                  -p:SelfContained=true
+                  -p:Version=${{ steps.vars.outputs.nightly_version }}
+                  -o publish/self-contained/
 
-      - name: Zip (Self-Contained)
-        run: Compress-Archive -Path publish/self-contained/* -DestinationPath StreamDropCollector-nightly-self-contained.zip
+            - name: Publish (Framework-Dependent)
+              run: >
+                  dotnet publish UI/UI.csproj
+                  -c Release
+                  -r win-x64
+                  -p:SelfContained=false
+                  -p:Version=${{ steps.vars.outputs.nightly_version }}
+                  -o publish/framework-dependent/
 
-      - name: Zip (Framework-Dependent)
-        run: Compress-Archive -Path publish/framework-dependent/* -DestinationPath StreamDropCollector-nightly-framework-dependent.zip
+            - name: Zip (Self-Contained)
+              run: Compress-Archive -Path publish/self-contained/* -DestinationPath StreamDropCollector-nightly-self-contained.zip
 
-      - name: Delete existing nightly release
-        run: gh release delete nightly --yes --cleanup-tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+            - name: Zip (Framework-Dependent)
+              run: Compress-Archive -Path publish/framework-dependent/* -DestinationPath StreamDropCollector-nightly-framework-dependent.zip
 
-      - name: Create nightly release
-        run: >
-          gh release create nightly
-          StreamDropCollector-nightly-self-contained.zip
-          StreamDropCollector-nightly-framework-dependent.zip
-          --title "Nightly Build"
-          --notes "Automated build from latest commit on master."
-          --prerelease
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Delete existing nightly release
+              run: gh release delete nightly --yes --cleanup-tag
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              continue-on-error: true
+
+            - name: Create nightly release
+              run: >
+                  gh release create nightly
+                  StreamDropCollector-nightly-self-contained.zip
+                  StreamDropCollector-nightly-framework-dependent.zip
+                  --title "Nightly Build (${{ steps.vars.outputs.nightly_version }})"
+                  --notes "Automated build from commit ${{ steps.vars.outputs.sha_short }} on master."
+                  --prerelease
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
