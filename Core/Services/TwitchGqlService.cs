@@ -320,7 +320,7 @@ namespace Core.Services
             AppLogger.Debug("TwitchGql", $"ClaimDrop started. campaignId={campaignId}, rewardId={rewardId}");
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () => await RefreshHeadersAsync(ct));
 
-            // Step 1. Construct the payload, according to the above format
+            // Step 1. Construct the payload
             string operationName = "DropsPage_ClaimDropRewards";
             string dropInstanceID = $"{_userId}#{campaignId}#{rewardId}";
             string hash = "a455deea71bdc9015b78eb49f4acfbce8baa7ccbedd28e549bb025bd0f751930";
