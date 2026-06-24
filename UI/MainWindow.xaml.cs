@@ -121,8 +121,7 @@ namespace UI
         {
             StartActivationServer();
 
-            FileVersionInfo localVersionInfo = FileVersionInfo.GetVersionInfo(Utility.GetExePath());
-            VersionString = localVersionInfo.FileVersion ?? "N/A";
+            VersionString = Utility.GetDisplayVersion();
 
             string basePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector");
             string updatePath = Path.Combine(basePath, "Update");

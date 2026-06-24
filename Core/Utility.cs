@@ -91,6 +91,16 @@ namespace Core
         }
 
         /// <summary>
+        /// Gets the user-facing application version string, including nightly or prerelease suffixes when present.
+        /// </summary>
+        /// <returns>The product version from the executable metadata, or the file version as a fallback.</returns>
+        public static string GetDisplayVersion()
+        {
+            FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(GetExePath());
+            return versionInfo.ProductVersion ?? versionInfo.FileVersion ?? "N/A";
+        }
+
+        /// <summary>
         /// Gets the full path to the running application executable.
         /// </summary>
         /// <returns>The absolute path to the current process executable, or a best-effort fallback path when the main module is unavailable.</returns>

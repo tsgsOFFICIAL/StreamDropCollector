@@ -76,10 +76,7 @@ namespace UI
 
             AppLogger.Initialize();
 
-            FileVersionInfo localVersionInfo = FileVersionInfo.GetVersionInfo(Utility.GetExePath());
-            string versionInfo = localVersionInfo.FileVersion ?? "N/A";
-
-            AppLogger.Info("App", $"Starting StreamDropCollector version {versionInfo}");
+            AppLogger.Info("App", $"Starting StreamDropCollector version {Utility.GetDisplayVersion()}");
 
             base.OnStartup(e);
 
