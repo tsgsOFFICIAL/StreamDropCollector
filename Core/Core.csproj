@@ -5,7 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<UseWPF>true</UseWPF>
-		<FileVersion>1.0.24</FileVersion>
+		<FileVersion>1.1.0</FileVersion>
 		<Copyright>tsgsOFFICIAL</Copyright>
 	</PropertyGroup>
 

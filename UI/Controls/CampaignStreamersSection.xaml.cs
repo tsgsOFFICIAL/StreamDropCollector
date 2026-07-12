@@ -304,14 +304,16 @@ namespace UI.Controls
             UpdateClosedFooter();
         }
 
-        private static IReadOnlyList<string> ResolveEligibleLogins(DropsCampaign campaign) =>
-            campaign.Platform == Platform.Twitch
-                ? DropsInventoryManager.Instance.GetTwitchEligibleLoginsForCampaign(campaign)
-                : EligibleStreamerParser.ParseChannelLogins(campaign);
+        private static IReadOnlyList<string> ResolveEligibleLogins(DropsCampaign campaign) => campaign.Platform switch
+        {
+            Platform.Twitch => DropsInventoryManager.Instance.GetTwitchEligibleLoginsForCampaign(campaign),
+            Platform.Kick => DropsInventoryManager.Instance.GetKickEligibleLoginsForCampaign(campaign),
+            _ => EligibleStreamerParser.ParseChannelLogins(campaign)
+        };
 
         private void EnsureGeneralDropStreamersLoaded()
         {
-            if (_campaign is not { IsGeneralDrop: true, Platform: Platform.Twitch })
+            if (_campaign is not { IsGeneralDrop: true, Platform: Platform.Twitch or Platform.Kick })
                 return;
 
             if (_allStreamers.Count > 0)

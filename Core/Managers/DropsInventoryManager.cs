@@ -124,7 +124,8 @@ namespace Core.Managers
         private readonly PinnedCampaignStore _pinnedCampaignStore = new();
         private readonly LastMinedStreamersStore _lastMinedStreamers = new();
         private readonly ITwitchHelixService _twitchHelixService = TwitchHelixService.Instance;
-        private readonly TwitchGeneralDropDiscoveryCache _twitchGeneralDropCache = new();
+        private readonly GeneralDropDiscoveryCache _twitchGeneralDropCache = new();
+        private readonly GeneralDropDiscoveryCache _kickGeneralDropCache = new();
         private ITwitchLiveChannelApi _twitchLiveChannelApi = null!;
         private IKickLiveChannelApi _kickLiveChannelApi = null!;
         private readonly MiningOrchestrator _miningOrchestrator = new();
@@ -460,7 +461,11 @@ namespace Core.Managers
             HashSet<string> logins = new(StringComparer.OrdinalIgnoreCase);
             foreach (DropsCampaign campaign in kickCampaigns)
             {
-                foreach (string login in EligibleStreamerParser.ParseChannelLogins(campaign))
+                IReadOnlyList<string> campaignLogins = await _kickLiveChannelApi
+                    .GetEligibleLoginsAsync(campaign, allowDirectoryDiscovery: false, ct)
+                    .ConfigureAwait(false);
+
+                foreach (string login in campaignLogins)
                     logins.Add(login);
             }
 
@@ -640,9 +645,26 @@ namespace Core.Managers
             return _twitchGeneralDropCache.Get(campaign.Id);
         }
 
+        /// <summary>
+        /// Gets eligible Kick streamer logins for UI display (connect URLs or cached general-drop directory results).
+        /// </summary>
+        public IReadOnlyList<string> GetKickEligibleLoginsForCampaign(DropsCampaign campaign)
+        {
+            if (campaign.Platform != Platform.Kick)
+                return Array.Empty<string>();
+
+            if (!campaign.IsGeneralDrop)
+                return EligibleStreamerParser.ParseChannelLogins(campaign);
+
+            if (_kickLiveChannelApi is KickLiveChannelApi concrete)
+                return concrete.GetCachedGeneralDropLogins(campaign.Id);
+
+            return _kickGeneralDropCache.Get(campaign.Id);
+        }
+
         private void RefreshMiningServices()
         {
-            _kickLiveChannelApi = new KickLiveChannelApi(() => KickWebView);
+            _kickLiveChannelApi = new KickLiveChannelApi(() => KickWebView, _kickGeneralDropCache);
             _twitchLiveChannelApi = new TwitchLiveChannelApi(_twitchHelixService, () => TwitchWebView, _twitchGeneralDropCache);
             _kickStreamerSelector = new KickStreamerSelector(_kickLiveChannelApi, _lastMinedStreamers);
             _twitchStreamerSelector = new TwitchStreamerSelector(_twitchLiveChannelApi, _lastMinedStreamers);
@@ -684,6 +706,7 @@ namespace Core.Managers
             });
 
             SchedulePreloadTwitchGeneralDropDirectories();
+            SchedulePreloadKickGeneralDropDirectories();
             ScheduleKickStreamerMetadataRefresh();
             ScheduleTwitchStreamerMetadataRefresh();
 
@@ -712,6 +735,31 @@ namespace Core.Managers
                 catch (Exception ex)
                 {
                     AppLogger.Warn("TwitchGeneralDrop", $"General-drop preload failed: {ex.Message}");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Preloads directory logins for all general-drop Kick campaigns (UI chips). Does not run during active mining re-evaluations.
+        /// </summary>
+        public void SchedulePreloadKickGeneralDropDirectories()
+        {
+            if (KickWebView is null)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    List<DropsCampaign> snapshot = await Application.Current.Dispatcher.InvokeAsync(() =>
+                        ActiveCampaigns.Where(c => c.Platform == Platform.Kick).ToList());
+
+                    await _kickLiveChannelApi.PreloadGeneralDropDirectoriesAsync(snapshot);
+                    ScheduleKickStreamerMetadataRefresh();
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("KickGeneralDrop", $"General-drop preload failed: {ex.Message}");
                 }
             });
         }
@@ -826,6 +874,12 @@ namespace Core.Managers
                 {
                     AppLogger.Debug("TwitchMining", "StartMiningStreams preloading general-drop directories before campaign selection.");
                     await _twitchLiveChannelApi.PreloadGeneralDropDirectoriesAsync(campaignSnapshot, token);
+                }
+
+                if (!restartedInternally && KickWebView is not null)
+                {
+                    AppLogger.Debug("KickMining", "StartMiningStreams preloading general-drop directories before campaign selection.");
+                    await _kickLiveChannelApi.PreloadGeneralDropDirectoriesAsync(campaignSnapshot, token);
                 }
 
                 MiningOrchestratorResult result = await _miningOrchestrator.RunAsync(

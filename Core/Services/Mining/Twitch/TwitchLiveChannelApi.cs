@@ -3,7 +3,6 @@ using Core.Helpers;
 using Core.Interfaces;
 using Core.Logging;
 using Core.Models;
-using Core.Services.Twitch.Helix;
 
 namespace Core.Services.Mining.Twitch
 {
@@ -14,7 +13,7 @@ namespace Core.Services.Mining.Twitch
     {
         private readonly ITwitchHelixService _helixService;
         private readonly TwitchGeneralDropDirectoryClient _generalDropDirectory;
-        private readonly TwitchGeneralDropDiscoveryCache _generalDropCache;
+        private readonly GeneralDropDiscoveryCache _generalDropCache;
         private readonly SemaphoreSlim _generalDropPreloadLock = new(1, 1);
 
         /// <summary>
@@ -23,10 +22,10 @@ namespace Core.Services.Mining.Twitch
         public TwitchLiveChannelApi(
             ITwitchHelixService helixService,
             Func<IWebViewHost?> webViewProvider,
-            TwitchGeneralDropDiscoveryCache? generalDropCache = null)
+            GeneralDropDiscoveryCache? generalDropCache = null)
         {
             _helixService = helixService ?? throw new ArgumentNullException(nameof(helixService));
-            _generalDropCache = generalDropCache ?? new TwitchGeneralDropDiscoveryCache();
+            _generalDropCache = generalDropCache ?? new GeneralDropDiscoveryCache();
             _generalDropDirectory = new TwitchGeneralDropDirectoryClient(webViewProvider);
         }
 
@@ -63,7 +62,7 @@ namespace Core.Services.Mining.Twitch
                 return _generalDropCache.Get(campaign.Id);
 
             IReadOnlyList<string> discovered = await _generalDropDirectory
-                .DiscoverLoginsAsync(campaign, TwitchGeneralDropDiscoveryCache.MaxLogins, ct)
+                .DiscoverLoginsAsync(campaign, GeneralDropDiscoveryCache.MaxLogins, ct)
                 .ConfigureAwait(false);
 
             if (discovered.Count > 0)
@@ -177,7 +176,7 @@ namespace Core.Services.Mining.Twitch
                 return null;
             }
 
-            IEnumerable<string> ordered = BuildOrderedLogins(directoryLogins, preferredLogin);
+            IEnumerable<string> ordered = LiveChannelSelector.BuildOrderedLogins(directoryLogins, preferredLogin);
             int verifiedCount = 0;
 
             foreach (string login in ordered)
@@ -225,7 +224,7 @@ namespace Core.Services.Mining.Twitch
 
             AppLogger.Debug("TwitchMining", $"SelectBestLiveLogin candidates={logins.Count}: [{string.Join(", ", logins)}]");
 
-            IEnumerable<string> ordered = BuildOrderedLogins(logins, preferredLogin);
+            IEnumerable<string> ordered = LiveChannelSelector.BuildOrderedLogins(logins, preferredLogin);
             int liveCount = 0;
             int gameMatchCount = 0;
 
@@ -270,15 +269,6 @@ namespace Core.Services.Mining.Twitch
                 $"SelectBestLiveLogin FAILED campaign='{campaign.Name}' gameId={campaign.GameId} " +
                 $"candidates={logins.Count} live={liveCount} gameMatch={gameMatchCount}");
             return null;
-        }
-
-        private static IEnumerable<string> BuildOrderedLogins(IReadOnlyList<string> logins, string? preferredLogin)
-        {
-            if (string.IsNullOrWhiteSpace(preferredLogin))
-                return logins;
-
-            return new[] { preferredLogin }
-                .Concat(logins.Where(l => !string.Equals(l, preferredLogin, StringComparison.OrdinalIgnoreCase)));
         }
     }
 }

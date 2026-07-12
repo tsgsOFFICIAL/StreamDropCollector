@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 
-namespace Core.Services.Mining.Twitch
+namespace Core.Services.Mining
 {
     /// <summary>
-    /// Short-lived cache of directory-discovered logins for general Twitch drop campaigns.
+    /// Short-lived cache of directory-discovered logins for general drop campaigns.
     /// </summary>
-    public sealed class TwitchGeneralDropDiscoveryCache
+    public sealed class GeneralDropDiscoveryCache
     {
         public const int MaxLogins = 10;
         private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(90);

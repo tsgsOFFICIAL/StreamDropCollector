@@ -1,8 +1,13 @@
 {
-  "version": "1.0.23",
+  "version": "1.1.0",
   "type": "Feature",
-  "changelog": "Added the ability to manually switch campaigns.",
+  "changelog": "Added support for Kick general drops (\"watch anyone\" and category-wide campaigns) - the app now automatically discovers and watches a live streamer for these instead of skipping them.",
   "historic_versions": [
+    {
+      "version": "1.0.23",
+      "type": "Feature",
+      "changelog": "Added the ability to manually switch campaigns."
+    },
     {
       "version": "1.0.22",
       "type": "Patch",

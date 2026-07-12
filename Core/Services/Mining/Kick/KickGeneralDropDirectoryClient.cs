@@ -1,24 +1,25 @@
-using Core.Interfaces;
 using System.Windows;
+using Core.Interfaces;
 using Core.Logging;
 using Core.Models;
+using Core.Services.Mining;
 
-namespace Core.Services.Mining.Twitch
+namespace Core.Services.Mining.Kick
 {
     /// <summary>
-    /// Discovers drops-enabled live streamers from Twitch's directory page via the hidden WebView.
+    /// Discovers live streamers from Kick's browse/category listing pages via the hidden WebView.
     /// </summary>
-    internal sealed class TwitchGeneralDropDirectoryClient
+    internal sealed class KickGeneralDropDirectoryClient
     {
         private readonly Func<IWebViewHost?> _webViewProvider;
 
-        public TwitchGeneralDropDirectoryClient(Func<IWebViewHost?> webViewProvider)
+        public KickGeneralDropDirectoryClient(Func<IWebViewHost?> webViewProvider)
         {
             _webViewProvider = webViewProvider ?? throw new ArgumentNullException(nameof(webViewProvider));
         }
 
         /// <summary>
-        /// Navigates to the campaign directory URL (<c>?filter=drops</c>) and scrapes up to <paramref name="limit"/> logins.
+        /// Navigates to the campaign directory URL (browse or category listing) and scrapes up to <paramref name="limit"/> logins.
         /// </summary>
         public async Task<IReadOnlyList<string>> DiscoverLoginsAsync(
             DropsCampaign campaign,
@@ -31,7 +32,7 @@ namespace Core.Services.Mining.Twitch
             IWebViewHost? host = _webViewProvider();
             if (host is null)
             {
-                AppLogger.Warn("TwitchGeneralDrop", $"Directory discovery skipped for '{campaign.Name}' - Twitch WebView is null.");
+                AppLogger.Warn("KickGeneralDrop", $"Directory discovery skipped for '{campaign.Name}' - Kick WebView is null.");
                 return Array.Empty<string>();
             }
 
@@ -42,19 +43,19 @@ namespace Core.Services.Mining.Twitch
                 ct.ThrowIfCancellationRequested();
 
                 AppLogger.Debug(
-                    "TwitchGeneralDrop",
+                    "KickGeneralDrop",
                     $"Directory discovery START campaign='{campaign.Name}' url={directoryUrl} limit={limit}");
 
                 await host.NavigateAsync(directoryUrl);
                 bool idle = await host.WaitForNetworkIdleAsync(8000, 500, ct);
                 if (!idle)
-                    AppLogger.Warn("TwitchGeneralDrop", $"Directory page network idle timeout for '{campaign.Name}'; scraping anyway.");
+                    AppLogger.Warn("KickGeneralDrop", $"Directory page network idle timeout for '{campaign.Name}'; scraping anyway.");
 
-                string raw = await host.ExecuteScriptAsync(TwitchGeneralDropDirectoryScripts.GetTopStreamerLoginsJs(limit));
+                string raw = await host.ExecuteScriptAsync(KickGeneralDropDirectoryScripts.GetTopStreamerLoginsJs(limit));
                 IReadOnlyList<string> logins = ParseLoginsResult(raw);
 
                 AppLogger.Debug(
-                    "TwitchGeneralDrop",
+                    "KickGeneralDrop",
                     $"Directory discovery DONE campaign='{campaign.Name}' found={logins.Count} logins=[{string.Join(", ", logins)}]");
 
                 return logins;

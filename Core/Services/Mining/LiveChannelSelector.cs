@@ -1,3 +1,4 @@
+using System.Linq;
 using Core.Helpers;
 using Core.Logging;
 using Core.Models;
@@ -54,6 +55,18 @@ namespace Core.Services.Mining
 
             AppLogger.Warn(logScope, $"No eligible live streamer found for campaign '{campaign.Name}' among {logins.Count} candidate(s).");
             return null;
+        }
+
+        /// <summary>
+        /// Orders logins with <paramref name="preferredLogin"/> first (when present among them), followed by the rest in order.
+        /// </summary>
+        public static IEnumerable<string> BuildOrderedLogins(IReadOnlyList<string> logins, string? preferredLogin)
+        {
+            if (string.IsNullOrWhiteSpace(preferredLogin))
+                return logins;
+
+            return new[] { preferredLogin }
+                .Concat(logins.Where(l => !string.Equals(l, preferredLogin, StringComparison.OrdinalIgnoreCase)));
         }
     }
 }
