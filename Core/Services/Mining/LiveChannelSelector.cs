@@ -30,14 +30,25 @@ namespace Core.Services.Mining
 
             if (!string.IsNullOrWhiteSpace(preferredLogin))
             {
-                LiveChannelSnapshot? preferredSnapshot = await getChannelAsync(preferredLogin, ct);
-                if (LiveChannelEligibility.IsEligible(preferredSnapshot, campaign.Slug))
+                bool preferredIsCampaignChannel = logins.Any(l => string.Equals(l, preferredLogin, StringComparison.OrdinalIgnoreCase));
+                if (!preferredIsCampaignChannel)
                 {
-                    AppLogger.Debug(logScope, $"Selected preferred login '{preferredLogin}' for '{campaign.Name}' (live, category ok).");
-                    return preferredLogin;
+                    // The remembered streamer is keyed by category slug, not campaign id, so it can carry over
+                    // from an unrelated campaign in the same category. Only honor it if it's actually one of
+                    // THIS campaign's own channels - otherwise we'd mine a stream Kick never credits for this drop.
+                    AppLogger.Debug(logScope, $"Preferred login '{preferredLogin}' is not one of '{campaign.Name}''s own channels [{string.Join(", ", logins)}] - ignoring.");
                 }
+                else
+                {
+                    LiveChannelSnapshot? preferredSnapshot = await getChannelAsync(preferredLogin, ct);
+                    if (LiveChannelEligibility.IsEligible(preferredSnapshot, campaign.Slug))
+                    {
+                        AppLogger.Debug(logScope, $"Selected preferred login '{preferredLogin}' for '{campaign.Name}' (live, category ok, campaign channel confirmed).");
+                        return preferredLogin;
+                    }
 
-                AppLogger.Debug(logScope, $"Preferred login '{preferredLogin}' is not eligible for '{campaign.Name}'.");
+                    AppLogger.Debug(logScope, $"Preferred login '{preferredLogin}' is a campaign channel but not currently eligible for '{campaign.Name}'.");
+                }
             }
 
             foreach (string login in logins)
