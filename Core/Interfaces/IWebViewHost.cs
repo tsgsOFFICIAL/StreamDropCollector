@@ -169,5 +169,11 @@ namespace Core.Interfaces
         /// <returns>A task that represents the asynchronous operation. The task result contains a byte array with the image
         /// data. Returns an empty array if the image cannot be retrieved.</returns>
         Task<byte[]?> FetchImageBytesAsync(string imageUrl, int timeoutMs = 10000);
+        /// <summary>
+        /// Enables CDP-level network request/response/failure logging and page console/exception logging for the
+        /// lifetime of the host. Safe to call multiple times - only attaches once.
+        /// </summary>
+        /// <param name="logScope">The AppLogger scope to write entries under.</param>
+        Task EnableVerboseNetworkAndConsoleLoggingAsync(string logScope);
     }
 }

@@ -42,6 +42,9 @@ namespace Core.Mining
 
             /// <summary>Triggers a full stream re-selection when a mined channel goes ineligible.</summary>
             public required Func<Task> RequestReevaluationAsync { get; init; }
+
+            /// <summary>Optional: logs the real Kick &lt;video&gt; element playback state (paused, currentTime, buffered, errors) each tick.</summary>
+            public Func<Task>? LogKickPlaybackDiagnosticsAsync { get; init; }
         }
 
         /// <summary>
@@ -62,6 +65,18 @@ namespace Core.Mining
                     bool kickHasProgress = host.HasKickCampaignsWithProgress();
                     bool twitchWasOnline = host.GetLastKnownTwitchOnline();
                     bool kickWasOnline = host.GetLastKnownKickOnline();
+
+                    if (host.LogKickPlaybackDiagnosticsAsync != null)
+                    {
+                        try
+                        {
+                            await host.LogKickPlaybackDiagnosticsAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            AppLogger.Warn("KickPlayback", $"LogKickPlaybackDiagnosticsAsync threw: {ex.Message}");
+                        }
+                    }
 
                     bool twitchEligible = await host.IsTwitchEligibleAsync();
                     bool kickEligible = await host.IsKickEligibleAsync();

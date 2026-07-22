@@ -1362,6 +1362,161 @@ namespace UI.Views
                 return null;
             }
         }
+        private int _verboseNetworkLoggingAttached;
+
+        /// <summary>
+        /// Enables CDP-level network request/response/failure logging and page console/exception logging.
+        /// Safe to call multiple times - only attaches listeners once per host instance.
+        /// </summary>
+        public async Task EnableVerboseNetworkAndConsoleLoggingAsync(string logScope)
+        {
+            if (Interlocked.CompareExchange(ref _verboseNetworkLoggingAttached, 1, 0) != 0)
+                return;
+
+            await RunOnUiAsync(async () =>
+            {
+                await EnsureInitializedCoreAsync();
+
+                await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+                await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.enable", "{}");
+                await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Log.enable", "{}");
+
+                CoreWebView2DevToolsProtocolEventReceiver requestReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.requestWillBeSent");
+                requestReceiver.DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    try
+                    {
+                        JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                        JsonElement request = root.GetProperty("request");
+                        string url = request.TryGetProperty("url", out JsonElement urlEl) ? urlEl.GetString() ?? "" : "";
+                        string method = request.TryGetProperty("method", out JsonElement methodEl) ? methodEl.GetString() ?? "" : "";
+                        string type = root.TryGetProperty("type", out JsonElement typeEl) ? typeEl.GetString() ?? "" : "";
+
+                        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                            url = $"data:...(len={url.Length})";
+
+                        AppLogger.Debug(logScope, $"NET request type={type} method={method} url={url}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn(logScope, $"NET requestWillBeSent parse failure: {ex.Message}");
+                    }
+                };
+
+                CoreWebView2DevToolsProtocolEventReceiver responseReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.responseReceived");
+                responseReceiver.DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    try
+                    {
+                        JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                        JsonElement response = root.GetProperty("response");
+                        string url = response.TryGetProperty("url", out JsonElement urlEl) ? urlEl.GetString() ?? "" : "";
+                        int status = response.TryGetProperty("status", out JsonElement statusEl) ? statusEl.GetInt32() : -1;
+                        string mimeType = response.TryGetProperty("mimeType", out JsonElement mimeEl) ? mimeEl.GetString() ?? "" : "";
+                        string type = root.TryGetProperty("type", out JsonElement typeEl) ? typeEl.GetString() ?? "" : "";
+                        bool fromCache = response.TryGetProperty("fromDiskCache", out JsonElement cacheEl) && cacheEl.ValueKind == JsonValueKind.True;
+
+                        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                            url = $"data:...(len={url.Length})";
+
+                        AppLogger.Debug(
+                            logScope,
+                            $"NET response type={type} status={status} mimeType={mimeType} fromDiskCache={fromCache} url={url}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn(logScope, $"NET responseReceived parse failure: {ex.Message}");
+                    }
+                };
+
+                CoreWebView2DevToolsProtocolEventReceiver failedReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFailed");
+                failedReceiver.DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    try
+                    {
+                        JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                        string type = root.TryGetProperty("type", out JsonElement typeEl) ? typeEl.GetString() ?? "" : "";
+                        string errorText = root.TryGetProperty("errorText", out JsonElement errEl) ? errEl.GetString() ?? "" : "";
+                        bool canceled = root.TryGetProperty("canceled", out JsonElement cancelEl) && cancelEl.ValueKind == JsonValueKind.True;
+
+                        AppLogger.Warn(logScope, $"NET loadingFailed type={type} errorText={errorText} canceled={canceled}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn(logScope, $"NET loadingFailed parse failure: {ex.Message}");
+                    }
+                };
+
+                CoreWebView2DevToolsProtocolEventReceiver consoleReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Runtime.consoleAPICalled");
+                consoleReceiver.DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    try
+                    {
+                        JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                        string type = root.TryGetProperty("type", out JsonElement typeEl) ? typeEl.GetString() ?? "" : "";
+                        string argsText = root.TryGetProperty("args", out JsonElement argsEl)
+                            ? string.Join(" ", argsEl.EnumerateArray().Select(a =>
+                                a.TryGetProperty("value", out JsonElement valEl) ? valEl.ToString()
+                                : a.TryGetProperty("description", out JsonElement descEl) ? descEl.GetString()
+                                : a.ToString()))
+                            : "";
+
+                        AppLogger.Debug(logScope, $"CONSOLE {type}: {argsText}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn(logScope, $"Runtime.consoleAPICalled parse failure: {ex.Message}");
+                    }
+                };
+
+                CoreWebView2DevToolsProtocolEventReceiver exceptionReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
+                exceptionReceiver.DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    try
+                    {
+                        JsonElement root = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement;
+                        JsonElement details = root.GetProperty("exceptionDetails");
+                        string text = details.TryGetProperty("text", out JsonElement textEl) ? textEl.GetString() ?? "" : "";
+                        string url = details.TryGetProperty("url", out JsonElement urlEl) ? urlEl.GetString() ?? "" : "";
+                        string description = details.TryGetProperty("exception", out JsonElement excEl)
+                            && excEl.TryGetProperty("description", out JsonElement descEl) ? descEl.GetString() ?? "" : "";
+
+                        AppLogger.Warn(logScope, $"JS EXCEPTION text={text} url={url} description={description}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn(logScope, $"Runtime.exceptionThrown parse failure: {ex.Message}");
+                    }
+                };
+
+                CoreWebView2DevToolsProtocolEventReceiver logReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Log.entryAdded");
+                logReceiver.DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    try
+                    {
+                        JsonElement entry = JsonDocument.Parse(e.ParameterObjectAsJson).RootElement.GetProperty("entry");
+                        string level = entry.TryGetProperty("level", out JsonElement levelEl) ? levelEl.GetString() ?? "" : "";
+                        string source = entry.TryGetProperty("source", out JsonElement sourceEl) ? sourceEl.GetString() ?? "" : "";
+                        string text = entry.TryGetProperty("text", out JsonElement textEl) ? textEl.GetString() ?? "" : "";
+                        string url = entry.TryGetProperty("url", out JsonElement urlEl) ? urlEl.GetString() ?? "" : "";
+
+                        AppLogger.Debug(logScope, $"BROWSER LOG level={level} source={source} url={url} text={text}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn(logScope, $"Log.entryAdded parse failure: {ex.Message}");
+                    }
+                };
+
+                WebView.CoreWebView2.ProcessFailed += (_, e) =>
+                {
+                    AppLogger.Error(logScope, $"WebView2 PROCESS FAILED kind={e.ProcessFailedKind} exitCode={e.ExitCode} reason={e.Reason} processDescription={e.ProcessDescription}");
+                };
+
+                AppLogger.Info(logScope, "EnableVerboseNetworkAndConsoleLoggingAsync attached (Network/Runtime/Log CDP domains + ProcessFailed).");
+            });
+        }
+
         /// <summary>
         /// Releases all resources used by the current instance and performs necessary cleanup.
         /// </summary>

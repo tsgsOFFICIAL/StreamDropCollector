@@ -1204,7 +1204,10 @@ namespace Core.Managers
                 GetLastKnownKickOnline = () => _lastKnownKickOnlineState,
                 SetLastKnownTwitchOnline = value => _lastKnownTwitchOnlineState = value,
                 SetLastKnownKickOnline = value => _lastKnownKickOnlineState = value,
-                RequestReevaluationAsync = () => StartMiningStreams(true)
+                RequestReevaluationAsync = () => StartMiningStreams(true),
+                LogKickPlaybackDiagnosticsAsync = () => _selection.CurrentKickCampaign != null && _kickPageReader != null
+                    ? _kickPageReader.LogPlaybackDiagnosticsAsync()
+                    : Task.CompletedTask
             });
         }
         /// <summary>
