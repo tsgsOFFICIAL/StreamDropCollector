@@ -39,7 +39,10 @@ namespace Core.Mining
             {
                 JsonObject? inventoryResponse = await gql.QueryInventoryProgressAsync(ct);
                 if (inventoryResponse == null)
+                {
+                    AppLogger.Warn("ProgressSync", "Twitch inventory query returned null response.");
                     return new Dictionary<string, IReadOnlyList<DropsReward>>();
+                }
 
                 JsonArray dropCampaignsInProgress = inventoryResponse["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
                 JsonArray gameEventDrops = inventoryResponse["data"]?["currentUser"]?["inventory"]?["gameEventDrops"]?.AsArray() ?? new JsonArray();
@@ -124,11 +127,17 @@ namespace Core.Mining
             {
                 string? rawProgress = await FetchKickProgressPayloadAsync(host, ct);
                 if (string.IsNullOrWhiteSpace(rawProgress))
+                {
+                    AppLogger.Warn("ProgressSync", "Kick progress fetch returned no payload (in-page fetch failed, timed out, or returned empty).");
                     return new Dictionary<string, IReadOnlyList<DropsReward>>();
+                }
 
                 using JsonDocument progressDoc = JsonDocument.Parse(rawProgress);
                 if (!progressDoc.RootElement.TryGetProperty("data", out JsonElement progressArray))
+                {
+                    AppLogger.Warn("ProgressSync", $"Kick progress payload missing 'data' property. payloadLength={rawProgress.Length}");
                     return new Dictionary<string, IReadOnlyList<DropsReward>>();
+                }
 
                 Dictionary<string, DropsCampaign> localById = campaigns.ToDictionary(c => c.Id, StringComparer.Ordinal);
                 Dictionary<string, IReadOnlyList<DropsReward>> result = new(StringComparer.Ordinal);
@@ -210,9 +219,13 @@ namespace Core.Mining
                 return await response.text();
             ";
 
+            AppLogger.Debug("ProgressSync", $"Kick progress in-page fetch START url={KickProgressUrl}");
             string? payload = await host.ExecuteAsyncScriptAsync(asyncBody, 20000, ct);
             if (string.IsNullOrWhiteSpace(payload))
+            {
+                AppLogger.Warn("ProgressSync", "Kick progress in-page script returned null/empty (see preceding WebViewAsync warning for the underlying script failure, if any).");
                 return null;
+            }
 
             if (payload.Contains("__fetchError", StringComparison.Ordinal))
             {

@@ -1030,11 +1030,18 @@ namespace Core.Managers
         private void ScheduleServerProgressVerification()
         {
             if (_isPaused || !_liveProgressTimer.Enabled)
+            {
+                AppLogger.Debug("ProgressSync", $"Schedule SKIP - paused={_isPaused}, liveProgressTimerEnabled={_liveProgressTimer.Enabled}.");
                 return;
+            }
 
             if (Interlocked.CompareExchange(ref _progressVerifyScheduled, 1, 0) != 0)
+            {
+                AppLogger.Debug("ProgressSync", "Schedule SKIP - a verification pass is already in flight.");
                 return;
+            }
 
+            AppLogger.Debug("ProgressSync", "Schedule OK - dispatching VerifyServerProgressAsync.");
             _ = Application.Current.Dispatcher.InvokeAsync(VerifyServerProgressAsync);
         }
 
@@ -1048,37 +1055,78 @@ namespace Core.Managers
             {
                 await _progressVerifyLock.WaitAsync();
                 if (_isPaused || !_liveProgressTimer.Enabled)
+                {
+                    AppLogger.Debug("ProgressSync", $"Verify SKIP - paused={_isPaused}, liveProgressTimerEnabled={_liveProgressTimer.Enabled}.");
                     return;
+                }
 
                 DropsCampaign? twitchCampaign = _selection.CurrentTwitchCampaign;
                 DropsCampaign? kickCampaign = _selection.CurrentKickCampaign;
                 if (twitchCampaign == null && kickCampaign == null)
+                {
+                    AppLogger.Debug("ProgressSync", "Verify SKIP - no campaign currently selected on either platform.");
                     return;
+                }
+
+                AppLogger.Debug(
+                    "ProgressSync",
+                    $"Verify START twitchCampaignId={twitchCampaign?.Id ?? "null"} kickCampaignId={kickCampaign?.Id ?? "null"} " +
+                    $"twitchGqlAvailable={_twitchGqlService != null} kickWebViewAvailable={KickWebView != null}");
 
                 IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> twitchProgress = new Dictionary<string, IReadOnlyList<DropsReward>>();
                 IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> kickProgress = new Dictionary<string, IReadOnlyList<DropsReward>>();
 
                 if (twitchCampaign != null && _twitchGqlService != null)
                     twitchProgress = await ServerProgressFetcher.FetchTwitchRewardProgressAsync(_twitchGqlService, [twitchCampaign]);
+                else if (twitchCampaign != null)
+                    AppLogger.Debug("ProgressSync", "Twitch fetch SKIP - no Twitch GQL service available.");
 
                 if (kickCampaign != null && KickWebView != null)
                     kickProgress = await ServerProgressFetcher.FetchKickRewardProgressAsync(KickWebView, [kickCampaign]);
+                else if (kickCampaign != null)
+                    AppLogger.Debug("ProgressSync", "Kick fetch SKIP - KickWebView is null.");
+
+                AppLogger.Debug(
+                    "ProgressSync",
+                    $"Fetch results twitchEntries={twitchProgress.Count} kickEntries={kickProgress.Count}");
 
                 bool twitchChanged = false;
                 bool kickChanged = false;
 
-                if (twitchCampaign != null
-                    && twitchProgress.TryGetValue(twitchCampaign.Id, out IReadOnlyList<DropsReward>? twitchRewards)
-                    && MiningProgressReconciler.TryReconcile(twitchCampaign, twitchRewards, _twitchProgress, out DropsCampaign updatedTwitch))
-                    twitchChanged = ApplyReconciledCampaign(updatedTwitch, Platform.Twitch);
+                if (twitchCampaign != null)
+                {
+                    if (twitchProgress.TryGetValue(twitchCampaign.Id, out IReadOnlyList<DropsReward>? twitchRewards))
+                    {
+                        if (MiningProgressReconciler.TryReconcile(twitchCampaign, twitchRewards, _twitchProgress, out DropsCampaign updatedTwitch))
+                            twitchChanged = ApplyReconciledCampaign(updatedTwitch, Platform.Twitch);
+                        else
+                            AppLogger.Debug("ProgressSync", $"Twitch reconcile found no drift for campaignId={twitchCampaign.Id}.");
+                    }
+                    else
+                    {
+                        AppLogger.Debug("ProgressSync", $"Twitch campaignId={twitchCampaign.Id} not present in server response (entries={twitchProgress.Count}).");
+                    }
+                }
 
-                if (kickCampaign != null
-                    && kickProgress.TryGetValue(kickCampaign.Id, out IReadOnlyList<DropsReward>? kickRewards)
-                    && MiningProgressReconciler.TryReconcile(kickCampaign, kickRewards, _kickProgress, out DropsCampaign updatedKick))
-                    kickChanged = ApplyReconciledCampaign(updatedKick, Platform.Kick);
+                if (kickCampaign != null)
+                {
+                    if (kickProgress.TryGetValue(kickCampaign.Id, out IReadOnlyList<DropsReward>? kickRewards))
+                    {
+                        if (MiningProgressReconciler.TryReconcile(kickCampaign, kickRewards, _kickProgress, out DropsCampaign updatedKick))
+                            kickChanged = ApplyReconciledCampaign(updatedKick, Platform.Kick);
+                        else
+                            AppLogger.Debug("ProgressSync", $"Kick reconcile found no drift for campaignId={kickCampaign.Id}.");
+                    }
+                    else
+                    {
+                        AppLogger.Debug("ProgressSync", $"Kick campaignId={kickCampaign.Id} not present in server response (entries={kickProgress.Count}).");
+                    }
+                }
 
                 if (twitchChanged || kickChanged)
                     AppLogger.Info("ProgressSync", "Progress synced with server.");
+                else
+                    AppLogger.Debug("ProgressSync", "Verify DONE - no changes applied.");
             }
             catch (Exception ex)
             {
