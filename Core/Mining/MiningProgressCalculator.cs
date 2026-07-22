@@ -23,7 +23,13 @@ namespace Core.Mining
 
             int effectiveMinutes = campaign.Rewards.Sum(r => Math.Min(r.ProgressMinutes, r.RequiredMinutes));
             double percentage = (double)effectiveMinutes / totalRequiredMinutes * 100;
-            return (byte)Math.Clamp((int)Math.Floor(percentage), 0, 100);
+            byte result = (byte)Math.Clamp((int)Math.Floor(percentage), 0, 100);
+
+            AppLogger.Debug(
+                "CampaignProgress",
+                $"campaignId={campaign.Id}, campaignName='{campaign.Name}', totalRequiredMinutes={totalRequiredMinutes}, effectiveMinutes={effectiveMinutes}, computedPct={result}");
+
+            return result;
         }
 
         /// <summary>

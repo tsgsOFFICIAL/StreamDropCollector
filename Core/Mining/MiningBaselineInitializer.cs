@@ -1,3 +1,4 @@
+using Core.Logging;
 using Core.Models;
 
 namespace Core.Mining
@@ -28,6 +29,12 @@ namespace Core.Mining
 
             int dropMinedSeconds = Math.Max(0, (nextReward?.ProgressMinutes ?? 0) - minutesBeforeNextReward) * 60;
 
+            AppLogger.Debug(
+                "MiningBaseline",
+                $"Create campaignId={campaign.Id} platform={campaign.Platform} minedSeconds={minedSeconds} " +
+                $"nextRewardId={nextReward?.Id ?? "(none)"} minutesBeforeNextReward={minutesBeforeNextReward} dropMinedSeconds={dropMinedSeconds} " +
+                $"rewards=[{string.Join(", ", campaign.Rewards.Select(r => $"{r.Id}:progress={r.ProgressMinutes}/{r.RequiredMinutes},claimed={r.IsClaimed}"))}]");
+
             return new MiningBaseline(
                 minedSeconds,
                 dropMinedSeconds,
@@ -46,9 +53,18 @@ namespace Core.Mining
                 .FirstOrDefault();
 
             if (soonest == null)
+            {
+                AppLogger.Debug("MiningBaseline", $"EstimateSoonestRewardCompletion campaignId={campaign.Id} -> no unclaimed reward remaining.");
                 return null;
+            }
 
-            return DateTime.Now.AddMinutes(soonest.RequiredMinutes - soonest.ProgressMinutes);
+            DateTime estimate = DateTime.Now.AddMinutes(soonest.RequiredMinutes - soonest.ProgressMinutes);
+            AppLogger.Debug(
+                "MiningBaseline",
+                $"EstimateSoonestRewardCompletion campaignId={campaign.Id} rewardId={soonest.Id} " +
+                $"remainingMinutes={soonest.RequiredMinutes - soonest.ProgressMinutes} estimate={estimate:u}");
+
+            return estimate;
         }
 
         /// <summary>

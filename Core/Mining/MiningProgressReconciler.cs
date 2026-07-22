@@ -1,3 +1,4 @@
+using Core.Logging;
 using Core.Models;
 
 namespace Core.Mining
@@ -26,8 +27,17 @@ namespace Core.Mining
             out DropsCampaign updatedCampaign)
         {
             updatedCampaign = campaign;
+
+            AppLogger.Debug(
+                "Reconcile",
+                $"TryReconcile START campaignId={campaign.Id} localRewardIds=[{string.Join(", ", campaign.Rewards.Select(r => r.Id))}] " +
+                $"serverRewardCount={serverRewards.Count} serverRewardIds=[{string.Join(", ", serverRewards.Select(r => r.Id))}]");
+
             if (serverRewards.Count == 0)
+            {
+                AppLogger.Debug("Reconcile", $"TryReconcile ABORT campaignId={campaign.Id} - server returned zero rewards.");
                 return false;
+            }
 
             Dictionary<string, DropsReward> serverById = serverRewards
                 .Where(r => !string.IsNullOrEmpty(r.Id))
@@ -39,15 +49,27 @@ namespace Core.Mining
             {
                 if (!serverById.TryGetValue(localReward.Id, out DropsReward serverReward))
                 {
+                    AppLogger.Debug("Reconcile", $"TryReconcile rewardId={localReward.Id} has no server match - keeping local value unchanged.");
                     mergedRewards.Add(localReward);
                     continue;
                 }
 
                 int serverMinutes = Math.Min(serverReward.ProgressMinutes, localReward.RequiredMinutes);
                 bool serverClaimed = serverReward.IsClaimed;
+                bool rewardChanged = localReward.ProgressMinutes != serverMinutes || localReward.IsClaimed != serverClaimed;
 
-                if (localReward.ProgressMinutes != serverMinutes || localReward.IsClaimed != serverClaimed)
+                if (rewardChanged)
+                {
                     changed = true;
+                    AppLogger.Debug(
+                        "Reconcile",
+                        $"TryReconcile DRIFT rewardId={localReward.Id} localMinutes={localReward.ProgressMinutes} serverMinutes={serverMinutes} " +
+                        $"localClaimed={localReward.IsClaimed} serverClaimed={serverClaimed}");
+                }
+                else
+                {
+                    AppLogger.Debug("Reconcile", $"TryReconcile rewardId={localReward.Id} no drift (localMinutes==serverMinutes=={serverMinutes}, claimed=={serverClaimed}).");
+                }
 
                 mergedRewards.Add(localReward with
                 {
@@ -57,11 +79,19 @@ namespace Core.Mining
             }
 
             if (!changed)
+            {
+                AppLogger.Debug("Reconcile", $"TryReconcile DONE campaignId={campaign.Id} - no drift detected, nothing applied.");
                 return false;
+            }
 
             updatedCampaign = campaign with { Rewards = mergedRewards.AsReadOnly() };
             MiningBaseline baseline = MiningBaselineInitializer.Create(updatedCampaign);
             state.ApplyBaseline(baseline);
+
+            AppLogger.Debug(
+                "Reconcile",
+                $"TryReconcile DONE campaignId={campaign.Id} - drift applied, baseline re-created and state re-applied.");
+
             return true;
         }
     }

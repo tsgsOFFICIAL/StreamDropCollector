@@ -55,9 +55,13 @@ namespace Core.Stores
             {
                 Dictionary<string, string> source = GetDictionary(platform);
                 if (!source.TryGetValue(campaignSlug, out string? remembered) || string.IsNullOrWhiteSpace(remembered))
+                {
+                    AppLogger.Debug("Selection", $"TryGet MISS platform={platform} campaignSlug='{campaignSlug}'.");
                     return false;
+                }
 
                 url = remembered;
+                AppLogger.Debug("Selection", $"TryGet HIT platform={platform} campaignSlug='{campaignSlug}' url={remembered}");
                 return true;
             }
         }
@@ -84,6 +88,8 @@ namespace Core.Stores
                 if (changed)
                     target[campaignSlug] = streamerUrl;
             }
+
+            AppLogger.Debug("Selection", $"Remember platform={platform} campaignSlug='{campaignSlug}' url={streamerUrl} changed={changed}");
 
             if (changed)
                 Save();

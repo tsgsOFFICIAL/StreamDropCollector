@@ -32,6 +32,12 @@ namespace Core.Mining
         {
             List<DropsReward> readyToClaimRewards = [.. campaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
 
+            AppLogger.Debug(
+                "DropClaim",
+                $"ProcessAutoClaimsAsync START autoClaimEnabled={UISettingsManager.Instance.AutoClaimRewards} " +
+                $"readyToClaimCount={readyToClaimRewards.Count} " +
+                $"rewardIds=[{string.Join(", ", readyToClaimRewards.Select(r => r.Id))}]");
+
             if (UISettingsManager.Instance.AutoClaimRewards)
             {
                 foreach (DropsReward item in readyToClaimRewards)
@@ -40,13 +46,35 @@ namespace Core.Mining
 
                     DropsCampaign? parentCampaign = campaigns.FirstOrDefault(c => c.Rewards.Contains(item));
                     if (parentCampaign == null)
+                    {
+                        AppLogger.Warn("DropClaim", $"No parent campaign found for ready reward id={item.Id} name='{item.Name}' - skipped.");
                         continue;
+                    }
+
+                    AppLogger.Debug(
+                        "DropClaim",
+                        $"Claim attempt START platform={parentCampaign.Platform} campaignId={parentCampaign.Id} rewardId={item.Id} " +
+                        $"rewardName='{item.Name}' progressMinutes={item.ProgressMinutes}/{item.RequiredMinutes} " +
+                        $"twitchGqlAvailable={twitchGqlService != null} kickWebViewAvailable={kickWebView != null}");
 
                     bool claimResult = false;
                     if (parentCampaign.Platform == Platform.Twitch && twitchGqlService != null)
+                    {
                         claimResult = await twitchGqlService.ClaimDropAsync(parentCampaign.Id, item.Id);
+                        AppLogger.Debug("DropClaim", $"Twitch ClaimDropAsync result={claimResult} campaignId={parentCampaign.Id} rewardId={item.Id}");
+                    }
                     else if (parentCampaign.Platform == Platform.Kick && kickWebView != null)
+                    {
                         claimResult = await await Application.Current.Dispatcher.InvokeAsync(async () => await kickWebView.ClaimKickDropAsync(parentCampaign.Id, item.Id));
+                        AppLogger.Debug("DropClaim", $"Kick ClaimKickDropAsync result={claimResult} campaignId={parentCampaign.Id} rewardId={item.Id}");
+                    }
+                    else
+                    {
+                        AppLogger.Warn(
+                            "DropClaim",
+                            $"Claim SKIPPED - no claim path available for platform={parentCampaign.Platform} " +
+                            $"(twitchGqlAvailable={twitchGqlService != null}, kickWebViewAvailable={kickWebView != null}). campaignId={parentCampaign.Id} rewardId={item.Id}");
+                    }
 
                     if (claimResult)
                     {

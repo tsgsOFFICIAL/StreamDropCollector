@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Core.Interfaces;
+using Core.Logging;
 using Core.Models;
 using Core.Enums;
 
@@ -36,15 +37,30 @@ namespace Core.Services
             IGqlService? gqlService,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
+            AppLogger.Debug(
+                "DropsService",
+                $"GetAllActiveCampaignsAsync START kickStatus={kickStatus} twitchStatus={twitchStatus} gqlServiceAvailable={gqlService != null}");
+
             List<Task<IReadOnlyList<DropsCampaign>>> pending = [];
+            Dictionary<Task<IReadOnlyList<DropsCampaign>>, string> taskLabels = new();
 
             if (kickStatus == ConnectionStatus.Connected)
-                pending.Add(_kickProvider.GetActiveCampaignsAsync(kickHost, ct));
+            {
+                Task<IReadOnlyList<DropsCampaign>> kickTask = _kickProvider.GetActiveCampaignsAsync(kickHost, ct);
+                pending.Add(kickTask);
+                taskLabels[kickTask] = "Kick";
+            }
+            else
+            {
+                AppLogger.Debug("DropsService", $"Kick campaigns SKIPPED - status={kickStatus} (not Connected).");
+            }
 
             if (twitchStatus == ConnectionStatus.Connected)
             {
                 _twitchProvider = new TwitchDropsProvider(gqlService!);
-                pending.Add(_twitchProvider.GetActiveCampaignsAsync(twitchHost, ct));
+                Task<IReadOnlyList<DropsCampaign>> twitchTask = _twitchProvider.GetActiveCampaignsAsync(twitchHost, ct);
+                pending.Add(twitchTask);
+                taskLabels[twitchTask] = "Twitch";
             }
 
             // Yield each platform's results as soon as it finishes, without blocking on the other
@@ -52,8 +68,17 @@ namespace Core.Services
             {
                 Task<IReadOnlyList<DropsCampaign>> completed = await Task.WhenAny(pending);
                 pending.Remove(completed);
-                yield return await completed;
+
+                IReadOnlyList<DropsCampaign> result = await completed;
+                AppLogger.Debug(
+                    "DropsService",
+                    $"GetAllActiveCampaignsAsync {taskLabels.GetValueOrDefault(completed, "Unknown")} campaigns resolved count={result.Count} " +
+                    $"ids=[{string.Join(", ", result.Select(c => c.Id))}]");
+
+                yield return result;
             }
+
+            AppLogger.Debug("DropsService", "GetAllActiveCampaignsAsync DONE - all pending platforms resolved.");
         }
     }
 }

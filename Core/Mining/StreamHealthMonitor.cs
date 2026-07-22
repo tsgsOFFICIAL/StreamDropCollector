@@ -50,6 +50,7 @@ namespace Core.Mining
         /// <param name="host">Callbacks and state accessors used on each 30-second health tick.</param>
         public void Start(Host host)
         {
+            AppLogger.Debug("HealthCheck", "StreamHealthMonitor.Start - (re)starting 30s health-check timer.");
             Stop();
 
             _timer = new System.Timers.Timer(30 * 1000);
@@ -70,12 +71,18 @@ namespace Core.Mining
                         "TwitchMining",
                         $"HealthCheck twitchEligible={twitchEligible} kickEligible={kickEligible} " +
                         $"twitchHasProgress={twitchHasProgress} twitchWasOnline={twitchWasOnline}");
+                    AppLogger.Debug(
+                        "HealthCheck",
+                        $"Kick health tick kickEligible={kickEligible} kickHasProgress={kickHasProgress} kickWasOnline={kickWasOnline}");
 
                     bool twitchNeedsReevaluation = twitchHasProgress && !twitchEligible && twitchWasOnline;
                     bool kickNeedsReevaluation = kickHasProgress && !kickEligible && kickWasOnline;
 
                     if (!twitchNeedsReevaluation && !kickNeedsReevaluation)
+                    {
+                        AppLogger.Debug("HealthCheck", "HealthCheck tick OK - no re-evaluation needed.");
                         return;
+                    }
 
                     if (!twitchEligible)
                         host.SetLastKnownTwitchOnline(false);
@@ -84,7 +91,10 @@ namespace Core.Mining
                         host.SetLastKnownKickOnline(false);
 
                     AppLogger.Debug("HealthCheck", "Stream ineligible via API -> forcing re-evaluation");
-                    AppLogger.Warn("HealthCheck", $"Forcing re-evaluation. twitchEligible={twitchEligible}, kickEligible={kickEligible}");
+                    AppLogger.Warn(
+                        "HealthCheck",
+                        $"Forcing re-evaluation. twitchEligible={twitchEligible}, kickEligible={kickEligible}, " +
+                        $"twitchNeedsReevaluation={twitchNeedsReevaluation}, kickNeedsReevaluation={kickNeedsReevaluation}");
                     Stop();
                     await host.RequestReevaluationAsync();
                 });

@@ -1,3 +1,5 @@
+using Core.Logging;
+
 namespace Core.Mining
 {
     /// <summary>
@@ -30,6 +32,11 @@ namespace Core.Mining
         /// </summary>
         public void ApplyBaseline(MiningBaseline baseline)
         {
+            AppLogger.Debug(
+                "ProgressState",
+                $"ApplyBaseline BEFORE minedSeconds={MinedSeconds} dropMinedSeconds={DropMinedSeconds} appliedBucket={AppliedMinuteBucket} " +
+                $"AFTER minedSeconds={baseline.MinedSeconds} dropMinedSeconds={baseline.DropMinedSeconds} appliedBucket={baseline.AppliedMinuteBucket}");
+
             MinedSeconds = baseline.MinedSeconds;
             DropMinedSeconds = baseline.DropMinedSeconds;
             AppliedMinuteBucket = baseline.AppliedMinuteBucket;
@@ -38,7 +45,11 @@ namespace Core.Mining
         /// <summary>
         /// Re-syncs the applied minute bucket from current mined seconds (used after UI reset).
         /// </summary>
-        public void SyncAppliedBucketFromMinedSeconds() =>
+        public void SyncAppliedBucketFromMinedSeconds()
+        {
+            int previous = AppliedMinuteBucket;
             AppliedMinuteBucket = MinedSeconds / 60;
+            AppLogger.Debug("ProgressState", $"SyncAppliedBucketFromMinedSeconds previousBucket={previous} minedSeconds={MinedSeconds} newBucket={AppliedMinuteBucket}");
+        }
     }
 }

@@ -1,4 +1,5 @@
 using Core.Enums;
+using Core.Logging;
 using Core.Models;
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -35,6 +36,10 @@ namespace Core.Mining
                 DropsCampaign? campaign = activeCampaigns.FirstOrDefault(c => c.Platform == platform && c.Id == campaignId);
                 if (campaign == null || !campaign.HasProgressToMake())
                 {
+                    verboseLog?.Invoke(
+                        "MinuteTick",
+                        $"ApplyMinuteProgress ABORT platform={platform} campaignId={campaignId} " +
+                        $"reason={(campaign == null ? "campaign not found in active inventory" : "campaign has no progress to make")} - clearing current selection.");
                     ClearCurrentCampaign(selection, platform);
                     UpdateSelectionFlags(activeCampaigns, selection);
                     return;
@@ -79,12 +84,16 @@ namespace Core.Mining
             string rewardId)
         {
             bool updated = false;
+            AppLogger.Debug("CampaignUpdater", $"MarkRewardClaimed START campaignId={campaignId} rewardId={rewardId}");
 
             Application.Current.Dispatcher.Invoke(() =>
             {
                 DropsCampaign? existingCampaign = activeCampaigns.FirstOrDefault(c => c.Id == campaignId);
                 if (existingCampaign == null)
+                {
+                    AppLogger.Warn("CampaignUpdater", $"MarkRewardClaimed ABORT - campaignId={campaignId} not found in active inventory.");
                     return;
+                }
 
                 int campaignIndex = activeCampaigns.IndexOf(existingCampaign);
                 if (campaignIndex < 0)
@@ -110,7 +119,12 @@ namespace Core.Mining
                 }
 
                 if (!rewardFound)
+                {
+                    AppLogger.Warn("CampaignUpdater", $"MarkRewardClaimed ABORT - rewardId={rewardId} not found in campaignId={campaignId}.");
                     return;
+                }
+
+                AppLogger.Debug("CampaignUpdater", $"MarkRewardClaimed OK campaignId={campaignId} rewardId={rewardId}");
 
                 DropsCampaign updatedCampaign = existingCampaign with { Rewards = updatedRewards };
                 activeCampaigns[campaignIndex] = updatedCampaign;
@@ -173,6 +187,12 @@ namespace Core.Mining
                 activeCampaigns.Clear();
                 foreach (DropsCampaign? campaign in updatedCampaigns.OrderBy(x => x.Platform).ThenBy(x => x.GameName))
                     activeCampaigns.Add(campaign);
+
+                AppLogger.Debug(
+                    "CampaignUpdater",
+                    $"UpdateSelectionFlags DONE count={updatedCampaigns.Count} " +
+                    $"currentTwitchId={selection.CurrentTwitchCampaign?.Id ?? "(none)"} currentKickId={selection.CurrentKickCampaign?.Id ?? "(none)"} " +
+                    $"currentCampaignIds=[{string.Join(", ", updatedCampaigns.Where(c => c.IsCurrentCampaign).Select(c => $"{c.Platform}:{c.Id}"))}]");
             });
         }
 

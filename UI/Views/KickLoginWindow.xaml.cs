@@ -1,5 +1,6 @@
 ﻿using Core.Enums;
 using Core.Helpers;
+using Core.Logging;
 using Microsoft.Web.WebView2.Core;
 using System.Windows;
 
@@ -26,6 +27,7 @@ namespace UI.Views
         {
             Loaded -= OnLoaded;
 
+            AppLogger.Debug("KickLoginWindow", "OnLoaded - navigating to https://kick.com");
             await Web.EnsureCoreWebView2Async();
             Web.NavigationCompleted += OnNavigationCompleted;
             Web.Source = new Uri("https://kick.com");
@@ -33,6 +35,8 @@ namespace UI.Views
 
         private async void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
         {
+            AppLogger.Debug("KickLoginWindow", $"OnNavigationCompleted isSuccess={e.IsSuccess} webErrorStatus={e.WebErrorStatus} url={Web.Source}");
+
             if (!e.IsSuccess)
                 return;
 
@@ -40,14 +44,16 @@ namespace UI.Views
 
             try
             {
-                await PlatformLoginDetector.ClickKickLoginWhenEarlyAsync(
+                bool clicked = await PlatformLoginDetector.ClickKickLoginWhenEarlyAsync(
                     script => Web.ExecuteScriptAsync(script),
                     cancellationToken: _cts.Token);
+                AppLogger.Debug("KickLoginWindow", $"ClickKickLoginWhenEarlyAsync result={clicked}");
 
                 _ = PollAndCloseWhenLoggedInAsync();
             }
             catch (OperationCanceledException)
             {
+                AppLogger.Debug("KickLoginWindow", "OnNavigationCompleted canceled.");
             }
         }
 
@@ -60,11 +66,17 @@ namespace UI.Views
                     Platform.Kick,
                     cancellationToken: _cts.Token);
 
+                AppLogger.Debug("KickLoginWindow", $"PollAndCloseWhenLoggedInAsync loggedIn={loggedIn} cancelled={_cts.IsCancellationRequested}");
+
                 if (loggedIn && !_cts.IsCancellationRequested)
+                {
+                    AppLogger.Info("KickLoginWindow", "Kick login detected - closing login window.");
                     Dispatcher.Invoke(Close);
+                }
             }
             catch (OperationCanceledException)
             {
+                AppLogger.Debug("KickLoginWindow", "PollAndCloseWhenLoggedInAsync canceled.");
             }
         }
     }

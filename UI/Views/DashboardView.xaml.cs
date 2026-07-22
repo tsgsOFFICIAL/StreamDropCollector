@@ -518,7 +518,9 @@ namespace UI.Views
         /// <param name="e">The event data associated with the Click event.</param>
         private void OnKickLoginClick(object sender, RoutedEventArgs e)
         {
+            AppLogger.Debug("Dashboard", "OnKickLoginClick - opening Kick login window.");
             new KickLoginWindow().ShowDialog();
+            AppLogger.Debug("Dashboard", "OnKickLoginClick - login window closed, re-validating Kick credentials.");
             _ = ValidateKickCredentialsAsync();
         }
         /// <summary>

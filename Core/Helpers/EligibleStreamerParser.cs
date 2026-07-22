@@ -1,5 +1,6 @@
 using Core.Models;
 using Core.Enums;
+using Core.Logging;
 
 namespace Core.Helpers
 {
@@ -22,7 +23,12 @@ namespace Core.Helpers
         public static IReadOnlyList<string> ParseChannelLogins(DropsCampaign campaign)
         {
             if (campaign.IsGeneralDrop || campaign.ConnectUrls.Count == 0)
+            {
+                AppLogger.Debug(
+                    "EligibleStreamers",
+                    $"ParseChannelLogins SKIP campaignId={campaign.Id} isGeneralDrop={campaign.IsGeneralDrop} connectUrlCount={campaign.ConnectUrls.Count}");
                 return Array.Empty<string>();
+            }
 
             HashSet<string> logins = new(StringComparer.OrdinalIgnoreCase);
 
@@ -30,9 +36,16 @@ namespace Core.Helpers
             {
                 if (TryParseChannelLogin(url, campaign.Platform, out string? login))
                     logins.Add(login);
+                else
+                    AppLogger.Debug("EligibleStreamers", $"ParseChannelLogins could not extract login from url={url} platform={campaign.Platform}.");
             }
 
-            return logins.OrderBy(l => l, StringComparer.OrdinalIgnoreCase).ToList();
+            List<string> result = logins.OrderBy(l => l, StringComparer.OrdinalIgnoreCase).ToList();
+            AppLogger.Debug(
+                "EligibleStreamers",
+                $"ParseChannelLogins DONE campaignId={campaign.Id} connectUrlCount={campaign.ConnectUrls.Count} logins=[{string.Join(", ", result)}]");
+
+            return result;
         }
 
         /// <summary>

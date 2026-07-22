@@ -1,4 +1,5 @@
 using Core.Enums;
+using Core.Logging;
 using Core.Models;
 
 namespace Core.Mining
@@ -40,7 +41,11 @@ namespace Core.Mining
             if (minuteBucket > state.AppliedMinuteBucket)
             {
                 int minutesToApply = minuteBucket - state.AppliedMinuteBucket;
+                int previousBucket = state.AppliedMinuteBucket;
                 state.AppliedMinuteBucket = minuteBucket;
+                verboseLog?.Invoke(
+                    "MinuteBucket",
+                    $"{platformLabel} bucket ADVANCE campaignId={campaign.Id} previousBucket={previousBucket} newBucket={minuteBucket} minutesToApply={minutesToApply}");
                 applyMinuteProgress(platform, campaign.Id, minutesToApply);
             }
 
@@ -64,6 +69,10 @@ namespace Core.Mining
         {
             if (reward?.Id == state.LastReportedDropId)
                 return;
+
+            AppLogger.Debug(
+                "DropPointer",
+                $"RaiseDropChangedIfNeeded CHANGE previousDropId={state.LastReportedDropId ?? "(none)"} newDropId={reward?.Id ?? "(none)"} newDropName={reward?.Name ?? "(none)"}");
 
             state.LastReportedDropId = reward?.Id;
             onDropChanged(reward);

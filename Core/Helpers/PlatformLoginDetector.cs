@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Core.Enums;
+using Core.Logging;
 
 namespace Core.Helpers
 {
@@ -20,13 +21,22 @@ namespace Core.Helpers
         /// <summary>
         /// Determines whether the user appears logged in based on page HTML.
         /// </summary>
-        public static bool IsLoggedInFromHtml(Platform platform, string html) =>
-            platform switch
+        public static bool IsLoggedInFromHtml(Platform platform, string html)
+        {
+            bool loggedIn = platform switch
             {
                 Platform.Kick => !html.Contains(KickLoginHtmlMarker, StringComparison.OrdinalIgnoreCase),
                 Platform.Twitch => !html.Contains(TwitchLoginHtmlMarker, StringComparison.OrdinalIgnoreCase),
                 _ => false
             };
+
+            AppLogger.Debug(
+                "LoginDetect",
+                $"IsLoggedInFromHtml platform={platform} htmlLength={html.Length} loggedIn={loggedIn} " +
+                $"(marker={(platform == Platform.Kick ? KickLoginHtmlMarker : platform == Platform.Twitch ? TwitchLoginHtmlMarker : "n/a")})");
+
+            return loggedIn;
+        }
 
         /// <summary>
         /// Builds a script that returns <c>true</c> when the login button is present (page loaded, user not logged in).
@@ -122,12 +132,16 @@ namespace Core.Helpers
             while (!cancellationToken.IsCancellationRequested && elapsed < timeoutMs)
             {
                 if (await executeScriptAsync(script) == "true")
+                {
+                    AppLogger.Debug("LoginDetect", $"PollUntilLoginButtonPresentAsync platform={platform} FOUND after {elapsed}ms.");
                     return true;
+                }
 
                 await Task.Delay(pollIntervalMs, cancellationToken);
                 elapsed += pollIntervalMs;
             }
 
+            AppLogger.Warn("LoginDetect", $"PollUntilLoginButtonPresentAsync platform={platform} TIMED OUT after {timeoutMs}ms (cancelled={cancellationToken.IsCancellationRequested}).");
             return false;
         }
 
@@ -156,13 +170,17 @@ namespace Core.Helpers
             while (!cancellationToken.IsCancellationRequested && (limit == Timeout.Infinite || elapsed < limit))
             {
                 if (await executeScriptAsync(script) == "true")
+                {
+                    AppLogger.Debug("LoginDetect", $"PollUntilLoggedInAsync platform={platform} LOGGED IN after {elapsed}ms.");
                     return true;
+                }
 
                 await Task.Delay(pollIntervalMs, cancellationToken);
                 if (limit != Timeout.Infinite)
                     elapsed += pollIntervalMs;
             }
 
+            AppLogger.Warn("LoginDetect", $"PollUntilLoggedInAsync platform={platform} TIMED OUT after {elapsed}ms (cancelled={cancellationToken.IsCancellationRequested}).");
             return false;
         }
 
@@ -251,6 +269,7 @@ namespace Core.Helpers
             {
                 if (await executeScriptAsync(isEarlyScript) == "true")
                 {
+                    AppLogger.Debug("LoginDetect", $"ClickKickLoginWhenEarlyAsync clicking early login button after {elapsed}ms.");
                     await executeScriptAsync(clickScript);
                     return true;
                 }
@@ -259,6 +278,7 @@ namespace Core.Helpers
                 elapsed += pollIntervalMs;
             }
 
+            AppLogger.Warn("LoginDetect", $"ClickKickLoginWhenEarlyAsync TIMED OUT after {timeoutMs}ms - early login button never appeared.");
             return false;
         }
     }

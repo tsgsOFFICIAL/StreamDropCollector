@@ -164,7 +164,15 @@ namespace Core.Mining
                     $"MiningOrchestrator twitchResult OK campaign='{twitchResult.Campaign.Name}' login={twitchResult.Login} url={twitchResult.StreamUrl}");
 
             PlatformMiningResult? kickResult = null;
-            if (kickCampaigns.Count != 0 && kickWebView != null)
+            if (kickCampaigns.Count == 0)
+            {
+                AppLogger.Warn("KickSelection", "MiningOrchestrator SKIP Kick selection - no Kick campaigns with progress.");
+            }
+            else if (kickWebView == null)
+            {
+                AppLogger.Warn("KickSelection", $"MiningOrchestrator SKIP Kick selection - kickWebView is null ({kickCampaigns.Count} candidates ignored).");
+            }
+            else
             {
                 kickResult = await PlatformMiningSession.TrySelectAsync(
                     Platform.Kick,
@@ -179,6 +187,13 @@ namespace Core.Mining
                     onKickSelectionPreview,
                     cancellationToken);
             }
+
+            if (kickResult is null)
+                AppLogger.Warn("KickSelection", "MiningOrchestrator kickResult=null after TrySelectAsync.");
+            else
+                AppLogger.Debug(
+                    "KickSelection",
+                    $"MiningOrchestrator kickResult OK campaign='{kickResult.Campaign.Name}' login={kickResult.Login} url={kickResult.StreamUrl}");
 
             if (twitchResult?.SuggestedNextCheckAt != null)
                 nextCheckAt = MiningBaselineInitializer.Earliest(nextCheckAt, twitchResult.SuggestedNextCheckAt);

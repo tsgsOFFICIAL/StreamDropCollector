@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Core.Interfaces;
 using Core.Logging;
@@ -72,26 +73,49 @@ namespace Core.Services
                     headers: {{ 'Accept': 'application/json' }}
                 }});
 
+                const headersObj = {{}};
+                response.headers.forEach((value, key) => {{ headersObj[key] = value; }});
+
                 if (!response.ok) {{
-                    return JSON.stringify({{ __fetchError: true, status: response.status }});
+                    return JSON.stringify({{ __fetchError: true, status: response.status, headers: headersObj }});
                 }}
 
-                return await response.text();
+                const bodyText = await response.text();
+                return JSON.stringify({{ status: response.status, headers: headersObj, body: bodyText }});
             ";
+
+            AppLogger.Debug("WebViewJsonFetch", $"GET START url={url}");
+            DateTime startedAtUtc = DateTime.UtcNow;
 
             try
             {
-                string? payload = await host.ExecuteAsyncScriptAsync(asyncBody, DefaultTimeoutMs, ct);
+                string? rawEnvelope = await host.ExecuteAsyncScriptAsync(asyncBody, DefaultTimeoutMs, ct);
+                TimeSpan duration = DateTime.UtcNow - startedAtUtc;
 
-                if (string.IsNullOrWhiteSpace(payload))
-                    return null;
-
-                if (payload.Contains("__fetchError", StringComparison.Ordinal))
+                if (string.IsNullOrWhiteSpace(rawEnvelope))
                 {
-                    AppLogger.Warn("WebViewJsonFetch", $"GET {url} failed in-page: {payload}");
+                    AppLogger.Debug("WebViewJsonFetch", $"GET {url} returned null/empty after {duration.TotalMilliseconds:F0}ms.");
                     return null;
                 }
 
+                using JsonDocument envelopeDoc = JsonDocument.Parse(rawEnvelope);
+                JsonElement envelopeRoot = envelopeDoc.RootElement;
+                int status = envelopeRoot.TryGetProperty("status", out JsonElement statusEl) ? statusEl.GetInt32() : -1;
+                string headersSummary = envelopeRoot.TryGetProperty("headers", out JsonElement headersEl)
+                    ? string.Join(", ", headersEl.EnumerateObject().Select(p => $"{p.Name}={p.Value.GetString()}"))
+                    : "(none)";
+
+                if (envelopeRoot.TryGetProperty("__fetchError", out _))
+                {
+                    AppLogger.Warn("WebViewJsonFetch", $"GET {url} failed in-page after {duration.TotalMilliseconds:F0}ms status={status} headers=[{headersSummary}]");
+                    return null;
+                }
+
+                string payload = envelopeRoot.TryGetProperty("body", out JsonElement bodyEl) ? bodyEl.GetString() ?? "" : "";
+
+                AppLogger.Debug(
+                    "WebViewJsonFetch",
+                    $"GET {url} OK durationMs={duration.TotalMilliseconds:F0} status={status} headers=[{headersSummary}] bodyLength={payload.Length} rawBody={payload}");
                 return payload;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

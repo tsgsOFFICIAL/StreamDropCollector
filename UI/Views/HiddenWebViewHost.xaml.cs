@@ -164,7 +164,15 @@ namespace UI.Views
         public async Task<string?> GetCookieValueAsync(string url, string name)
         {
             IReadOnlyList<CoreWebView2Cookie> cookies = await GetCookiesAsync(url);
-            return cookies.FirstOrDefault(c => c.Name == name)?.Value;
+            CoreWebView2Cookie? match = cookies.FirstOrDefault(c => c.Name == name);
+
+            AppLogger.Debug(
+                "WebViewCookie",
+                match != null
+                    ? $"GetCookieValueAsync url={url} name={name} FOUND valueLength={match.Value.Length} expiresUnixSeconds={match.Expires} domain={match.Domain}"
+                    : $"GetCookieValueAsync url={url} name={name} NOT FOUND (cookieCount={cookies.Count}, names=[{string.Join(", ", cookies.Select(c => c.Name))}])");
+
+            return match?.Value;
         }
         /// <summary>
         /// Captures the response body of the Twitch Viewer Drops Dashboard network request from the embedded web view
@@ -889,6 +897,8 @@ namespace UI.Views
                     AppLogger.Warn("KickClaim", "Claim timed out or no response");
                     return false;
                 }
+
+                AppLogger.Debug("KickClaim", $"Claim raw response campaignId={campaignId} rewardId={rewardId} body={rawResult}");
 
                 using JsonDocument doc = JsonDocument.Parse(rawResult);
                 bool success = doc.RootElement.GetProperty("success").GetBoolean();

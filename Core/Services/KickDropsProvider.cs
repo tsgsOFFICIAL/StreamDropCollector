@@ -50,6 +50,8 @@ namespace Core.Services
                     return Array.Empty<DropsCampaign>().AsReadOnly();
                 }
 
+                AppLogger.Debug("KickDrops", $"Kick campaigns API raw body. length={json.Length} body={json}");
+
                 // Step 2: parse actual JSON
                 using JsonDocument doc = JsonDocument.Parse(json);
                 if (!doc.RootElement.TryGetProperty("data", out JsonElement dataArray))
@@ -173,12 +175,25 @@ namespace Core.Services
                 }
 
                 // 3. Merge progress into campaigns (skip if no payload was captured).
+                AppLogger.Debug(
+                    "KickDrops",
+                    $"Progress capture result rawProgressLength={rawProgress.Length} rawProgressBody={rawProgress}");
+
                 if (!string.IsNullOrEmpty(rawProgress))
                 {
                     using JsonDocument progressDoc = JsonDocument.Parse(rawProgress);
 
                     if (progressDoc.RootElement.TryGetProperty("data", out JsonElement progressArray))
                     {
+                        List<string> progressCampaignIds = progressArray.EnumerateArray()
+                            .Select(item => item.TryGetProperty("id", out JsonElement idEl) ? idEl.GetString() ?? "(null)" : "(missing id)")
+                            .ToList();
+                        AppLogger.Debug(
+                            "KickDrops",
+                            $"Progress payload data array. itemCount={progressArray.GetArrayLength()} " +
+                            $"campaignIds=[{string.Join(", ", progressCampaignIds)}] " +
+                            $"localCampaignIds=[{string.Join(", ", campaigns.Select(c => c.Id))}]");
+
                         foreach (JsonElement item in progressArray.EnumerateArray())
                         {
                             string campaignId = item.GetProperty("id").GetString()!;

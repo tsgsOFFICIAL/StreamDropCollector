@@ -142,17 +142,36 @@ namespace Core.Mining
                 Dictionary<string, DropsCampaign> localById = campaigns.ToDictionary(c => c.Id, StringComparer.Ordinal);
                 Dictionary<string, IReadOnlyList<DropsReward>> result = new(StringComparer.Ordinal);
 
+                int serverItemCount = progressArray.GetArrayLength();
+                List<string> serverCampaignIds = progressArray.EnumerateArray()
+                    .Select(item => item.TryGetProperty("id", out JsonElement idEl) ? idEl.GetString() ?? "(null)" : "(missing id)")
+                    .ToList();
+
+                AppLogger.Debug(
+                    "ProgressSync",
+                    $"Kick progress payload parsed. serverItemCount={serverItemCount} " +
+                    $"serverCampaignIds=[{string.Join(", ", serverCampaignIds)}] " +
+                    $"localCampaignIds=[{string.Join(", ", localById.Keys)}]");
+
                 foreach (JsonElement item in progressArray.EnumerateArray())
                 {
                     string campaignId = item.GetProperty("id").GetString()!;
                     if (!localById.TryGetValue(campaignId, out DropsCampaign? localCampaign))
+                    {
+                        AppLogger.Debug("ProgressSync", $"Kick progress item campaignId={campaignId} has no local match - skipped.");
                         continue;
+                    }
 
                     // Kick reports campaign-level progress_units; apply to each reward cap.
                     int campaignProgressUnits = item.GetProperty("progress_units").GetInt32();
                     Dictionary<string, JsonElement> serverRewards = item.GetProperty("rewards")
                         .EnumerateArray()
                         .ToDictionary(r => r.GetProperty("id").GetString()!, StringComparer.Ordinal);
+
+                    AppLogger.Debug(
+                        "ProgressSync",
+                        $"Kick progress item MATCHED campaignId={campaignId} progressUnits={campaignProgressUnits} " +
+                        $"serverRewardIds=[{string.Join(", ", serverRewards.Keys)}]");
 
                     List<DropsReward> rewards = new();
                     foreach (DropsReward localReward in localCampaign.Rewards)
@@ -191,6 +210,18 @@ namespace Core.Mining
         /// </remarks>
         private static async Task<string?> FetchKickProgressPayloadAsync(IWebViewHost host, CancellationToken ct)
         {
+            try
+            {
+                IReadOnlyList<Microsoft.Web.WebView2.Core.CoreWebView2Cookie> allCookies = await host.GetCookiesAsync("https://kick.com");
+                AppLogger.Debug(
+                    "ProgressSync",
+                    $"Kick cookie jar for https://kick.com: [{string.Join(", ", allCookies.Select(c => $"{c.Name}(len={c.Value.Length},domain={c.Domain})"))}]");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("ProgressSync", $"Failed to enumerate Kick cookie jar: {ex.Message}");
+            }
+
             string? encodedToken = await host.GetCookieValueAsync("https://kick.com", "session_token");
             if (string.IsNullOrEmpty(encodedToken))
             {
@@ -199,6 +230,18 @@ namespace Core.Mining
             }
 
             string bearerToken = Uri.UnescapeDataString(encodedToken);
+
+            // session_token is normally shaped "<id>|<hash>" (Laravel-style token). Log the id prefix and
+            // hash length only - never the hash itself - so a malformed/stale cookie is visible without
+            // leaking the credential.
+            int pipeIndex = bearerToken.IndexOf('|');
+            string tokenShapeDescription = pipeIndex > 0
+                ? $"idPrefix={bearerToken[..pipeIndex]} hashLength={bearerToken.Length - pipeIndex - 1}"
+                : "UNEXPECTED SHAPE (no '|' separator found)";
+            AppLogger.Debug(
+                "ProgressSync",
+                $"Kick session_token cookie found. encodedLength={encodedToken.Length} decodedLength={bearerToken.Length} {tokenShapeDescription}");
+
             string serializedToken = JsonSerializer.Serialize(bearerToken);
             string serializedUrl = JsonSerializer.Serialize(KickProgressUrl);
 
@@ -212,26 +255,53 @@ namespace Core.Mining
                     }}
                 }});
 
+                const headersObj = {{}};
+                response.headers.forEach((value, key) => {{ headersObj[key] = value; }});
+
                 if (!response.ok) {{
-                    return JSON.stringify({{ __fetchError: true, status: response.status }});
+                    return JSON.stringify({{ __fetchError: true, status: response.status, headers: headersObj }});
                 }}
 
-                return await response.text();
+                const bodyText = await response.text();
+                return JSON.stringify({{ status: response.status, headers: headersObj, body: bodyText }});
             ";
 
-            AppLogger.Debug("ProgressSync", $"Kick progress in-page fetch START url={KickProgressUrl}");
-            string? payload = await host.ExecuteAsyncScriptAsync(asyncBody, 20000, ct);
-            if (string.IsNullOrWhiteSpace(payload))
+            AppLogger.Debug(
+                "ProgressSync",
+                $"Kick progress in-page fetch START url={KickProgressUrl} authHeaderLength={("Bearer " + bearerToken).Length}");
+            DateTime fetchStartedAtUtc = DateTime.UtcNow;
+            string? rawEnvelope = await host.ExecuteAsyncScriptAsync(asyncBody, 20000, ct);
+            TimeSpan fetchDuration = DateTime.UtcNow - fetchStartedAtUtc;
+            if (string.IsNullOrWhiteSpace(rawEnvelope))
             {
-                AppLogger.Warn("ProgressSync", "Kick progress in-page script returned null/empty (see preceding WebViewAsync warning for the underlying script failure, if any).");
+                AppLogger.Warn(
+                    "ProgressSync",
+                    $"Kick progress in-page script returned null/empty after {fetchDuration.TotalMilliseconds:F0}ms " +
+                    "(see preceding WebViewAsync warning for the underlying script failure, if any).");
                 return null;
             }
 
-            if (payload.Contains("__fetchError", StringComparison.Ordinal))
+            using JsonDocument envelopeDoc = JsonDocument.Parse(rawEnvelope);
+            JsonElement envelopeRoot = envelopeDoc.RootElement;
+            int status = envelopeRoot.TryGetProperty("status", out JsonElement statusEl) ? statusEl.GetInt32() : -1;
+            string headersSummary = envelopeRoot.TryGetProperty("headers", out JsonElement headersEl)
+                ? string.Join(", ", headersEl.EnumerateObject().Select(p => $"{p.Name}={p.Value.GetString()}"))
+                : "(none)";
+
+            if (envelopeRoot.TryGetProperty("__fetchError", out _))
             {
-                AppLogger.Warn("ProgressSync", $"Kick progress in-page fetch failed: {payload}");
+                AppLogger.Warn(
+                    "ProgressSync",
+                    $"Kick progress in-page fetch failed after {fetchDuration.TotalMilliseconds:F0}ms status={status} headers=[{headersSummary}]");
                 return null;
             }
+
+            string payload = envelopeRoot.TryGetProperty("body", out JsonElement bodyEl) ? bodyEl.GetString() ?? "" : "";
+
+            AppLogger.Debug(
+                "ProgressSync",
+                $"Kick progress in-page fetch OK durationMs={fetchDuration.TotalMilliseconds:F0} status={status} " +
+                $"headers=[{headersSummary}] bodyLength={payload.Length} rawBody={payload}");
 
             return payload;
         }
