@@ -1,8 +1,13 @@
 {
-  "version": "1.1.1",
-  "type": "Patch",
-  "changelog": "Fixed Kick campaigns restricted to specific channels sometimes mining a streamer that isn't actually part of that campaign, which silently earned no drop progress. The remembered-streamer preference is now validated against each campaign's own channel list before use.",
+  "version": "1.1.2",
+  "type": "Hotfix",
+  "changelog": "Hotfix for Twitch campaign matching (same issue as Kick had previously)",
   "historic_versions": [
+    {
+      "version": "1.1.1",
+      "type": "Patch",
+      "changelog": "Fixed Kick campaigns restricted to specific channels sometimes mining a streamer that isn't actually part of that campaign, which silently earned no drop progress. The remembered-streamer preference is now validated against each campaign's own channel list before use."
+    },
     {
       "version": "1.1.0",
       "type": "Feature",
