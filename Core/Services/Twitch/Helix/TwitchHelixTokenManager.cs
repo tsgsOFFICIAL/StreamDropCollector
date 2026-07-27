@@ -1,10 +1,18 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using Core.Logging;
 using Core.Models;
 
 namespace Core.Services.Twitch.Helix
 {
+    /// <summary>
+    /// Signals that Helix authentication could not be completed because of a transient network failure
+    /// (DNS resolution, connection reset, timeout) rather than an actual invalid/expired token.
+    /// </summary>
+    internal sealed class TwitchHelixTransientAuthException(string message, Exception innerException)
+        : Exception(message, innerException);
+
     internal sealed class TwitchHelixTokenManager
     {
         private readonly HttpClient _http;
@@ -38,6 +46,16 @@ namespace Core.Services.Twitch.Helix
                     AppLogger.Debug("TwitchHelix", "Reused saved Helix login.");
                     return new TwitchHelixTokenManager(http, clientId, refreshed.AccessToken, refreshed.RefreshToken);
                 }
+                catch (Exception ex) when (IsTransientNetworkFailure(ex))
+                {
+                    // Network hiccup (DNS, timeout, connection reset) - the saved token is likely still
+                    // valid, so keep it instead of forcing the user through a fresh device-code login.
+                    AppLogger.Warn(
+                        "TwitchHelix",
+                        $"Saved Helix login refresh hit a transient network error ({ex.Message}); keeping saved login for retry.");
+                    throw new TwitchHelixTransientAuthException(
+                        "Transient network failure refreshing saved Helix login.", ex);
+                }
                 catch (Exception ex)
                 {
                     AppLogger.Warn("TwitchHelix", $"Saved Helix login failed ({ex.Message}). Starting device-code flow.");
@@ -63,5 +81,18 @@ namespace Core.Services.Twitch.Helix
 
         private void ApplyAccessToken(string accessToken) =>
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        /// <summary>
+        /// Distinguishes connectivity failures (DNS, timeout, connection reset) - which say nothing about
+        /// whether the saved token is still valid - from an actual rejection by Twitch's auth server.
+        /// </summary>
+        private static bool IsTransientNetworkFailure(Exception ex) => ex switch
+        {
+            HttpRequestException => true,
+            SocketException => true,
+            TaskCanceledException => true,
+            TimeoutException => true,
+            _ => false
+        };
     }
 }

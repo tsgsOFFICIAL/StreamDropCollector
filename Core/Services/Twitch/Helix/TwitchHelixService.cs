@@ -30,10 +30,19 @@ namespace Core.Services.Twitch.Helix
         private readonly SemaphoreSlim _refreshLock = new(1, 1);
         private readonly SemaphoreSlim _authLock = new(1, 1);
 
+        private static readonly TimeSpan[] TransientAuthRetryDelays =
+        [
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(60),
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(5)
+        ];
+
         private TwitchHelixTokenManager? _tokenManager;
         private TwitchHelixClient? _client;
         private TwitchEventSubHub? _eventSubHub;
         private bool _isAuthenticated;
+        private int _transientAuthRetryScheduled;
 
         private TwitchHelixService()
         {
@@ -96,6 +105,14 @@ namespace Core.Services.Twitch.Helix
                 AppLogger.Info("TwitchHelix", "Helix authentication ready.");
                 return true;
             }
+            catch (TwitchHelixTransientAuthException ex)
+            {
+                AppLogger.Warn(
+                    "TwitchHelix",
+                    $"Helix authentication deferred ({ex.Message}); will retry automatically in the background.");
+                ScheduleTransientAuthRetry(promptAsync);
+                return false;
+            }
             catch (Exception ex)
             {
                 AppLogger.Error("TwitchHelix", "Helix authentication failed.", ex);
@@ -105,6 +122,55 @@ namespace Core.Services.Twitch.Helix
             {
                 _authLock.Release();
             }
+        }
+
+        /// <summary>
+        /// Retries authentication with backoff after a transient network failure, so a temporary outage
+        /// (e.g. a DNS blip while refreshing the saved token) recovers on its own instead of requiring
+        /// the user to restart the app or re-approve the device-code flow.
+        /// </summary>
+        private void ScheduleTransientAuthRetry(Func<TwitchDeviceCodePrompt, Task> promptAsync)
+        {
+            if (Interlocked.CompareExchange(ref _transientAuthRetryScheduled, 1, 0) != 0)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    foreach (TimeSpan delay in TransientAuthRetryDelays)
+                    {
+                        if (_isAuthenticated)
+                            return;
+
+                        await Task.Delay(delay).ConfigureAwait(false);
+
+                        if (_isAuthenticated)
+                            return;
+
+                        if (await EnsureAuthenticatedAsync(promptAsync).ConfigureAwait(false))
+                        {
+                            AppLogger.Info("TwitchHelix", "Helix authentication recovered after transient network failure.");
+                            return;
+                        }
+                    }
+
+                    while (!_isAuthenticated)
+                    {
+                        await Task.Delay(TransientAuthRetryDelays[^1]).ConfigureAwait(false);
+
+                        if (await EnsureAuthenticatedAsync(promptAsync).ConfigureAwait(false))
+                        {
+                            AppLogger.Info("TwitchHelix", "Helix authentication recovered after transient network failure.");
+                            return;
+                        }
+                    }
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _transientAuthRetryScheduled, 0);
+                }
+            });
         }
 
         /// <summary>

@@ -224,7 +224,23 @@ namespace Core.Services.Mining.Twitch
 
             AppLogger.Debug("TwitchMining", $"SelectBestLiveLogin candidates={logins.Count}: [{string.Join(", ", logins)}]");
 
-            IEnumerable<string> ordered = LiveChannelSelector.BuildOrderedLogins(logins, preferredLogin);
+            // The remembered streamer is keyed by campaign slug (e.g. game name), not campaign id, so it
+            // can carry over from a different campaign for the same game. Only honor it if it's actually
+            // one of THIS campaign's own channels - otherwise we'd mine a stream Twitch never credits for
+            // this specific drop, even though the streamer is live and playing the right game.
+            bool preferredIsCampaignChannel = !string.IsNullOrWhiteSpace(preferredLogin)
+                && logins.Any(l => string.Equals(l, preferredLogin, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(preferredLogin) && !preferredIsCampaignChannel)
+            {
+                AppLogger.Debug(
+                    "TwitchMining",
+                    $"Preferred login '{preferredLogin}' is not one of '{campaign.Name}''s own channels - ignoring.");
+            }
+
+            IEnumerable<string> ordered = LiveChannelSelector.BuildOrderedLogins(
+                logins,
+                preferredIsCampaignChannel ? preferredLogin : null);
             int liveCount = 0;
             int gameMatchCount = 0;
 
