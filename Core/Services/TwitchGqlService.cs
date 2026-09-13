@@ -8,6 +8,7 @@ using Core.Logging;
 using System.Text;
 using System.Net;
 using System.IO;
+using System.Diagnostics;
 
 namespace Core.Services
 {
@@ -24,6 +25,7 @@ namespace Core.Services
         private string? _deviceId;
         private string? _accessToken;
         private string? _userId;
+        private DateTimeOffset? _headersCapturedAtUtc;
         private readonly object _hashCacheSync = new();
         private readonly Dictionary<string, GqlHashCacheEntry> _gqlHashCache = new(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan _gqlHashCacheFreshnessThreshold = TimeSpan.FromHours(24);
@@ -81,18 +83,24 @@ namespace Core.Services
             {
                 try
                 {
-                    AppLogger.Debug("TwitchGql", $"[RefreshHeaders] Attempt {attempt}/{maxAttempts} – Navigating to drops/campaigns");
+                    Stopwatch attemptStopwatch = Stopwatch.StartNew();
+                    DateTimeOffset attemptStartedUtc = DateTimeOffset.UtcNow;
+                    AppLogger.Debug("TwitchGql", $"[RefreshHeaders] Attempt {attempt}/{maxAttempts} – Navigating to drops/campaigns (startedUtc={attemptStartedUtc:O})");
 
                     // Fresh navigation every attempt (important for clean integrity token)
                     await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
+                    long navigationMs = attemptStopwatch.ElapsedMilliseconds;
+                    AppLogger.Debug("TwitchGql", $"[RefreshHeaders] Navigation completed in {navigationMs}ms. Starting header capture.");
 
-                    // Parallel capture tasks
-                    Task<string> clientIdTask = _host.CaptureRequestHeaderAsync("Client-ID", "gql.twitch.tv", 10000, ct);
-                    Task<string> integrityTask = _host.CaptureRequestHeaderAsync("Client-Integrity", "gql.twitch.tv", 10000, ct);
-                    Task<string> deviceIdTask = _host.CaptureRequestHeaderAsync("X-Device-Id", "gql.twitch.tv", 10000, ct);
-                    Task<string> authTokenTask = GetAuthTokenFromCookieAsync();
+                    // Parallel capture tasks - each timed independently so a slow/timed-out capture is visible.
+                    Stopwatch captureStopwatch = Stopwatch.StartNew();
+                    Task<string> clientIdTask = TimedCaptureAsync("Client-ID", _host.CaptureRequestHeaderAsync("Client-ID", "gql.twitch.tv", 10000, ct), captureStopwatch);
+                    Task<string> integrityTask = TimedCaptureAsync("Client-Integrity", _host.CaptureRequestHeaderAsync("Client-Integrity", "gql.twitch.tv", 10000, ct), captureStopwatch);
+                    Task<string> deviceIdTask = TimedCaptureAsync("X-Device-Id", _host.CaptureRequestHeaderAsync("X-Device-Id", "gql.twitch.tv", 10000, ct), captureStopwatch);
+                    Task<string> authTokenTask = TimedCaptureAsync("auth-token cookie", GetAuthTokenFromCookieAsync(), captureStopwatch);
 
                     string[] results = await Task.WhenAll(clientIdTask, integrityTask, deviceIdTask, authTokenTask);
+                    long totalCaptureMs = captureStopwatch.ElapsedMilliseconds;
 
                     string clientId = results[0];
                     string integrityToken = results[1];
@@ -115,8 +123,15 @@ namespace Core.Services
                     _integrityToken = integrityToken;
                     _deviceId = deviceId ?? _deviceId; // Device-ID is optional – keep old if missing
                     _accessToken = accessToken;
+                    _headersCapturedAtUtc = DateTimeOffset.UtcNow;
 
-                    AppLogger.Debug("TwitchGql", $"[RefreshHeaders] Success on attempt {attempt} – Got fresh headers");
+                    // Both Client-Integrity and Authorization are redacted - they're session/account-bound
+                    // credentials and must never end up in full in a log file that could be shared or leaked.
+                    AppLogger.Debug(
+                        "TwitchGql",
+                        $"[RefreshHeaders] Success on attempt {attempt} – Got fresh headers in {totalCaptureMs}ms (navigation={navigationMs}ms, totalAttempt={attemptStopwatch.ElapsedMilliseconds}ms). " +
+                        $"Client-ID={_clientId}, Client-Integrity={RedactToken(_integrityToken)}, X-Device-Id={(_deviceId ?? "(none)")}, " +
+                        $"Authorization={RedactToken(_accessToken)}, capturedAtUtc={_headersCapturedAtUtc:O}");
                     return;
                 }
                 catch (Exception ex) when (attempt < maxAttempts)
@@ -130,6 +145,18 @@ namespace Core.Services
 
             // All attempts failed
             throw new InvalidOperationException($"Failed to refresh headers after {maxAttempts} attempts. Last capture likely poisoned or page didn't trigger GQL requests.");
+        }
+
+        /// <summary>
+        /// Wraps a header/cookie capture task and logs how long it individually took relative to the shared
+        /// stopwatch, so a slow outlier (e.g. Client-Integrity taking far longer than Client-ID) is visible instead
+        /// of only seeing the combined Task.WhenAll duration.
+        /// </summary>
+        private static async Task<string> TimedCaptureAsync(string label, Task<string> capture, Stopwatch stopwatch)
+        {
+            string result = await capture ?? string.Empty;
+            AppLogger.Debug("TwitchGql", $"[RefreshHeaders] '{label}' captured at +{stopwatch.ElapsedMilliseconds}ms (len={result.Length}).");
+            return result;
         }
         /// <summary>
         /// Retrieves the Twitch authentication token from the browser cookie asynchronously.
@@ -157,7 +184,7 @@ namespace Core.Services
         {
             if (allowCached && TryGetCachedHash(operationName, requireFresh: true, out string? cachedHash))
             {
-                LogCacheDebug($"Using cached hash for '{operationName}'.");
+                AppLogger.Debug("TwitchGql", $"[GQL] '{operationName}' hash from cache ({DescribeCacheEntry(operationName)}).");
                 return cachedHash!;
             }
 
@@ -189,6 +216,7 @@ namespace Core.Services
                     {
                         string hash = hashElement.GetString()!;
                         SetCachedHash(operationName, hash);
+                        AppLogger.Debug("TwitchGql", $"[GQL] '{operationName}' hash captured live (hash={hash}).");
                         return hash;
                     }
                 }
@@ -197,9 +225,131 @@ namespace Core.Services
             }
             catch (Exception ex) when (allowCached && TryGetCachedHash(operationName, requireFresh: false, out string? fallbackHash))
             {
-                LogCacheWarn($"Live hash capture failed for '{operationName}'. Using cached fallback. {ex.Message}");
+                AppLogger.Warn("TwitchGql", $"[GQL] '{operationName}' live hash capture failed ({ex.Message}); falling back to cached hash ({DescribeCacheEntry(operationName)}).");
                 return fallbackHash!;
             }
+        }
+
+        /// <summary>
+        /// Describes the cached hash entry for an operation (age and value) for diagnostic logging. This is
+        /// intentionally unconditional (not gated behind VerboseDebugLogging) because hash provenance is the key
+        /// signal needed to distinguish a stale/rotated persisted-query hash from other GQL failure causes.
+        /// </summary>
+        private string DescribeCacheEntry(string operationName)
+        {
+            lock (_hashCacheSync)
+            {
+                if (_gqlHashCache.TryGetValue(operationName, out GqlHashCacheEntry? entry))
+                {
+                    TimeSpan age = DateTimeOffset.UtcNow - entry.UpdatedUtc;
+                    return $"age={age:hh\\:mm\\:ss}, hash={entry.Hash}";
+                }
+            }
+
+            return "age=unknown, hash=(none)";
+        }
+
+        /// <summary>
+        /// Extracts a compact summary of GraphQL error messages/codes from a raw gql.twitch.tv response body.
+        /// Without this, every failure (integrity rejection, stale persisted-query hash, rate limiting, auth
+        /// issues, etc.) was logged identically as a bare "hasErrors=True" boolean, making the actual cause
+        /// unrecoverable from the logs after the fact.
+        /// </summary>
+        private static string ExtractGqlErrorSummary(string jsonText)
+        {
+            try
+            {
+                JsonNode? node = JsonNode.Parse(jsonText);
+                IEnumerable<JsonNode?> responses = node is JsonArray array ? array : new[] { node };
+
+                List<string> messages = new();
+                foreach (JsonNode? response in responses)
+                {
+                    JsonArray? errors = response?["errors"]?.AsArray();
+                    if (errors == null)
+                        continue;
+
+                    foreach (JsonNode? error in errors)
+                    {
+                        string message = error?["message"]?.GetValue<string>() ?? "(no message)";
+                        string? code = error?["extensions"]?["code"]?.GetValue<string>();
+                        messages.Add(code != null ? $"{code}: {message}" : message);
+                    }
+                }
+
+                if (messages.Count > 0)
+                    return string.Join(" | ", messages);
+
+                return jsonText.Length > 500 ? jsonText[..500] + "..." : jsonText;
+            }
+            catch (Exception ex)
+            {
+                string raw = jsonText.Length > 200 ? jsonText[..200] + "..." : jsonText;
+                return $"(failed to parse error body: {ex.Message}; raw={raw})";
+            }
+        }
+
+        /// <summary>
+        /// Masks an account/session-bound credential (Authorization/auth-token, or the Client-Integrity token)
+        /// for logging, keeping only enough (a short prefix/suffix and length) to spot-check presence and
+        /// confirm it changed between attempts, without writing something that could be used to access or
+        /// impersonate the account into a log file that might be shared or leaked.
+        /// </summary>
+        private static string RedactToken(string? token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return "(null/empty)";
+
+            if (token.Length <= 16)
+                return $"(redacted, len={token.Length})";
+
+            return $"{token[..10]}...{token[^4..]} (redacted, len={token.Length})";
+        }
+
+        /// <summary>
+        /// Dumps every response header (both message and content headers) for diagnostic logging on failure -
+        /// Twitch may include rate-limit, request-id, or integrity-status headers that never appear in the body.
+        /// </summary>
+        private static string DescribeResponseHeaders(HttpResponseMessage response)
+        {
+            List<string> parts = new();
+
+            foreach (KeyValuePair<string, IEnumerable<string>> header in response.Headers)
+                parts.Add($"{header.Key}={string.Join(",", header.Value)}");
+
+            foreach (KeyValuePair<string, IEnumerable<string>> header in response.Content.Headers)
+                parts.Add($"{header.Key}={string.Join(",", header.Value)}");
+
+            return parts.Count > 0 ? string.Join("; ", parts) : "(none)";
+        }
+
+        /// <summary>
+        /// Logs the headers about to be attached to an outgoing GQL request, plus how long ago they were
+        /// captured. Client-ID and X-Device-Id aren't account-sensitive and are logged in full; Client-Integrity
+        /// and Authorization are account/session credentials and are always redacted (see RedactToken).
+        /// </summary>
+        private void LogOutgoingRequest(string context)
+        {
+            string age = _headersCapturedAtUtc.HasValue
+                ? (DateTimeOffset.UtcNow - _headersCapturedAtUtc.Value).ToString(@"hh\:mm\:ss\.fff")
+                : "unknown (headers never captured this session)";
+
+            AppLogger.Debug(
+                "TwitchGql",
+                $"[{context}] Sending GQL request. Client-ID={_clientId ?? "(none)"}, Client-Integrity={RedactToken(_integrityToken)}, " +
+                $"X-Device-Id={_deviceId ?? "(none)"}, Authorization={RedactToken(_accessToken)}, headersAge={age}");
+        }
+
+        /// <summary>
+        /// Builds a single, complete diagnostic line for a failed GQL response: status, every response header,
+        /// the extracted error summary, and the full raw body (capped). Intended to make the next failure
+        /// definitive instead of leaving us to guess between integrity/hash/rate-limit/auth causes again.
+        /// </summary>
+        private static string DescribeGqlFailure(HttpResponseMessage response, string jsonText)
+        {
+            string rawBody = jsonText.Length > 4000 ? jsonText[..4000] + "...(truncated)" : jsonText;
+            return $"status={(int)response.StatusCode} {response.ReasonPhrase}, responseHeaders=[{DescribeResponseHeaders(response)}], " +
+                   $"errors={ExtractGqlErrorSummary(jsonText)}, rawBody={rawBody}";
         }
 
         /// <summary>
@@ -259,12 +409,13 @@ namespace Core.Services
             if (!string.IsNullOrEmpty(_deviceId))
                 request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
 
+            LogOutgoingRequest("ClaimDrop");
             HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
             string jsonText = await response.Content.ReadAsStringAsync(ct);
 
             if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
             {
-                AppLogger.Warn("TwitchGql", $"ClaimDrop failed. status={(int)response.StatusCode}, hasErrors={jsonText.Contains("\"errors\"")}");
+                AppLogger.Warn("TwitchGql", $"ClaimDrop failed. {DescribeGqlFailure(response, jsonText)}");
                 return false;
             }
 
@@ -317,12 +468,13 @@ namespace Core.Services
             if (!string.IsNullOrEmpty(_deviceId))
                 request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
 
+            LogOutgoingRequest("QueryFullDropsDashboard initial");
             HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
             string jsonText = await response.Content.ReadAsStringAsync(ct);
 
             if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
             {
-                AppLogger.Warn("TwitchGql", $"QueryFullDropsDashboard initial call failed. status={(int)response.StatusCode}, hasErrors={jsonText.Contains("\"errors\"")}. Refreshing headers and retrying.");
+                AppLogger.Warn("TwitchGql", $"QueryFullDropsDashboard initial call failed. dashboardHash={dashboardHash}, inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}. Refreshing headers and retrying.");
                 await RefreshHeadersAsync(ct);
 
                 dashboardHash = await GetPersistedQueryHashAsync("ViewerDropsDashboard", ct, allowCached: false);
@@ -341,12 +493,13 @@ namespace Core.Services
                 if (!string.IsNullOrEmpty(_deviceId))
                     newRequest.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
 
+                LogOutgoingRequest("QueryFullDropsDashboard retry");
                 response = await _httpClient.SendAsync(newRequest, ct);
                 jsonText = await response.Content.ReadAsStringAsync(ct);
 
                 if (jsonText.Contains("\"errors\""))
                 {
-                    AppLogger.Error("TwitchGql", "QueryFullDropsDashboard retry still returned GraphQL errors.");
+                    AppLogger.Error("TwitchGql", $"QueryFullDropsDashboard retry still returned GraphQL errors. dashboardHash={dashboardHash}, inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}");
                     throw new InvalidOperationException("Failed integrity, please wait a while and try again.");
                 }
             }
@@ -412,14 +565,13 @@ namespace Core.Services
             if (!string.IsNullOrEmpty(_deviceId))
                 request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
 
+            LogOutgoingRequest("QueryInventoryProgress");
             HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
             string jsonText = await response.Content.ReadAsStringAsync(ct);
 
             if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
             {
-                AppLogger.Warn(
-                    "TwitchGql",
-                    $"QueryInventoryProgress failed. status={(int)response.StatusCode}, hasErrors={jsonText.Contains("\"errors\"")}");
+                AppLogger.Warn("TwitchGql", $"QueryInventoryProgress failed. inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}");
                 return null;
             }
 
@@ -468,6 +620,7 @@ namespace Core.Services
                 if (!string.IsNullOrEmpty(_deviceId))
                     request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
 
+                LogOutgoingRequest($"DropCampaignDetails batchStart={i}");
                 HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
                 string jsonText = await response.Content.ReadAsStringAsync(ct);
 
@@ -479,7 +632,7 @@ namespace Core.Services
                 // Auto-retry on integrity fail
                 if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
                 {
-                    AppLogger.Warn("TwitchGql", $"DropCampaignDetails batch call failed. batchStart={i}, status={(int)response.StatusCode}, hasErrors={jsonText.Contains("\"errors\"")}. Refreshing headers and retrying.");
+                    AppLogger.Warn("TwitchGql", $"DropCampaignDetails batch call failed. batchStart={i}, liveHash={liveHash}, {DescribeGqlFailure(response, jsonText)}. Refreshing headers and retrying.");
                     await RefreshHeadersAsync(ct);
 
                     liveHash = await GetCurrentDropCampaignDetailsHashInternalAsync(allowCached: false, ct);
@@ -496,8 +649,12 @@ namespace Core.Services
                     if (!string.IsNullOrEmpty(_deviceId))
                         retryRequest.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
 
+                    LogOutgoingRequest($"DropCampaignDetails retry batchStart={i}");
                     response = await _httpClient.SendAsync(retryRequest, ct);
                     jsonText = await response.Content.ReadAsStringAsync(ct);
+
+                    if (jsonText.Contains("\"errors\""))
+                        AppLogger.Error("TwitchGql", $"DropCampaignDetails retry still returned GraphQL errors. batchStart={i}, liveHash={liveHash}, {DescribeGqlFailure(response, jsonText)}");
                 }
 
                 response.EnsureSuccessStatusCode();
@@ -523,7 +680,7 @@ namespace Core.Services
 
             if (allowCached && TryGetCachedHash(operationName, requireFresh: true, out string? cachedHash))
             {
-                LogCacheDebug("Using cached hash for 'DropCampaignDetails'.");
+                AppLogger.Debug("TwitchGql", $"[GQL] 'DropCampaignDetails' hash from cache ({DescribeCacheEntry(operationName)}).");
                 return cachedHash!;
             }
 
@@ -550,7 +707,7 @@ namespace Core.Services
             }
             catch (Exception ex) when (allowCached && TryGetCachedHash(operationName, requireFresh: false, out string? fallbackHash))
             {
-                LogCacheWarn($"DropCampaignDetails capture failed; using cached fallback. {ex.Message}");
+                AppLogger.Warn("TwitchGql", $"[GQL] 'DropCampaignDetails' live hash capture failed ({ex.Message}); falling back to cached hash ({DescribeCacheEntry(operationName)}).");
                 return fallbackHash!;
             }
 
@@ -568,7 +725,7 @@ namespace Core.Services
 
             SetCachedHash(operationName, hash);
 
-            AppLogger.Debug("TwitchGql", $"[GQL] Live DropCampaignDetails hash captured: {hash}");
+            AppLogger.Debug("TwitchGql", $"[GQL] 'DropCampaignDetails' hash captured live (hash={hash}).");
             return hash!;
         }
 
