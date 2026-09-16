@@ -59,6 +59,12 @@ jobs:
             - name: Zip (Framework-Dependent)
               run: Compress-Archive -Path publish/framework-dependent/* -DestinationPath StreamDropCollector-nightly-framework-dependent.zip
 
+            - name: Install Inno Setup
+              run: choco install innosetup -y --no-progress
+
+            - name: Build installer
+              run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Installer\StreamDropCollector.iss'
+
             - name: Delete existing nightly release
               run: gh release delete nightly --yes --cleanup-tag
               env:
@@ -66,12 +72,15 @@ jobs:
               continue-on-error: true
 
             - name: Create nightly release
-              run: >
-                  gh release create nightly
-                  StreamDropCollector-nightly-self-contained.zip
-                  StreamDropCollector-nightly-framework-dependent.zip
-                  --title "Nightly Build (${{ steps.vars.outputs.nightly_version }})"
-                  --notes "Automated build from commit ${{ steps.vars.outputs.sha_short }} on master."
-                  --prerelease
+              shell: pwsh
+              run: |
+                  $installer = Get-ChildItem "publish/installer/*.exe" | Select-Object -First 1 -ExpandProperty FullName
+                  gh release create nightly `
+                    "StreamDropCollector-nightly-self-contained.zip" `
+                    "StreamDropCollector-nightly-framework-dependent.zip" `
+                    "$installer" `
+                    --title "Nightly Build (${{ steps.vars.outputs.nightly_version }})" `
+                    --notes "Automated build from commit ${{ steps.vars.outputs.sha_short }} on master." `
+                    --prerelease
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

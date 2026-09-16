@@ -53,6 +53,12 @@ jobs:
             - name: Zip (Framework-Dependent)
               run: Compress-Archive -Path UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/* -DestinationPath StreamDropCollector-${{ github.ref_name }}-framework-dependent.zip
 
+            - name: Install Inno Setup
+              run: choco install innosetup -y --no-progress
+
+            - name: Build installer
+              run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Installer\StreamDropCollector.iss'
+
             - name: Commit published output to master
               shell: pwsh
               run: |
@@ -85,7 +91,7 @@ jobs:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   $notes = @"
-                  [Download it here](https://download-directory.github.io/?url=https://github.com/tsgsOFFICIAL/StreamDropCollector/tree/master/UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64)
+                  Grab `Setup.exe` below for a guided install, or extract one of the zips instead if you prefer a portable copy.
 
                   [Installation guide](https://github.com/tsgsOFFICIAL/StreamDropCollector?tab=readme-ov-file#quick-start)
 
@@ -93,9 +99,11 @@ jobs:
 
                   **Full Changelog**: https://github.com/tsgsOFFICIAL/StreamDropCollector/compare/${{ steps.prev_tag.outputs.tag }}...${{ github.ref_name }}
                   "@
+                  $installer = Get-ChildItem "publish/installer/*.exe" | Select-Object -First 1 -ExpandProperty FullName
                   gh release create "${{ github.ref_name }}" `
                     "StreamDropCollector-${{ github.ref_name }}-self-contained.zip" `
                     "StreamDropCollector-${{ github.ref_name }}-framework-dependent.zip" `
+                    "$installer" `
                     --title "StreamDropCollector ${{ github.ref_name }}" `
                     --verify-tag `
                     --notes $notes

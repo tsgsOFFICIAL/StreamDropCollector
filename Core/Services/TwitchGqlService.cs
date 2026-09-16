@@ -472,9 +472,9 @@ namespace Core.Services
             HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
             string jsonText = await response.Content.ReadAsStringAsync(ct);
 
-            if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
+            if (!response.IsSuccessStatusCode || !HasUsableDashboardData(jsonText))
             {
-                AppLogger.Warn("TwitchGql", $"QueryFullDropsDashboard initial call failed. dashboardHash={dashboardHash}, inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}. Refreshing headers and retrying.");
+                AppLogger.Warn("TwitchGql", $"QueryFullDropsDashboard initial call failed or missing required data. dashboardHash={dashboardHash}, inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}. Refreshing headers and retrying.");
                 await RefreshHeadersAsync(ct);
 
                 dashboardHash = await GetPersistedQueryHashAsync("ViewerDropsDashboard", ct, allowCached: false);
@@ -497,18 +497,46 @@ namespace Core.Services
                 response = await _httpClient.SendAsync(newRequest, ct);
                 jsonText = await response.Content.ReadAsStringAsync(ct);
 
-                if (jsonText.Contains("\"errors\""))
+                if (!HasUsableDashboardData(jsonText))
                 {
-                    AppLogger.Error("TwitchGql", $"QueryFullDropsDashboard retry still returned GraphQL errors. dashboardHash={dashboardHash}, inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}");
+                    AppLogger.Error("TwitchGql", $"QueryFullDropsDashboard retry still missing required data. dashboardHash={dashboardHash}, inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}");
                     throw new InvalidOperationException("Failed integrity, please wait a while and try again.");
                 }
             }
+
+            if (jsonText.Contains("\"errors\""))
+                AppLogger.Warn("TwitchGql", $"QueryFullDropsDashboard returned partial GraphQL errors alongside usable data; continuing. {DescribeGqlFailure(response, jsonText)}");
 
             response.EnsureSuccessStatusCode();
 
             JsonArray responseArray = JsonNode.Parse(jsonText)!.AsArray();
             AppLogger.Debug("TwitchGql", "QueryFullDropsDashboard completed successfully.");
             return responseArray;
+        }
+
+        /// <summary>
+        /// Checks whether a QueryFullDropsDashboard response has the specific fields the app actually consumes
+        /// (currentUser.inventory from the Inventory operation, currentUser.dropCampaigns from ViewerDropsDashboard),
+        /// even if the response also carries GraphQL errors for unrelated fields (e.g. gameEventDropsConnection).
+        /// A GraphQL error only nulls the field that failed, so sibling fields we need can still be present and valid.
+        /// </summary>
+        private static bool HasUsableDashboardData(string jsonText)
+        {
+            try
+            {
+                JsonArray? array = JsonNode.Parse(jsonText)?.AsArray();
+                if (array == null || array.Count < 2)
+                    return false;
+
+                JsonObject? inventoryUser = array[0]?["data"]?["currentUser"]?.AsObject();
+                JsonObject? dashboardUser = array[1]?["data"]?["currentUser"]?.AsObject();
+
+                return inventoryUser?["inventory"] != null && dashboardUser?["dropCampaigns"] != null;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
 
         /// <summary>
