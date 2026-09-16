@@ -45,7 +45,10 @@ namespace Core.Mining
                 }
 
                 JsonArray dropCampaignsInProgress = inventoryResponse["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
-                JsonArray gameEventDrops = inventoryResponse["data"]?["currentUser"]?["inventory"]?["gameEventDrops"]?.AsArray() ?? new JsonArray();
+
+                // Twitch's actual field is "gameEventDropsConnection" (edges/node), not "gameEventDrops" -
+                // see the matching comment in TwitchDropsProvider.cs for how this was confirmed.
+                JsonArray gameEventDropEdges = inventoryResponse["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?["edges"]?.AsArray() ?? new JsonArray();
 
                 Dictionary<string, DropsCampaign> localById = campaigns.ToDictionary(c => c.Id, StringComparer.Ordinal);
                 Dictionary<string, IReadOnlyList<DropsReward>> result = new(StringComparer.Ordinal);
@@ -76,8 +79,9 @@ namespace Core.Mining
                         }
 
                         // Completed event drops override in-progress minutes for claim state.
-                        JsonObject? matchingEventDrop = gameEventDrops.OfType<JsonObject>()
-                            .FirstOrDefault(e => e["id"]?.GetValue<string>() == localReward.DropInstanceId);
+                        JsonObject? matchingEventDrop = gameEventDropEdges.OfType<JsonObject>()
+                            .Select(edge => edge["node"]?.AsObject())
+                            .FirstOrDefault(node => node?["id"]?.GetValue<string>() == localReward.DropInstanceId);
 
                         if (matchingEventDrop != null)
                         {
