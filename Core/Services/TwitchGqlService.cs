@@ -657,6 +657,10 @@ namespace Core.Services
                     ? await request.Content.ReadAsStringAsync(ct)
                     : "No request content");
 
+                // print the raw response too, so verbose logs can confirm whether Twitch's DropCampaignDetails
+                // response actually carries per-drop "self" progress/claim data.
+                AppLogger.Debug("TwitchGql", $"[DropCampaignDetails batchStart={i}] Response body: {jsonText}");
+
                 // Auto-retry on integrity fail
                 if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
                 {
