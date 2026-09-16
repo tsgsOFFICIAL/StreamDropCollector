@@ -99,8 +99,10 @@ namespace Core.Services.Twitch.Helix
                     ct).ConfigureAwait(false);
 
                 _client = new TwitchHelixClient(_http, _tokenManager);
+                // Started lazily from SetMinedChannelWatcherAsync instead of here: Twitch's EventSub WebSocket
+                // closes a session that hasn't created a subscription within ~10s of connecting, and starting
+                // the socket this early - well before a channel is selected to mine - blows that window every time.
                 _eventSubHub = new TwitchEventSubHub(_client, _cache, OnStreamOnlineAsync, PublishSnapshotsChanged);
-                _eventSubHub.Start();
                 _isAuthenticated = true;
                 AppLogger.Info("TwitchHelix", "Helix authentication ready.");
                 return true;
@@ -253,7 +255,12 @@ namespace Core.Services.Twitch.Helix
             }
 
             AppLogger.Debug("TwitchMining", $"SetMinedChannelWatcher SET login={login} broadcasterId={broadcasterId}");
+
+            // Record the watcher before starting the socket (Start() is a no-op after the first call) so that
+            // whenever session_welcome arrives, ResubscribeCurrentWatcherAsync already has a channel to subscribe
+            // to - keeping the welcome-to-subscribe gap near-zero instead of racing Twitch's ~10s session timeout.
             await _eventSubHub.SetWatcherAsync(login, broadcasterId, ct).ConfigureAwait(false);
+            _eventSubHub.Start();
         }
 
         /// <summary>

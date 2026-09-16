@@ -472,6 +472,10 @@ namespace Core.Services
             HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
             string jsonText = await response.Content.ReadAsStringAsync(ct);
 
+            // print the raw response so verbose logs can show what Inventory's dropCampaignsInProgress/
+            // gameEventDrops actually contain (this is the only source of real per-drop self.isClaimed data).
+            AppLogger.Debug("TwitchGql", $"[QueryFullDropsDashboard initial] Response body: {jsonText}");
+
             if (!response.IsSuccessStatusCode || !HasUsableDashboardData(jsonText))
             {
                 AppLogger.Warn("TwitchGql", $"QueryFullDropsDashboard initial call failed or missing required data. dashboardHash={dashboardHash}, inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}. Refreshing headers and retrying.");
@@ -496,6 +500,8 @@ namespace Core.Services
                 LogOutgoingRequest("QueryFullDropsDashboard retry");
                 response = await _httpClient.SendAsync(newRequest, ct);
                 jsonText = await response.Content.ReadAsStringAsync(ct);
+
+                AppLogger.Debug("TwitchGql", $"[QueryFullDropsDashboard retry] Response body: {jsonText}");
 
                 if (!HasUsableDashboardData(jsonText))
                 {
@@ -596,6 +602,8 @@ namespace Core.Services
             LogOutgoingRequest("QueryInventoryProgress");
             HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
             string jsonText = await response.Content.ReadAsStringAsync(ct);
+
+            AppLogger.Debug("TwitchGql", $"[QueryInventoryProgress] Response body: {jsonText}");
 
             if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
             {
