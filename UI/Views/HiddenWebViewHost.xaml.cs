@@ -568,6 +568,7 @@ namespace UI.Views
             CoreWebView2DevToolsProtocolEventReceiver? loadingFinishedReceiver = null;
             EventHandler<CoreWebView2DevToolsProtocolEventReceivedEventArgs>? onRequestWillBeSent = null;
             EventHandler<CoreWebView2DevToolsProtocolEventReceivedEventArgs>? onLoadingFinished = null;
+            EventHandler<CoreWebView2WebMessageReceivedEventArgs>? onDiagnosticMessage = null;
 
             bool IsMatchingOperationPayload(string postData)
             {
@@ -618,6 +619,9 @@ namespace UI.Views
 
                         if (loadingFinishedReceiver != null && onLoadingFinished != null)
                             loadingFinishedReceiver.DevToolsProtocolEventReceived -= onLoadingFinished;
+
+                        if (onDiagnosticMessage != null)
+                            WebView.CoreWebView2.WebMessageReceived -= onDiagnosticMessage;
                     });
                 }
             }
@@ -728,6 +732,32 @@ namespace UI.Views
 
                 requestWillBeSentReceiver.DevToolsProtocolEventReceived += onRequestWillBeSent;
                 loadingFinishedReceiver.DevToolsProtocolEventReceived += onLoadingFinished;
+
+                // Diagnostic-only: the preCaptureJs click script reports how many candidate buttons it
+                // found and clicked, so a capture timeout in the logs shows whether the click actually
+                // had anything to click on, instead of just "no matching GraphQL request was seen".
+                onDiagnosticMessage = (s, e) =>
+                {
+                    try
+                    {
+                        string? message = e.TryGetWebMessageAsString();
+                        if (string.IsNullOrWhiteSpace(message) || !message.Contains("__sdcDiag", StringComparison.Ordinal))
+                            return;
+
+                        using JsonDocument doc = JsonDocument.Parse(message);
+                        if (doc.RootElement.TryGetProperty("__sdcDiag", out JsonElement kindElement) &&
+                            kindElement.GetString() == "DropCampaignDetailsClick")
+                        {
+                            int candidates = doc.RootElement.TryGetProperty("candidates", out JsonElement c) ? c.GetInt32() : -1;
+                            AppLogger.Debug("WebViewCapture", $"[GQL Capture] Click script for '{triggerText}' found/clicked {candidates} candidate button(s).");
+                        }
+                    }
+                    catch
+                    {
+                        // Best-effort diagnostics only; never let this affect capture.
+                    }
+                };
+                WebView.CoreWebView2.WebMessageReceived += onDiagnosticMessage;
             })).ConfigureAwait(false);
 
             // External cancellation
@@ -787,6 +817,18 @@ namespace UI.Views
                     // Run custom JS if provided
                     if (!string.IsNullOrEmpty(preCaptureJs))
                     {
+                        // DOM-ready (already awaited inside ForceRefreshAsync) only means the initial
+                        // document loaded - client-side-rendered content like the campaign accordion list
+                        // is still being fetched/painted after that. Wait for the page's network activity
+                        // to settle (same helper used by TwitchGeneralDropDirectoryClient/
+                        // KickGeneralDropDirectoryClient) before clicking, so we're not clicking into an
+                        // empty page. WaitForNetworkIdleAsync talks to CoreWebView2 directly, so it must be
+                        // marshaled onto the WebView's UI thread like the other DevTools calls in this class.
+                        bool idle = await (await WebView.Dispatcher.InvokeAsync(async () =>
+                            await WaitForNetworkIdleAsync(6000, 500, ct))).ConfigureAwait(false);
+                        if (!idle)
+                            AppLogger.Debug("WebViewCapture", $"[GQL Capture] Network idle timeout before pre-capture script for '{triggerText}'; running it anyway.");
+
                         await ExecuteScriptAsync(preCaptureJs);
                     }
 

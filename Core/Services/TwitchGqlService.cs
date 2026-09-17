@@ -728,14 +728,22 @@ namespace Core.Services
             await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
 
             string clickScript = @"
-                (async () => {
-                    // Wait a bit more for React to render
-                    await new Promise(r => setTimeout(r, 3000));
+                (() => {
+                    // Network-idle is awaited on the C# side (WaitForNetworkIdleAsync) before this script
+                    // runs, so the campaign accordion list should already be populated by now.
+                    const selectors = ['.accordion-header button', '[role=""heading""][aria-level=""3""] button'];
+                    const buttons = new Set();
+                    for (const sel of selectors) {
+                        document.querySelectorAll(sel).forEach(b => buttons.add(b));
+                    }
+                    buttons.forEach(b => b.click());
 
-                    document.querySelectorAll(
-                      '[role=""heading""][aria-level=""3""] button'
-                    ).forEach(ind => ind.closest('button')?.click());
-
+                    try {
+                        window.chrome?.webview?.postMessage(JSON.stringify({
+                            __sdcDiag: 'DropCampaignDetailsClick',
+                            candidates: buttons.size
+                        }));
+                    } catch (e) {}
                 })();
             ";
 
