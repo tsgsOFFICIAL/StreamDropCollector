@@ -10,7 +10,7 @@
 		<ApplicationIcon>Assets\logo.ico</ApplicationIcon>
 		<AssemblyTitle>Stream Drop Collector</AssemblyTitle>
 		<AssemblyName>Stream Drop Collector</AssemblyName>
-		<FileVersion>1.1.2</FileVersion>
+		<FileVersion>1.1.3</FileVersion>
 		<Copyright>tsgsOFFICIAL</Copyright>
 	</PropertyGroup>
 

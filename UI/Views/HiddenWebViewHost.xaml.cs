@@ -878,63 +878,37 @@ namespace UI.Views
 
             string bearerToken = Uri.UnescapeDataString(encodedToken); // Decode %7C -> |
 
-            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
-
-            // One-time handler for the result
-            void MessageReceivedHandler(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
-            {
-                string message = e.TryGetWebMessageAsString() ?? "";
-                tcs.TrySetResult(message);
-                WebView.CoreWebView2.WebMessageReceived -= MessageReceivedHandler;
-            }
-
-            WebView.CoreWebView2.WebMessageReceived += MessageReceivedHandler;
-
             try
             {
-                string script = $@"
-                    (async () => {{
-                        try {{
-                            const response = await fetch('https://web.kick.com/api/v1/drops/claim', {{
-                                method: 'POST',
-                                credentials: 'include',
-                                headers: {{
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json',
-                                    'Authorization': 'Bearer {bearerToken}'
-                                }},
-                                body: JSON.stringify({{
-                                    campaign_id: '{campaignId}',
-                                    reward_id: '{rewardId}'
-                                }})
-                            }});
+                string asyncScriptBody = $@"
+                    const response = await fetch('https://web.kick.com/api/v1/drops/claim', {{
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: {{
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'Authorization': 'Bearer {bearerToken}'
+                        }},
+                        body: JSON.stringify({{
+                            campaign_id: '{campaignId}',
+                            reward_id: '{rewardId}'
+                        }})
+                    }});
 
-                            const data = await response.json();
+                    const data = await response.json();
 
-                            const result = {{
-                                success: response.ok && (data.message === 'Success' || data.success === true),
-                                data: data,
-                                error: response.ok ? null : (data.message || data.error || response.statusText)
-                            }};
-
-                            window.chrome.webview.postMessage(JSON.stringify(result));
-                        }} catch (err) {{
-                            window.chrome.webview.postMessage(JSON.stringify({{
-                                success: false,
-                                error: err.message || 'Unknown JS error'
-                            }}));
-                        }}
-                    }})();
+                    return {{
+                        success: response.ok && (data.message === 'Success' || data.success === true),
+                        data: data,
+                        error: response.ok ? null : (data.message || data.error || response.statusText)
+                    }};
                 ";
 
-                await WebView.CoreWebView2.ExecuteScriptAsync(script);
+                // Correlated by request id so a concurrent postMessage from another
+                // WebView operation (e.g. a channel info fetch) can't be mistaken for this result.
+                string? rawResult = await ExecuteAsyncScriptAsync(asyncScriptBody, timeoutMs: 15000);
 
-                // Wait for the postMessage (with timeout)
-                string rawResult = await Task.WhenAny(tcs.Task, Task.Delay(15000)) == tcs.Task
-                    ? await tcs.Task
-                    : "{}";
-
-                if (rawResult == "{}" || string.IsNullOrWhiteSpace(rawResult))
+                if (string.IsNullOrWhiteSpace(rawResult))
                 {
                     AppLogger.Warn("KickClaim", "Claim timed out or no response");
                     return false;
@@ -971,11 +945,6 @@ namespace UI.Views
             {
                 AppLogger.Error("KickClaim", "Exception in ClaimKickDropAsync.", ex);
                 return false;
-            }
-            finally
-            {
-                // Clean up handler in case of exception/timeout
-                WebView.CoreWebView2.WebMessageReceived -= MessageReceivedHandler;
             }
         }
         /// <summary>
@@ -1122,6 +1091,11 @@ namespace UI.Views
 
             try
             {
+                // Held for the full round-trip (script submission through its postMessage
+                // reply), not just submission: two scripts running concurrently on this
+                // WebView can post their results back-to-back closely enough that the wrong
+                // in-flight caller ends up observing the other's message, despite the id
+                // correlation below. Serializing end-to-end removes that overlap entirely.
                 await _uiOperationLock.WaitAsync(ct);
                 try
                 {
@@ -1131,28 +1105,28 @@ namespace UI.Views
                         EnsureAsyncScriptMessageHandler();
                         await WebView.CoreWebView2.ExecuteScriptAsync(script);
                     });
+
+                    Task completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs, ct));
+                    if (completed != tcs.Task)
+                    {
+                        _pendingAsyncScripts.TryRemove(correlationId, out _);
+                        AppLogger.Warn("WebViewAsync", $"Async script timed out after {timeoutMs}ms.");
+                        return null;
+                    }
+
+                    AsyncScriptResponse response = await tcs.Task;
+                    if (!response.Ok)
+                    {
+                        AppLogger.Warn("WebViewAsync", $"Async script failed: {response.Error}");
+                        return null;
+                    }
+
+                    return response.Result;
                 }
                 finally
                 {
                     _uiOperationLock.Release();
                 }
-
-                Task completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs, ct));
-                if (completed != tcs.Task)
-                {
-                    _pendingAsyncScripts.TryRemove(correlationId, out _);
-                    AppLogger.Warn("WebViewAsync", $"Async script timed out after {timeoutMs}ms.");
-                    return null;
-                }
-
-                AsyncScriptResponse response = await tcs.Task;
-                if (!response.Ok)
-                {
-                    AppLogger.Warn("WebViewAsync", $"Async script failed: {response.Error}");
-                    return null;
-                }
-
-                return response.Result;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

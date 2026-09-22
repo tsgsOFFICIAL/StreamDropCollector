@@ -1,8 +1,13 @@
 {
-  "version": "1.1.2",
+  "version": "1.1.3",
   "type": "Hotfix",
-  "changelog": "Hotfix for Twitch campaign matching (same issue as Kick had previously)",
+  "changelog": "Fixed Kick drop claims consistently failing due to a WebView message race with concurrent channel status polling.",
   "historic_versions": [
+    {
+      "version": "1.1.2",
+      "type": "Hotfix",
+      "changelog": "Hotfix for Twitch campaign matching (same issue as Kick had previously)"
+    },
     {
       "version": "1.1.1",
       "type": "Patch",
