@@ -110,7 +110,6 @@ namespace UI
             }
             catch (Exception ex)
             {
-                // Undecodable image or missing WIC codec (e.g. WebP on Windows 10) - leave the image blank rather than crash.
                 string header = Convert.ToHexString(bytes, 0, Math.Min(bytes.Length, 12));
                 AppLogger.Warn("ImageEx", $"Failed to decode image '{url}' ({bytes.Length} bytes, header {header}): {ex.GetType().Name}: {ex.Message}");
                 img.Opacity = 1;

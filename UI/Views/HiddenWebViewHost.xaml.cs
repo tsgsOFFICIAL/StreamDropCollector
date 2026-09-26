@@ -937,6 +937,16 @@ namespace UI.Views
                                     : "Unknown error"
                               );
                     AppLogger.Warn("KickClaim", $"Kick claim failed: {error}");
+
+                    // INVALID_CLAIM + connect_url means the game account (e.g. Riot) isn't linked on Kick.
+                    if (doc.RootElement.TryGetProperty("data", out JsonElement d1) &&
+                        d1.TryGetProperty("data", out JsonElement d2) &&
+                        d2.TryGetProperty("type", out JsonElement typeElem) &&
+                        typeElem.GetString() == "INVALID_CLAIM" &&
+                        d2.TryGetProperty("connect_url", out JsonElement urlElem))
+                    {
+                        Core.Mining.KickUnlinkedClaims.Mark(campaignId, rewardId, urlElem.GetString());
+                    }
                 }
 
                 return success;
