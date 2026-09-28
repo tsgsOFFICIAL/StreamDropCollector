@@ -46,9 +46,10 @@ namespace Core.Mining
 
                 JsonArray dropCampaignsInProgress = inventoryResponse["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
 
-                // Twitch's actual field is "gameEventDropsConnection" (edges/node), not "gameEventDrops" -
-                // see the matching comment in TwitchDropsProvider.cs for how this was confirmed.
-                JsonArray gameEventDropEdges = inventoryResponse["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?["edges"]?.AsArray() ?? new JsonArray();
+                // "gameEventDropsConnection" permanently errors on Twitch's backend - see the matching
+                // comment in TwitchDropsProvider.cs. Already-claimed rewards with no in-progress record
+                // come from "earnedDropRewards" instead.
+                JsonArray earnedDropRewardEdges = inventoryResponse["data"]?["currentUser"]?["inventory"]?["earnedDropRewards"]?["edges"]?.AsArray() ?? new JsonArray();
 
                 Dictionary<string, DropsCampaign> localById = campaigns.ToDictionary(c => c.Id, StringComparer.Ordinal);
                 Dictionary<string, IReadOnlyList<DropsReward>> result = new(StringComparer.Ordinal);
@@ -78,12 +79,14 @@ namespace Core.Mining
                             isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? isClaimed;
                         }
 
-                        // Completed event drops override in-progress minutes for claim state.
-                        JsonObject? matchingEventDrop = gameEventDropEdges.OfType<JsonObject>()
+                        // Completed earned drops override in-progress minutes for claim state.
+                        JsonObject? matchingEarnedDrop = earnedDropRewardEdges.OfType<JsonObject>()
                             .Select(edge => edge["node"]?.AsObject())
-                            .FirstOrDefault(node => node?["id"]?.GetValue<string>() == localReward.DropInstanceId);
+                            .FirstOrDefault(node =>
+                                node?["item"]?["id"]?.GetValue<string>() == localReward.DropInstanceId &&
+                                node?["status"]?.GetValue<string>() == "CLAIMED");
 
-                        if (matchingEventDrop != null)
+                        if (matchingEarnedDrop != null)
                         {
                             isClaimed = true;
                             progressMinutes = localReward.RequiredMinutes;

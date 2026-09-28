@@ -102,10 +102,12 @@ namespace Core.Services
 
                 JsonArray dropCampaignsInProgress = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
 
-                // Already finished/claimed drops. Twitch's actual field here is "gameEventDropsConnection"
-                // (a Relay-style edges/node connection), not "gameEventDrops" - the old key never existed in
-                // the real response, so this list was always empty and claimed rewards were never detected.
-                JsonArray gameEventDropEdges = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?["edges"]?.AsArray() ?? new JsonArray();
+                // Already finished/claimed drops. "gameEventDropsConnection" now permanently returns a GQL
+                // "service error" (null) on Twitch's backend, so already-claimed rewards with no in-progress
+                // record (e.g. lower tiers auto-claimed alongside a higher one) must come from
+                // "earnedDropRewards" instead - its edge nodes carry item.id (== the reward's benefit id,
+                // i.e. DropInstanceId) and a "CLAIMED" status.
+                JsonArray earnedDropRewardEdges = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["earnedDropRewards"]?["edges"]?.AsArray() ?? new JsonArray();
 
                 // Create a new list with updated campaigns
                 List<DropsCampaign> updatedResult = new List<DropsCampaign>();
@@ -143,12 +145,14 @@ namespace Core.Services
                             }
                         }
 
-                        // 2. Apply gameEventDrops (completed drops) - these mark rewards as claimed via DropInstanceId
-                        JsonObject? matchingEventDrop = gameEventDropEdges.OfType<JsonObject>()
+                        // 2. Apply earnedDropRewards (completed drops) - these mark rewards as claimed via DropInstanceId
+                        JsonObject? matchingEarnedDrop = earnedDropRewardEdges.OfType<JsonObject>()
                             .Select(edge => edge["node"]?.AsObject())
-                            .FirstOrDefault(node => node?["id"]?.GetValue<string>() == reward.DropInstanceId);
+                            .FirstOrDefault(node =>
+                                node?["item"]?["id"]?.GetValue<string>() == reward.DropInstanceId &&
+                                node?["status"]?.GetValue<string>() == "CLAIMED");
 
-                        if (matchingEventDrop != null)
+                        if (matchingEarnedDrop != null)
                         {
                             // This reward has been fully claimed via a game event drop
                             updatedReward = updatedReward with

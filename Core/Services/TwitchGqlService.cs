@@ -605,11 +605,21 @@ namespace Core.Services
 
             AppLogger.Debug("TwitchGql", $"[QueryInventoryProgress] Response body: {jsonText}");
 
-            if (!response.IsSuccessStatusCode || jsonText.Contains("\"errors\""))
+            // "gameEventDropsConnection" permanently returns a GQL "service error" alongside otherwise-usable
+            // data (see HasUsableDashboardData), so a blanket check for the "errors" substring would fail
+            // every single call. Only bail out when the inventory field we actually need is missing.
+            JsonObject? inventoryUser = response.IsSuccessStatusCode
+                ? JsonNode.Parse(jsonText)?[0]?["data"]?["currentUser"]?.AsObject()
+                : null;
+
+            if (inventoryUser?["inventory"] == null)
             {
                 AppLogger.Warn("TwitchGql", $"QueryInventoryProgress failed. inventoryHash={inventoryHash}, {DescribeGqlFailure(response, jsonText)}");
                 return null;
             }
+
+            if (jsonText.Contains("\"errors\""))
+                AppLogger.Warn("TwitchGql", $"QueryInventoryProgress returned partial GraphQL errors alongside usable data; continuing. {DescribeGqlFailure(response, jsonText)}");
 
             JsonArray? responseArray = JsonNode.Parse(jsonText)?.AsArray();
             AppLogger.Debug("TwitchGql", "QueryInventoryProgress completed successfully.");
