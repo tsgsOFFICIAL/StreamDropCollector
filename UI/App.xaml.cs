@@ -1,6 +1,7 @@
 ﻿using Core;
 using Core.Logging;
 using Core.Managers;
+using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.IO;
@@ -109,8 +110,64 @@ namespace UI
             // REACT TO WINDOWS THEME CHANGE IN REAL TIME
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
 
+            if (!EnsureWebView2RuntimeAvailable())
+            {
+                _instanceMutex?.Dispose();
+                _instanceMutex = null;
+                Shutdown();
+                return;
+            }
+
             MainWindow mainWindow = new MainWindow();
             mainWindow.Show();
+        }
+
+        /// <summary>
+        /// Verifies the WebView2 Runtime is installed, and tells the user how to fix it if not.
+        /// </summary>
+        /// <returns><c>true</c> if the runtime was found; otherwise <c>false</c>.</returns>
+        private static bool EnsureWebView2RuntimeAvailable()
+        {
+            try
+            {
+                string? version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                if (!string.IsNullOrWhiteSpace(version))
+                {
+                    AppLogger.Info("App", $"WebView2 Runtime detected: {version}");
+                    return true;
+                }
+
+                AppLogger.Error("App", "WebView2 Runtime check returned no version.");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("App", "WebView2 Runtime not found.", ex);
+            }
+
+            MessageBoxResult result = System.Windows.MessageBox.Show(
+                "Stream Drop Collector requires the Microsoft Edge WebView2 Runtime, which could not be found on this PC.\n\n" +
+                "Install it (or open Microsoft Edge once to finish its setup), then start the app again.\n\n" +
+                "Open the WebView2 download page now?",
+                "WebView2 Runtime Missing",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo("https://developer.microsoft.com/microsoft-edge/webview2/#download-section")
+                    {
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("App", $"Failed to open WebView2 download page: {ex.Message}");
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
