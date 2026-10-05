@@ -15,8 +15,13 @@
         <TextBlock Text="{Binding WhitelistSummary, ElementName=Root}"
                    Foreground="{DynamicResource TextMutedBrush}"
                    Margin="0,0,0,8"/>
+        <TextBox x:Name="SearchBox"
+                 Style="{StaticResource PlaceholderSearchTextBoxStyle}"
+                 Tag="Search games…"
+                 Margin="0,0,0,6"
+                 TextChanged="OnSearchTextChanged"/>
         <Border Style="{StaticResource InsetPanelBorder}" Margin="0,0,0,6">
-            <ListBox ItemsSource="{Binding GameOptions, ElementName=Root}"
+            <ListBox x:Name="OptionsList"
                      BorderThickness="0"
                      Background="Transparent"
                      MaxHeight="140">

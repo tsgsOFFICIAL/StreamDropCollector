@@ -74,6 +74,11 @@
                             <TextBlock x:Name="FilterHint"
                                        Text="If no games are selected, all games are allowed."
                                        Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"/>
+                            <TextBox x:Name="GameSearchBox"
+                                     Style="{StaticResource PlaceholderSearchTextBoxStyle}"
+                                     Tag="Search games…"
+                                     Margin="0,0,0,8"
+                                     TextChanged="OnGameSearchTextChanged"/>
                             <Border Style="{StaticResource InsetPanelBorder}" Margin="0,0,0,8">
                                 <ItemsControl x:Name="GameList">
                                     <ItemsControl.ItemTemplate>

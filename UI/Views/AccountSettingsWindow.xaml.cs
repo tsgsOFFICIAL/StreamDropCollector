@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using Core.Enums;
 using Core.Models;
 using UI.Accounts;
@@ -47,13 +50,22 @@ namespace UI.Views
             foreach (string slug in selected)
                 _games.Add(new GameFilterOption(session.Model.Platform, slug, $"{slug} (inactive)", true));
 
-            GameList.ItemsSource = _games;
+            // Filter through a view so hidden games stay in _games and are still saved with their selection.
+            _gamesView = new CollectionViewSource { Source = _games }.View;
+            _gamesView.Filter = item => item is not GameFilterOption option
+                || GameSearchBox.Text.Trim().Length == 0
+                || option.DisplayName.Contains(GameSearchBox.Text.Trim(), StringComparison.OrdinalIgnoreCase);
+            GameList.ItemsSource = _gamesView;
 
             // Setting initial control values moves focus around; always open at the top.
             Loaded += (_, _) => SettingsScroll.ScrollToTop();
             if (_games.Count == 0)
                 FilterHint.Text = "No games loaded yet for this account. Games appear here once its campaigns have loaded.";
         }
+
+        private readonly ICollectionView _gamesView;
+
+        private void OnGameSearchTextChanged(object sender, TextChangedEventArgs e) => _gamesView?.Refresh();
 
         private void OnSaveClick(object sender, RoutedEventArgs e)
         {

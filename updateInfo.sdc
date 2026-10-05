@@ -1,8 +1,13 @@
 {
-  "version": "1.3.2",
-  "type": "Patch",
-  "changelog": "Maintenance release with no functional changes.",
+  "version": "1.4.0",
+  "type": "Feature",
+  "changelog": "The game white/black-list now offers every game the platforms list, not just ones with an active campaign, and has a search box (also in per-account settings). Campaigns and rewards show an estimated time to complete, and the dashboard shows a live countdown for the current campaign and drop. Eligible-streamer lists now show a \"Finding streamers…\" placeholder while they load, and the live count shows ? until it is known; live status loads much faster on both Twitch and Kick. Fixed a whitelist that excludes everything not stopping the stream already being mined, Twitch not mining after accounts were re-enabled until a restart, and the health check falsely forcing repeated stream re-evaluations.",
   "historic_versions": [
+    {
+      "version": "1.3.2",
+      "type": "Patch",
+      "changelog": "Maintenance release with no functional changes."
+    },
     {
       "version": "1.3.1",
       "type": "Patch",

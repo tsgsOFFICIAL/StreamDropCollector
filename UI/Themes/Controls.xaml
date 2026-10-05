@@ -434,6 +434,45 @@
         </Setter>
     </Style>
 
+    <!-- Search box whose placeholder (taken from Tag) is drawn in the same host as the text and caret, so they always line up. -->
+    <Style x:Key="PlaceholderSearchTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource StreamerSearchTextBoxStyle}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6">
+                        <Grid>
+                            <!-- The text box applies its Padding to the content host itself; adding a margin as well would
+                                 pad twice and push the caret away from the placeholder. -->
+                            <ScrollViewer x:Name="PART_ContentHost"/>
+                            <!-- Padding left 3 = the content host's 2px internal text offset + 1px so the caret sits just before the first letter. -->
+                            <TextBlock x:Name="Placeholder"
+                                       Text="{TemplateBinding Tag}"
+                                       Margin="{TemplateBinding Padding}"
+                                       Padding="3,0,0,0"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False"
+                                       Visibility="Collapsed"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       Foreground="{DynamicResource TextMutedBrush}"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Placeholder" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="StreamerFilterButtonStyle" TargetType="Button">
         <Setter Property="Padding" Value="12,7"/>
         <Setter Property="MinHeight" Value="0"/>

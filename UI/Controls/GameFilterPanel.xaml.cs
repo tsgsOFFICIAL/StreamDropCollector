@@ -1,6 +1,10 @@
 using UserControl = System.Windows.Controls.UserControl;
+using TextChangedEventArgs = System.Windows.Controls.TextChangedEventArgs;
 using System.Collections;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Data;
+using Core.Models;
 
 namespace UI.Controls
 {
@@ -23,7 +27,9 @@ namespace UI.Controls
 
         /// <summary>Identifies the <see cref="GameOptions"/> dependency property.</summary>
         public static readonly DependencyProperty GameOptionsProperty =
-            DependencyProperty.Register(nameof(GameOptions), typeof(IEnumerable), typeof(GameFilterPanel), new PropertyMetadata(null));
+            DependencyProperty.Register(
+                nameof(GameOptions), typeof(IEnumerable), typeof(GameFilterPanel),
+                new PropertyMetadata(null, (d, _) => ((GameFilterPanel)d).RebuildView()));
 
         /// <summary>Identifies the <see cref="IsBlacklistMode"/> dependency property.</summary>
         public static readonly DependencyProperty IsBlacklistModeProperty =
@@ -91,6 +97,29 @@ namespace UI.Controls
         {
             InitializeComponent();
         }
+
+        private ICollectionView? _view;
+
+        private void RebuildView()
+        {
+            // A private view, so filtering here does not affect other consumers of the same collection.
+            _view = GameOptions is null ? null : new CollectionViewSource { Source = GameOptions }.View;
+
+            if (_view != null)
+                _view.Filter = MatchesSearch;
+
+            OptionsList.ItemsSource = _view;
+        }
+
+        private bool MatchesSearch(object item)
+        {
+            string query = SearchBox.Text.Trim();
+            return query.Length == 0
+                || item is not GameFilterOption option
+                || option.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void OnSearchTextChanged(object sender, TextChangedEventArgs e) => _view?.Refresh();
 
         private void OnClearClick(object sender, RoutedEventArgs e) =>
             RaiseEvent(new RoutedEventArgs(ClearClickEvent, this));
