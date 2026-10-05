@@ -48,6 +48,9 @@ namespace UI.Views
                 _games.Add(new GameFilterOption(session.Model.Platform, slug, $"{slug} (inactive)", true));
 
             GameList.ItemsSource = _games;
+
+            // Setting initial control values moves focus around; always open at the top.
+            Loaded += (_, _) => SettingsScroll.ScrollToTop();
             if (_games.Count == 0)
                 FilterHint.Text = "No games loaded yet for this account. Games appear here once its campaigns have loaded.";
         }

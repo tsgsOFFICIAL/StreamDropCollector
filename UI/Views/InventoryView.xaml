@@ -17,16 +17,7 @@
         <DockPanel Margin="0,0,0,20">
             <ComboBox x:Name="AccountPicker" DockPanel.Dock="Right" MinWidth="240" VerticalAlignment="Center"
                       Style="{StaticResource NeonFlatComboBoxStyle}"
-                      SelectionChanged="OnAccountPickerSelectionChanged">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock>
-                            <Run Text="{Binding DisplayName, Mode=OneWay}"/>
-                            <Run Text="{Binding PlatformName, Mode=OneWay, StringFormat=' ({0})'}"/>
-                        </TextBlock>
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
+                      SelectionChanged="OnAccountPickerSelectionChanged"/>
             <TextBlock Text="Inventory" Style="{StaticResource PageHeader}"/>
         </DockPanel>
 

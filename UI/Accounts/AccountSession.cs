@@ -40,7 +40,6 @@ namespace UI.Accounts
             string platformName = isTwitch ? "Twitch" : "Kick";
             string brandBrush = isTwitch ? "TwitchBrush" : "KickBrush";
 
-            Host = new HiddenWebViewHost(model);
             Engine = new DropsInventoryManager(model);
             Connection = new PlatformConnectionState(platformName, brandBrush, $"Login {platformName}")
             {
@@ -50,23 +49,94 @@ namespace UI.Accounts
             };
             Progress = new PlatformProgressState(platformName, brandBrush);
 
-            if (isTwitch)
-            {
-                _gqlService = new TwitchGqlService(Host);
-                _loginService = new TwitchLoginService();
-                Engine.InitializeWebViews(Host, null);
-            }
-            else
-            {
-                _loginService = new KickLoginService();
-                Engine.InitializeWebViews(null, Host);
-            }
-
+            _loginService = isTwitch ? new TwitchLoginService() : new KickLoginService();
             _loginService.StatusChanged += OnStatusChanged;
             WireEngineEvents(isTwitch);
 
-            _statusText = "Initializing";
-            _statusDetails = "Please wait...";
+            // A disabled account never creates a browser window until it is enabled.
+            if (model.Enabled)
+            {
+                CreateHost();
+                _statusText = "Initializing";
+                _statusDetails = "Please wait...";
+            }
+            else
+            {
+                _statusText = "Disabled";
+                _statusDetails = "Account is disabled";
+                Connection.ConnectionStatus = "Offline";
+                Connection.ConnectionColor = "Gray";
+                Connection.LoginButtonText = $"Login {platformName}";
+                Connection.IsLoginEnabled = true;
+            }
+        }
+
+        private HiddenWebViewHost? _host;
+
+        /// <summary>Gets the hidden browser host bound to this account's profile, or <see langword="null"/> while disabled.</summary>
+        public HiddenWebViewHost? Host => _host;
+
+        private void CreateHost()
+        {
+            _host = new HiddenWebViewHost(Model);
+
+            if (IsTwitch)
+            {
+                _gqlService = new TwitchGqlService(_host);
+                Engine.InitializeWebViews(_host, null);
+            }
+            else
+            {
+                Engine.InitializeWebViews(null, _host);
+            }
+        }
+
+        /// <summary>
+        /// Closes the browser window and disposes its WebView immediately, releasing its processes and memory.
+        /// </summary>
+        private void DestroyHost()
+        {
+            HiddenWebViewHost? host = _host;
+            _host = null;
+            _gqlService = null;
+            Engine.InitializeWebViews(null, null);
+
+            if (host == null)
+                return;
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    host.WebView.Dispose();
+                    host.Close();
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("Accounts", $"Failed closing browser host for {Model.DisplayName}: {ex.Message}");
+                }
+            });
+        }
+
+        private async Task DisableAsync()
+        {
+            _currentLoadCts?.Cancel();
+            await Engine.PauseMiningAsync();
+
+            // Wait for any in-flight campaign load to unwind before tearing down the browser it uses.
+            await _loadSemaphore.WaitAsync();
+            _loadSemaphore.Release();
+
+            if (Enabled || _disposed)
+                return;
+
+            DestroyHost();
+            Progress.Reset();
+            Connection.ConnectionStatus = "Offline";
+            Connection.ConnectionColor = "Gray";
+            OnPropertyChanged(nameof(IsConnected));
+            StatusText = "Disabled";
+            StatusDetails = "Account is disabled";
         }
 
         /// <summary>Gets the persisted account definition.</summary>
@@ -74,9 +144,6 @@ namespace UI.Accounts
 
         /// <summary>Gets the account's mining engine.</summary>
         public DropsInventoryManager Engine { get; }
-
-        /// <summary>Gets the hidden browser host bound to this account's profile.</summary>
-        public HiddenWebViewHost Host { get; }
 
         /// <summary>Gets the bindable connection state.</summary>
         public PlatformConnectionState Connection { get; }
@@ -97,7 +164,7 @@ namespace UI.Accounts
         public ConnectionStatus? Status => _loginService.Status;
 
         /// <summary>Gets a value indicating whether the account is logged in.</summary>
-        public bool IsConnected => _loginService.Status == ConnectionStatus.Connected;
+        public bool IsConnected => Enabled && _loginService.Status == ConnectionStatus.Connected;
 
         /// <summary>Gets a short marker shown next to the name when the account overrides global settings.</summary>
         public string CustomSettingsLabel => Model.Overrides.HasAny ? "  \u2022 custom settings" : string.Empty;
@@ -147,19 +214,20 @@ namespace UI.Accounts
                 OnPropertyChanged();
                 ModelChanged?.Invoke(this);
 
+                OnPropertyChanged(nameof(IsConnected));
+
                 if (value)
                 {
+                    if (_host == null)
+                        CreateHost();
+
                     StatusText = "Starting";
                     StatusDetails = "Re-enabling account";
                     _ = ValidateAsync();
                 }
                 else
                 {
-                    _ = Engine.PauseMiningAsync();
-                    Progress.MinedChannel = string.Empty;
-                    Progress.CampaignName = string.Empty;
-                    StatusText = "Disabled";
-                    StatusDetails = "Account is disabled";
+                    _ = DisableAsync();
                 }
             }
         }
@@ -192,12 +260,12 @@ namespace UI.Accounts
         /// </summary>
         public async Task ValidateAsync()
         {
-            if (!Enabled || _disposed)
+            if (!Enabled || _disposed || _host == null)
                 return;
 
             try
             {
-                await _loginService.ValidateCredentialsAsync(Host);
+                await _loginService.ValidateCredentialsAsync(_host);
             }
             catch (Exception ex)
             {
@@ -277,10 +345,14 @@ namespace UI.Accounts
                 StatusText = "Loading Campaigns";
                 StatusDetails = "Fetching latest drops...";
 
+                HiddenWebViewHost? host = _host;
+                if (host == null)
+                    return;
+
                 List<DropsCampaign> campaigns = [];
                 await foreach (IReadOnlyList<DropsCampaign> batch in _dropsService.GetAllActiveCampaignsAsync(
-                    IsTwitch ? null : Host, IsTwitch ? null : Status,
-                    IsTwitch ? Host : null, IsTwitch ? Status : null,
+                    IsTwitch ? null : host, IsTwitch ? null : Status,
+                    IsTwitch ? host : null, IsTwitch ? Status : null,
                     _gqlService, cts.Token))
                 {
                     campaigns.AddRange(batch);
@@ -417,19 +489,23 @@ namespace UI.Accounts
         {
             try
             {
+                HiddenWebViewHost? host = _host;
+                if (host == null)
+                    return;
+
                 string? name = null;
 
                 if (IsTwitch)
                 {
-                    name = await Host.GetCookieValueAsync("https://twitch.tv", "login");
+                    name = await host.GetCookieValueAsync("https://twitch.tv", "login");
                 }
                 else
                 {
-                    string? encoded = await Host.GetCookieValueAsync("https://kick.com", "session_token");
+                    string? encoded = await host.GetCookieValueAsync("https://kick.com", "session_token");
                     if (!string.IsNullOrEmpty(encoded))
                     {
                         string token = JsonSerializer.Serialize(Uri.UnescapeDataString(encoded));
-                        string? json = await Host.ExecuteAsyncScriptAsync($@"
+                        string? json = await host.ExecuteAsyncScriptAsync($@"
                             const r = await fetch('https://kick.com/api/v1/user', {{
                                 credentials: 'include',
                                 headers: {{ 'Accept': 'application/json', 'Authorization': 'Bearer ' + {token} }}
@@ -454,6 +530,9 @@ namespace UI.Accounts
             }
         }
 
+        /// <summary>Gets the label used by account pickers, for example "tsgsdev (Kick)".</summary>
+        public override string ToString() => $"{Model.DisplayName} ({PlatformName})";
+
         /// <summary>Raised when a bindable property changes.</summary>
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -471,11 +550,7 @@ namespace UI.Accounts
             _loginService.StatusChanged -= OnStatusChanged;
             Engine.Dispose();
 
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                Host.WebView.Dispose();
-                Host.Close();
-            });
+            DestroyHost();
         }
     }
 }

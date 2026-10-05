@@ -23,7 +23,7 @@
                        Foreground="{DynamicResource TextMutedBrush}"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
@@ -75,16 +75,16 @@
                                        Text="If no games are selected, all games are allowed."
                                        Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"/>
                             <Border Style="{StaticResource InsetPanelBorder}" Margin="0,0,0,8">
-                                <ListBox x:Name="GameList" BorderThickness="0" Background="Transparent" MaxHeight="200">
-                                    <ListBox.ItemTemplate>
+                                <ItemsControl x:Name="GameList">
+                                    <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <CheckBox Content="{Binding DisplayName}"
                                                       IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                                       Style="{StaticResource ModernCheckBoxStyle}"
                                                       Margin="0,4,0,4"/>
                                         </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </Border>
                             <CheckBox x:Name="BlacklistBox"
                                       Content="Blacklist selected games (mine everything except these)"

@@ -993,6 +993,16 @@ namespace UI.Views
         /// web view signals that navigation has finished.</remarks>
         /// <param name="url">The destination URL to navigate to. Cannot be null or empty.</param>
         /// <returns>A task that represents the asynchronous navigation operation.</returns>
+        public Task NavigateToBlankAsync() =>
+            RunExclusiveUiAsync(() =>
+            {
+                WebView.CoreWebView2?.Navigate("about:blank");
+                return Task.CompletedTask;
+            });
+
+        /// <summary>
+        /// Navigates to the URL, appending a cache-busting parameter, and waits for the page to be ready.
+        /// </summary>
         public Task NavigateAsync(string url) =>
             RunExclusiveUiAsync(async () =>
             {

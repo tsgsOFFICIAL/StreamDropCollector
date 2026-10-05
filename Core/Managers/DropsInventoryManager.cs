@@ -74,7 +74,41 @@ namespace Core.Managers
         /// <summary>
         /// Re-applies this account's overrides after they were edited: refilters campaigns and re-evaluates mining.
         /// </summary>
-        public void NotifyAccountSettingsChanged() => _ = ApplyGameWhitelistChangeAsync(Account.Platform);
+        public void NotifyAccountSettingsChanged() => _ = ApplyAccountSettingsChangeAsync();
+
+        private async Task ApplyAccountSettingsChangeAsync()
+        {
+            try
+            {
+                RefreshActiveCampaignsFromLatestSnapshot();
+
+                // Unlike a campaign-list change, this must re-evaluate even with zero campaigns:
+                // turning level farming off has to stop the farmed stream.
+                if (_isPaused || (TwitchWebView == null && KickWebView == null))
+                    return;
+
+                await StartMiningStreams(true);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Miner", "Failed to apply account settings change.", ex);
+            }
+        }
+
+        /// <summary>
+        /// Navigates a host away from its stream page so playback and watch-time stop.
+        /// </summary>
+        private static async Task StopStreamAsync(IWebViewHost host)
+        {
+            try
+            {
+                await await Application.Current.Dispatcher.InvokeAsync(() => host.NavigateToBlankAsync());
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("Miner", $"Failed to stop stream playback: {ex.Message}");
+            }
+        }
 
         /// <summary>
         /// Gets or sets a value indicating whether this engine drives the shared Twitch EventSub watcher.
@@ -976,6 +1010,9 @@ namespace Core.Managers
                 _recheckTimer?.Dispose();
                 _recheckTimer = null;
 
+                bool hadTwitchStream = _currentTwitchLogin != null;
+                bool hadKickStream = _currentKickLogin != null;
+
                 _selection.CurrentTwitchCampaign = null;
                 _selection.CurrentKickCampaign = null;
                 _currentTwitchLogin = null;
@@ -1024,6 +1061,16 @@ namespace Core.Managers
                     EffectiveKickLevelFarming,
                     EffectiveAutoClaim,
                     token);
+
+                // A platform that was streaming but has nothing selected now must stop playing (and earning watch time).
+                if (!token.IsCancellationRequested)
+                {
+                    if (hadKickStream && result.Kick == null && KickWebView is { } kickHost)
+                        await StopStreamAsync(kickHost);
+
+                    if (hadTwitchStream && result.Twitch == null && TwitchWebView is { } twitchHost)
+                        await StopStreamAsync(twitchHost);
+                }
 
                 if (!result.CompletedSelectionCycle)
                 {

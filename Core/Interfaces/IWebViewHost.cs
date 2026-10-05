@@ -130,6 +130,11 @@ namespace Core.Interfaces
         /// Navigate the webview to a URL (used to set origin/referrer).
         /// </summary>
         Task NavigateAsync(string url);
+
+        /// <summary>
+        /// Navigates to a blank page, stopping any playing stream and its network activity.
+        /// </summary>
+        Task NavigateToBlankAsync();
         /// <summary>
         /// Executes JS in the webview and returns the resulting JSON/string.
         /// </summary>

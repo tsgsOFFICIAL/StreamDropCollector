@@ -135,6 +135,23 @@ namespace UI.Models
         /// <summary>Compact level line shown only when the campaign bar is not already showing level progress.</summary>
         public string LevelLineText => IsLevelFarming ? string.Empty : LevelText;
 
+        /// <summary>Clears all progress, campaign, drop, channel and level state (for example when an account is disabled).</summary>
+        public void Reset()
+        {
+            CampaignProgress = 0;
+            DropProgress = 0;
+            CampaignName = string.Empty;
+            CampaignImageUrl = string.Empty;
+            DropName = string.Empty;
+            DropImageUrl = string.Empty;
+            MinedChannel = string.Empty;
+            _isLevelFarming = false;
+            _levelText = string.Empty;
+            _levelPercent = 0;
+            _levelBadgeUrl = string.Empty;
+            NotifyLevelDerived();
+        }
+
         private void NotifyLevelDerived()
         {
             OnPropertyChanged(nameof(IsLevelFarming));
