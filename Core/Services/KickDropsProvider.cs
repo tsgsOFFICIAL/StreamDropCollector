@@ -61,9 +61,21 @@ namespace Core.Services
                 }
 
                 List<DropsCampaign> campaigns = new List<DropsCampaign>();
+                List<(string Slug, string Name)> knownGames = [];
+                KnownGames = knownGames;
 
                 foreach (JsonElement campaign in dataArray.EnumerateArray())
                 {
+                    if (campaign.TryGetProperty("category", out JsonElement knownCategory) &&
+                        knownCategory.ValueKind == JsonValueKind.Object &&
+                        knownCategory.TryGetProperty("slug", out JsonElement knownSlug) &&
+                        knownCategory.TryGetProperty("name", out JsonElement knownName) &&
+                        knownSlug.GetString() is { Length: > 0 } slugValue &&
+                        knownName.GetString() is { Length: > 0 } nameValue)
+                    {
+                        knownGames.Add((slugValue.Trim().ToLowerInvariant(), nameValue));
+                    }
+
                     if (!campaign.TryGetProperty("status", out JsonElement status) || status.GetString() != "active")
                         continue;
 

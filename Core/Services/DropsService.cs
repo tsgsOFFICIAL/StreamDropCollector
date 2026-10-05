@@ -16,6 +16,15 @@ namespace Core.Services
         private TwitchDropsProvider? _twitchProvider;
 
         /// <summary>
+        /// Gets every game seen by the providers during the last fetch, including games without an active campaign.
+        /// </summary>
+        public IReadOnlyList<(Platform Platform, string Slug, string Name)> KnownGames =>
+        [
+            .. _kickProvider.KnownGames.Select(g => (Platform.Kick, g.Slug, g.Name)),
+            .. (_twitchProvider?.KnownGames ?? []).Select(g => (Platform.Twitch, g.Slug, g.Name))
+        ];
+
+        /// <summary>
         /// Asynchronously streams active drops campaigns from connected hosts, yielding each platform's
         /// results as soon as they are available rather than waiting for all platforms to finish.
         /// </summary>

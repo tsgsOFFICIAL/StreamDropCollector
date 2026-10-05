@@ -359,7 +359,7 @@ namespace UI.Accounts
                 }
 
                 AppLogger.Info("Accounts", $"{Model.DisplayName} ({PlatformName}) loaded {campaigns.Count} campaigns.");
-                Engine.UpdateCampaigns(campaigns.AsReadOnly(), _gqlService, startMining: false);
+                Engine.UpdateCampaigns(campaigns.AsReadOnly(), _gqlService, startMining: false, knownGames: _dropsService.KnownGames);
 
                 StatusText = "Idle";
                 StatusDetails = $"{campaigns.Count} active campaigns loaded";

@@ -21,7 +21,47 @@ namespace Core.Models
         int ProgressMinutes = 0,
         bool IsClaimed = false,
         string? DropInstanceId = null,
-        bool IsCurrentReward = false);
+        bool IsCurrentReward = false)
+    {
+        /// <summary>
+        /// Gets the minutes of watch time still needed to earn this reward (0 once claimed or complete).
+        /// </summary>
+        public int RemainingMinutes => IsClaimed ? 0 : Math.Max(0, RequiredMinutes - ProgressMinutes);
+
+        /// <summary>
+        /// Gets a short "time to complete" label, such as "2h 15m left", "Ready to claim" or "Done".
+        /// </summary>
+        public string TimeToCompleteText => IsClaimed ? "Done" : DurationFormatter.FormatRemaining(RemainingMinutes);
+    }
+
+    /// <summary>
+    /// Formats minute counts for display.
+    /// </summary>
+    public static class DurationFormatter
+    {
+        /// <summary>Formats a minute count as "1d 2h", "2h 15m" or "45m".</summary>
+        public static string Format(int minutes)
+        {
+            if (minutes <= 0)
+                return "0m";
+
+            int days = minutes / 1440;
+            int hours = minutes % 1440 / 60;
+            int mins = minutes % 60;
+
+            if (days > 0)
+                return hours > 0 ? $"{days}d {hours}h" : $"{days}d";
+
+            if (hours > 0)
+                return mins > 0 ? $"{hours}h {mins}m" : $"{hours}h";
+
+            return $"{mins}m";
+        }
+
+        /// <summary>Formats the remaining minutes as a "left" label, or "Ready to claim" when none remain.</summary>
+        public static string FormatRemaining(int minutes) =>
+            minutes <= 0 ? "Ready to claim" : $"{Format(minutes)} left";
+    }
     /// <summary>
     /// Represents a campaign that offers in-game rewards through a drops program for a specific game and platform.
     /// </summary>
@@ -57,5 +97,21 @@ namespace Core.Models
         /// Gets a value indicating whether every reward in the campaign has been claimed.
         /// </summary>
         public bool AllRewardsClaimed => Rewards.All(r => r.IsClaimed);
+
+        /// <summary>
+        /// Gets the minutes of watch time still needed to finish every reward in the campaign.
+        /// </summary>
+        /// <remarks>Kick tracks one progress counter per campaign, so the longest remaining reward decides the total;
+        /// Twitch tracks each drop separately, so the remaining minutes add up.</remarks>
+        public int RemainingMinutes => Platform == Platform.Kick
+            ? Rewards.Select(r => r.RemainingMinutes).DefaultIfEmpty(0).Max()
+            : Rewards.Sum(r => r.RemainingMinutes);
+
+        /// <summary>
+        /// Gets a short "time to complete" label for the whole campaign.
+        /// </summary>
+        public string TimeToCompleteText => AllRewardsClaimed
+            ? "Completed"
+            : DurationFormatter.FormatRemaining(RemainingMinutes).Replace("left", "to complete");
     }
 }

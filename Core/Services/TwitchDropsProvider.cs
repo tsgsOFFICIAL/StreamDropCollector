@@ -36,6 +36,8 @@ namespace Core.Services
                 string userId = activeCampaigns["data"]?["currentUser"]?["id"]?.GetValue<string>() ?? "";
                 gql.UserId = userId;
 
+                KnownGames = CollectKnownGames(campaigns);
+
                 campaigns?.RemoveAll(campaign =>
                 {
                     if (campaign is not JsonObject campaignObj)
@@ -183,6 +185,27 @@ namespace Core.Services
                 AppLogger.Error("TwitchDrops", "Fetching active campaigns failed.", ex);
                 return [];
             }
+        }
+
+        private static List<(string Slug, string Name)> CollectKnownGames(JsonArray? campaigns)
+        {
+            List<(string Slug, string Name)> games = [];
+            if (campaigns == null)
+                return games;
+
+            foreach (JsonObject campaign in campaigns.OfType<JsonObject>())
+            {
+                JsonObject? game = campaign["game"] as JsonObject;
+                string? name = game?["displayName"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                string slug = game?["slug"]?.GetValue<string>() ?? Core.Services.Twitch.Helix.TwitchGameSlugHelper.Slugify(name);
+                if (!string.IsNullOrWhiteSpace(slug))
+                    games.Add((slug.Trim().ToLowerInvariant(), name));
+            }
+
+            return games;
         }
 
         /// <summary>

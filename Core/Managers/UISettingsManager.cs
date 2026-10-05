@@ -633,7 +633,10 @@ namespace Core.Managers
         /// Rebuilds the Twitch and Kick game filter option lists from the supplied active campaigns.
         /// </summary>
         /// <param name="campaigns">The campaigns used to derive selectable game slugs and display names.</param>
-        public void UpdateAvailableGameFilterOptions(IEnumerable<DropsCampaign> campaigns)
+        /// <param name="extraGames">Additional games (such as ones without an active campaign) to offer as options.</param>
+        public void UpdateAvailableGameFilterOptions(
+            IEnumerable<DropsCampaign> campaigns,
+            IEnumerable<(Platform Platform, string Slug, string Name)>? extraGames = null)
         {
             _isUpdatingGameFilterOptions = true;
             try
@@ -641,6 +644,7 @@ namespace Core.Managers
                 List<(Platform platform, string slug, string displayName)> options = campaigns
                     .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
                     .Select(c => (c.Platform, c.Slug.Trim().ToLowerInvariant(), c.GameName))
+                    .Concat((extraGames ?? []).Select(g => (g.Platform, g.Slug, g.Name)))
                     .GroupBy(x => $"{x.Platform}:{x.Item2}", StringComparer.OrdinalIgnoreCase)
                     .Select(g => g.First())
                     .OrderBy(x => x.Platform)

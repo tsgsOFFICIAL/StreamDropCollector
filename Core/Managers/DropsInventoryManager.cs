@@ -64,6 +64,7 @@ namespace Core.Managers
                 return _lastKnownCampaigns
                     .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
                     .Select(c => (Slug: c.Slug.Trim().ToLowerInvariant(), Name: c.GameName))
+                    .Concat(_extraKnownGames.Select(g => (g.Slug, g.Name)))
                     .GroupBy(x => x.Slug, StringComparer.OrdinalIgnoreCase)
                     .Select(g => g.First())
                     .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
@@ -242,6 +243,7 @@ namespace Core.Managers
         private bool _isPaused;
         private readonly object _campaignSnapshotSync = new();
         private List<DropsCampaign> _lastKnownCampaigns = new();
+        private List<(Platform Platform, string Slug, string Name)> _extraKnownGames = [];
 
         private readonly SemaphoreSlim _kickMetadataLock = new(1, 1);
         private readonly System.Timers.Timer _kickMetadataTimer = new(TimeSpan.FromSeconds(45).TotalMilliseconds);
@@ -472,7 +474,7 @@ namespace Core.Managers
                     ? snapshot
                     : [.. ActiveCampaigns];
 
-                UISettingsManager.Instance.UpdateAvailableGameFilterOptions(sourceCampaigns);
+                UISettingsManager.Instance.UpdateAvailableGameFilterOptions(sourceCampaigns, _extraKnownGames);
 
                 // Materialize before iterating to avoid concurrent modification
                 List<DropsCampaign> filteredCampaigns = ActiveCampaignFilter.FilterForDisplay(sourceCampaigns, IsCampaignAllowed);
@@ -800,7 +802,12 @@ namespace Core.Managers
         /// campaigns that have progress to make, have started, and have not yet ended are considered.</param>
         /// <param name="twitchGqlService">The Twitch GraphQL service used for Twitch-specific mining operations, or null if unavailable.</param>
         /// <param name="startMining">true to begin or refresh stream mining after updating campaigns; otherwise, false.</param>
-        public void UpdateCampaigns(IEnumerable<DropsCampaign> campaigns, IGqlService? twitchGqlService, bool startMining = true)
+        /// <param name="knownGames">Every game the platforms listed, including ones without an active campaign, offered in the game filter.</param>
+        public void UpdateCampaigns(
+            IEnumerable<DropsCampaign> campaigns,
+            IGqlService? twitchGqlService,
+            bool startMining = true,
+            IReadOnlyList<(Platform Platform, string Slug, string Name)>? knownGames = null)
         {
             _twitchGqlService = twitchGqlService;
             RefreshMiningServices();
@@ -809,11 +816,12 @@ namespace Core.Managers
             lock (_campaignSnapshotSync)
             {
                 _lastKnownCampaigns = [.. allCampaigns];
+                _extraKnownGames = [.. knownGames ?? []];
             }
 
             Application.Current.Dispatcher.Invoke(() =>
             {
-                UISettingsManager.Instance.UpdateAvailableGameFilterOptions(allCampaigns);
+                UISettingsManager.Instance.UpdateAvailableGameFilterOptions(allCampaigns, _extraKnownGames);
 
                 List<DropsCampaign> activeCampaignsList = ActiveCampaignFilter.FilterForDisplay(allCampaigns, IsCampaignAllowed);
 

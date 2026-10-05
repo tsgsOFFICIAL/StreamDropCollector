@@ -43,6 +43,8 @@
                     <Run Text=" / "/>
                     <Run Text="{Binding RequiredMinutes, Mode=OneWay}"/>
                     <Run Text=" min"/>
+                    <Run Text=" • " Foreground="{DynamicResource TextMutedBrush}"/>
+                    <Run Text="{Binding TimeToCompleteText, Mode=OneWay}" Foreground="{DynamicResource TextMutedBrush}"/>
                 </TextBlock>
 
                 <ProgressBar Value="{Binding ProgressMinutes}"

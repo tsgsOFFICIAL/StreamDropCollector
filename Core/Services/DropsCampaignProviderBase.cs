@@ -16,6 +16,11 @@ namespace Core.Services
         /// </summary>
         public abstract Platform Platform { get; }
         /// <summary>
+        /// Gets every game the platform listed during the last fetch, including those whose campaigns are inactive,
+        /// upcoming or not yet connected, so they can be offered in the game white/black-list.
+        /// </summary>
+        public IReadOnlyList<(string Slug, string Name)> KnownGames { get; protected set; } = [];
+        /// <summary>
         /// Asynchronously retrieves a list of currently active Drops campaigns.
         /// </summary>
         /// <param name="host">The web view host used to perform the operation. Cannot be null.</param>
