@@ -70,6 +70,11 @@ namespace Core.Services.Twitch.Helix
         public event Action<IReadOnlyDictionary<string, LiveChannelSnapshot>>? SnapshotsChanged;
 
         /// <summary>
+        /// Occurs once Helix authentication has succeeded (including a later recovery from a transient failure).
+        /// </summary>
+        public event Action? Authenticated;
+
+        /// <summary>
         /// Ensures Helix authentication, prompting for device-code approval when no saved refresh token exists.
         /// </summary>
         /// <param name="promptAsync">
@@ -105,6 +110,16 @@ namespace Core.Services.Twitch.Helix
                 _eventSubHub = new TwitchEventSubHub(_client, _cache, OnStreamOnlineAsync, PublishSnapshotsChanged);
                 _isAuthenticated = true;
                 AppLogger.Info("TwitchHelix", "Helix authentication ready.");
+
+                try
+                {
+                    Authenticated?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("TwitchHelix", $"Authenticated handler failed: {ex.Message}");
+                }
+
                 return true;
             }
             catch (TwitchHelixTransientAuthException ex)

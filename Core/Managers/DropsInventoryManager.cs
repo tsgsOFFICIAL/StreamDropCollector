@@ -167,6 +167,16 @@ namespace Core.Managers
         /// </summary>
         public event Action? KickGeneralDropDiscoveryCompletedEvent;
 
+        /// <summary>
+        /// Gets whether Twitch general-drop streamer discovery has finished at least once for this engine.
+        /// </summary>
+        public bool TwitchGeneralDropDiscoveryCompleted { get; private set; }
+
+        /// <summary>
+        /// Occurs when Twitch general-drop streamer discovery finishes, whether or not it found any streamers.
+        /// </summary>
+        public event Action? TwitchGeneralDropDiscoveryCompletedEvent;
+
         private void RaiseProgress(Platform platform, DropsCampaign? campaign, byte campaignPct, byte dropPct)
         {
             PlatformProgressState state = platform == Platform.Twitch ? _twitchProgress : _kickProgress;
@@ -300,6 +310,7 @@ namespace Core.Managers
         private readonly SemaphoreSlim _twitchMetadataLock = new(1, 1);
         private readonly System.Timers.Timer _twitchMetadataTimer = new(TimeSpan.FromSeconds(45).TotalMilliseconds);
         private int _twitchMetadataRefreshScheduled;
+        private int _twitchMetadataRerunRequested;
         private IReadOnlyDictionary<string, LiveChannelSnapshot> _twitchStreamerMetadata =
             new Dictionary<string, LiveChannelSnapshot>(StringComparer.OrdinalIgnoreCase);
 
@@ -345,6 +356,7 @@ namespace Core.Managers
             UISettingsManager.Instance.MiningPriorityModeChanged += OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
+            _twitchHelixService.Authenticated += OnTwitchHelixAuthenticated;
 
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
             _liveProgressTimer.AutoReset = true;
@@ -405,6 +417,40 @@ namespace Core.Managers
 
             _ = ApplyGameWhitelistChangeAsync(platform);
         }
+        /// <summary>
+        /// Starts a stream evaluation when Helix becomes ready after Twitch mining already ran without it.
+        /// </summary>
+        /// <remarks>Without Helix every Twitch channel lookup fails, so an evaluation that ran earlier found no stream;
+        /// nothing else would retry it until the next scheduled re-evaluation, up to an hour later.</remarks>
+        private void OnTwitchHelixAuthenticated()
+        {
+            if (Account.Platform != Platform.Twitch || _isPaused || TwitchWebView == null)
+                return;
+
+            // The chip refresh is a no-op without Helix, so any request made before it was ready was lost.
+            ScheduleTwitchStreamerMetadataRefresh();
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    bool needsStream = await Application.Current.Dispatcher.InvokeAsync(() =>
+                        _selection.CurrentTwitchCampaign == null
+                        && ActiveCampaigns.Any(c => c.Platform == Platform.Twitch && c.HasProgressToMake(EffectiveAutoClaim)));
+
+                    if (!needsStream)
+                        return;
+
+                    AppLogger.Info("Miner", "Twitch Helix became ready with no Twitch stream selected. Triggering re-evaluation.");
+                    await StartMiningStreams(true);
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("Miner", "Failed to re-evaluate after Helix authentication.", ex);
+                }
+            });
+        }
+
         /// <summary>
         /// Applies a change to the mining priority mode and triggers an immediate re-evaluation of active campaigns if
         /// applicable.
@@ -702,7 +748,12 @@ namespace Core.Managers
                 return;
 
             if (Interlocked.CompareExchange(ref _twitchMetadataRefreshScheduled, 1, 0) != 0)
+            {
+                // A refresh is already running with the logins it saw at its start (for example before general-drop
+                // discovery finished), so run once more when it completes instead of dropping this request.
+                Interlocked.Exchange(ref _twitchMetadataRerunRequested, 1);
                 return;
+            }
 
             _ = Task.Run(async () =>
             {
@@ -722,6 +773,9 @@ namespace Core.Managers
                 finally
                 {
                     Interlocked.Exchange(ref _twitchMetadataRefreshScheduled, 0);
+
+                    if (Interlocked.Exchange(ref _twitchMetadataRerunRequested, 0) == 1)
+                        ScheduleTwitchStreamerMetadataRefresh();
                 }
             });
         }
@@ -743,15 +797,26 @@ namespace Core.Managers
             List<DropsCampaign> twitchCampaigns = await Application.Current.Dispatcher.InvokeAsync(() =>
                 ActiveCampaigns.Where(c => c.Platform == Platform.Twitch).ToList());
 
+            // Campaigns with short streamer lists (typically general drops) go first so their chips fill in quickly.
+            const int priorityLoginLimit = 20;
             HashSet<string> logins = new(StringComparer.OrdinalIgnoreCase);
+            List<string> priorityLogins = [];
+            List<string> otherLogins = [];
+            List<IReadOnlyList<string>> campaignLogins = [];
             foreach (DropsCampaign campaign in twitchCampaigns)
             {
-                IReadOnlyList<string> campaignLogins = await _twitchLiveChannelApi
+                campaignLogins.Add(await _twitchLiveChannelApi
                     .GetEligibleLoginsAsync(campaign, allowDirectoryDiscovery: false, ct)
-                    .ConfigureAwait(false);
+                    .ConfigureAwait(false));
+            }
 
-                foreach (string login in campaignLogins)
-                    logins.Add(login);
+            foreach (IReadOnlyList<string> list in campaignLogins.OrderBy(x => x.Count))
+            {
+                foreach (string login in list)
+                {
+                    if (logins.Add(login))
+                        (list.Count <= priorityLoginLimit ? priorityLogins : otherLogins).Add(login);
+                }
             }
 
             if (logins.Count == 0)
@@ -765,7 +830,19 @@ namespace Core.Managers
             await _twitchMetadataLock.WaitAsync(ct);
             try
             {
-                await _twitchHelixService.RefreshChannelsAsync(logins, ct);
+                await _twitchHelixService.RefreshChannelsAsync(priorityLogins, ct);
+
+                // Show the short lists straight away; the long ones follow.
+                if (otherLogins.Count > 0)
+                {
+                    IReadOnlyDictionary<string, LiveChannelSnapshot> early = _twitchHelixService.Snapshots;
+                    _twitchStreamerMetadata = early;
+                    Application.Current.Dispatcher.Invoke(() =>
+                        TwitchStreamerMetadataChanged?.Invoke(early));
+
+                    await _twitchHelixService.RefreshChannelsAsync(otherLogins, ct);
+                }
+
                 _twitchStreamerMetadata = _twitchHelixService.Snapshots;
 
                 int liveCount = _twitchStreamerMetadata.Values.Count(s => s.IsLive);
@@ -924,6 +1001,17 @@ namespace Core.Managers
                         ActiveCampaigns.Where(c => c.Platform == Platform.Twitch).ToList());
 
                     await _twitchLiveChannelApi.PreloadGeneralDropDirectoriesAsync(snapshot);
+
+                    // Chips for general drops are built from the discovered logins; tell the UI now rather than
+                    // after the live-status scan, which would otherwise leave the section hidden.
+                    TwitchGeneralDropDiscoveryCompleted = true;
+                    IReadOnlyDictionary<string, LiveChannelSnapshot> current = _twitchStreamerMetadata;
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TwitchGeneralDropDiscoveryCompletedEvent?.Invoke();
+                        TwitchStreamerMetadataChanged?.Invoke(current);
+                    });
+
                     ScheduleTwitchStreamerMetadataRefresh();
                 }
                 catch (Exception ex)
@@ -979,6 +1067,7 @@ namespace Core.Managers
             UISettingsManager.Instance.MiningPriorityModeChanged -= OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged -= OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
+            _twitchHelixService.Authenticated -= OnTwitchHelixAuthenticated;
             _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;
 
             _recheckTimer?.Stop();

@@ -40,11 +40,11 @@ namespace UI.Controls
 
         private bool _discoveryFinished;
 
-        /// <summary>Whether a Kick general-drop campaign is still waiting for its streamer list to be discovered.</summary>
+        /// <summary>Whether a general-drop campaign is still waiting for its streamer list to be discovered.</summary>
         public bool IsDiscovering =>
             !_discoveryFinished
             && _allStreamers.Count == 0
-            && _campaign is { IsGeneralDrop: true, Platform: Platform.Kick };
+            && _campaign is { IsGeneralDrop: true, Platform: Platform.Kick or Platform.Twitch };
 
         /// <summary>Whether the section is shown at all (streamers found, or still looking for them).</summary>
         public bool ShowSection => HasStreamers || IsDiscovering;
@@ -188,6 +188,7 @@ namespace UI.Controls
                 _engine.KickStreamerMetadataChanged += OnKickStreamerMetadataChanged;
                 _engine.TwitchStreamerMetadataChanged += OnTwitchStreamerMetadataChanged;
                 _engine.KickGeneralDropDiscoveryCompletedEvent += OnKickGeneralDropDiscoveryCompleted;
+                _engine.TwitchGeneralDropDiscoveryCompletedEvent += OnTwitchGeneralDropDiscoveryCompleted;
             }
 
             Unloaded += (_, _) =>
@@ -198,6 +199,7 @@ namespace UI.Controls
                 _engine.KickStreamerMetadataChanged -= OnKickStreamerMetadataChanged;
                 _engine.TwitchStreamerMetadataChanged -= OnTwitchStreamerMetadataChanged;
                 _engine.KickGeneralDropDiscoveryCompletedEvent -= OnKickGeneralDropDiscoveryCompleted;
+                _engine.TwitchGeneralDropDiscoveryCompletedEvent -= OnTwitchGeneralDropDiscoveryCompleted;
             };
         }
 
@@ -224,10 +226,14 @@ namespace UI.Controls
             });
         }
 
-        private void OnKickGeneralDropDiscoveryCompleted() =>
+        private void OnKickGeneralDropDiscoveryCompleted() => OnGeneralDropDiscoveryCompleted(Platform.Kick);
+
+        private void OnTwitchGeneralDropDiscoveryCompleted() => OnGeneralDropDiscoveryCompleted(Platform.Twitch);
+
+        private void OnGeneralDropDiscoveryCompleted(Platform platform) =>
             Dispatcher.InvokeAsync(() =>
             {
-                if (_campaign?.Platform != Platform.Kick)
+                if (_campaign?.Platform != platform)
                     return;
 
                 EnsureGeneralDropStreamersLoaded();
@@ -327,7 +333,12 @@ namespace UI.Controls
             _liveCount = 0;
             _liveStatusKnown = false;
             // A section created after discovery already finished must not wait for an event that won't come again.
-            _discoveryFinished = _engine?.KickGeneralDropDiscoveryCompleted ?? false;
+            _discoveryFinished = campaign?.Platform switch
+            {
+                Platform.Kick => _engine?.KickGeneralDropDiscoveryCompleted ?? false,
+                Platform.Twitch => _engine?.TwitchGeneralDropDiscoveryCompleted ?? false,
+                _ => false
+            };
 
             if (campaign != null)
             {

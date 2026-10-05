@@ -27,6 +27,11 @@ namespace Core.Interfaces
         event Action<IReadOnlyDictionary<string, LiveChannelSnapshot>>? SnapshotsChanged;
 
         /// <summary>
+        /// Occurs once Helix authentication has succeeded (including a later recovery from a transient failure).
+        /// </summary>
+        event Action? Authenticated;
+
+        /// <summary>
         /// Ensures Helix authentication, prompting for device-code approval when no saved refresh token exists.
         /// </summary>
         /// <param name="promptAsync">
