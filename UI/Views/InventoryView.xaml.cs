@@ -1,4 +1,5 @@
 ﻿using System.Windows.Controls;
+using System.Windows.Data;
 using UI.Accounts;
 
 namespace UI.Views
@@ -15,11 +16,19 @@ namespace UI.Views
         /// </summary>
         public static InventoryView Instance => _instance.Value;
 
+        private readonly ListCollectionView _enabledAccounts;
+
         private InventoryView()
         {
             InitializeComponent();
 
-            AccountPicker.ItemsSource = AccountManager.Instance.Sessions;
+            // A private view (the default view is shared with the dashboard list) showing enabled accounts only.
+            _enabledAccounts = new ListCollectionView(AccountManager.Instance.Sessions)
+            {
+                Filter = item => item is AccountSession { Enabled: true }
+            };
+            AccountPicker.ItemsSource = _enabledAccounts;
+            AccountManager.Instance.EnabledAccountsChanged += () => _enabledAccounts.Refresh();
             AccountPicker.SelectedItem = AccountManager.Instance.SelectedSession;
             InventoryScroll.DataContext = AccountManager.Instance.SelectedSession?.Engine;
 

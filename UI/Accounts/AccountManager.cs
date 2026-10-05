@@ -58,6 +58,9 @@ namespace UI.Accounts
             }
         }
 
+        /// <summary>Raised when an account is enabled or disabled, so account pickers can refilter.</summary>
+        public event Action? EnabledAccountsChanged;
+
         /// <summary>Raised when the inventory's selected account changes.</summary>
         public event Action<AccountSession?>? SelectedSessionChanged;
 
@@ -92,7 +95,7 @@ namespace UI.Accounts
             foreach (AccountModel model in _store.Load())
                 AddSession(model);
 
-            SelectedSession = Sessions.FirstOrDefault();
+            SelectedSession = Sessions.FirstOrDefault(s => s.Enabled);
             SweepOrphanProfiles();
 
             _refreshTimer.Elapsed += (_, _) => Application.Current.Dispatcher.InvokeAsync(RefreshAllStaggeredAsync);
@@ -146,7 +149,7 @@ namespace UI.Accounts
             }
 
             if (SelectedSession == session)
-                SelectedSession = Sessions.FirstOrDefault(s => s != session);
+                SelectedSession = Sessions.FirstOrDefault(s => s != session && s.Enabled);
 
             if (_helixSession == session)
             {
@@ -195,6 +198,17 @@ namespace UI.Accounts
 
         private void OnSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(AccountSession.Enabled) && sender is AccountSession changed)
+            {
+                // The inventory can only show an enabled account.
+                if (!changed.Enabled && SelectedSession == changed)
+                    SelectedSession = Sessions.FirstOrDefault(s => s.Enabled);
+                else if (changed.Enabled && SelectedSession == null)
+                    SelectedSession = changed;
+
+                EnabledAccountsChanged?.Invoke();
+            }
+
             if (e.PropertyName is nameof(AccountSession.StatusText) or nameof(AccountSession.IsConnected))
             {
                 OnPropertyChanged(nameof(Summary));
