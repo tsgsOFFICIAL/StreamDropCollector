@@ -28,17 +28,18 @@ namespace Core.Mining
             IGqlService? twitchGqlService,
             IWebViewHost? kickWebView,
             Func<string, string, bool> markRewardClaimed,
+            bool autoClaimRewards,
             CancellationToken cancellationToken = default)
         {
             List<DropsReward> readyToClaimRewards = [.. campaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
 
             AppLogger.Debug(
                 "DropClaim",
-                $"ProcessAutoClaimsAsync START autoClaimEnabled={UISettingsManager.Instance.AutoClaimRewards} " +
+                $"ProcessAutoClaimsAsync START autoClaimEnabled={autoClaimRewards} " +
                 $"readyToClaimCount={readyToClaimRewards.Count} " +
                 $"rewardIds=[{string.Join(", ", readyToClaimRewards.Select(r => r.Id))}]");
 
-            if (UISettingsManager.Instance.AutoClaimRewards)
+            if (autoClaimRewards)
             {
                 foreach (DropsReward item in readyToClaimRewards)
                 {

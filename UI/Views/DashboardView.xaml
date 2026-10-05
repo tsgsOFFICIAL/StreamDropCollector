@@ -36,9 +36,9 @@
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,4,0,12"
                                TextWrapping="Wrap"/>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="Add Twitch account" Width="160" Height="36" Margin="0,0,10,0"
+                        <Button Content="Add Twitch account" Style="{StaticResource TwitchButtonStyle}" Width="160" Height="36" Margin="0,0,10,0"
                                 Click="OnAddTwitchAccountClick"/>
-                        <Button Content="Add Kick account" Width="160" Height="36"
+                        <Button Content="Add Kick account" Style="{StaticResource KickButtonStyle}" Width="160" Height="36"
                                 Click="OnAddKickAccountClick"/>
                     </StackPanel>
                 </StackPanel>

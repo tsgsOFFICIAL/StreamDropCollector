@@ -99,6 +99,17 @@ namespace UI.Accounts
         /// <summary>Gets a value indicating whether the account is logged in.</summary>
         public bool IsConnected => _loginService.Status == ConnectionStatus.Connected;
 
+        /// <summary>Gets a short marker shown next to the name when the account overrides global settings.</summary>
+        public string CustomSettingsLabel => Model.Overrides.HasAny ? "  \u2022 custom settings" : string.Empty;
+
+        /// <summary>Re-evaluates mining and refreshes bindings after the account's overrides were edited.</summary>
+        public void ApplyOverridesChanged()
+        {
+            OnPropertyChanged(nameof(CustomSettingsLabel));
+            ModelChanged?.Invoke(this);
+            Engine.NotifyAccountSettingsChanged();
+        }
+
         /// <summary>Gets a value indicating whether the engine is actively mining.</summary>
         public bool IsMining => _statusText == "Mining";
 

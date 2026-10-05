@@ -35,6 +35,7 @@ namespace Core.Mining
         /// <param name="onKickSelectionPreview">Raised when a Kick stream is chosen, before navigation.</param>
         /// <param name="markRewardClaimed">Marks a reward claimed in the active inventory.</param>
         /// <param name="updateSelectionFlags">Refreshes current-campaign highlight flags in the inventory.</param>
+        /// <param name="autoClaimRewards">Whether ready rewards are claimed automatically for this account.</param>
         /// <param name="kickLevelFarming">When true, watches a top-viewed Kick channel if no Kick campaign has progress to make.</param>
         /// <param name="cancellationToken">Cancellation token for the mining cycle.</param>
         /// <returns>Selection results, miner status, and the next scheduled re-evaluation time.</returns>
@@ -58,6 +59,7 @@ namespace Core.Mining
             Func<string, string, bool> markRewardClaimed,
             Action updateSelectionFlags,
             bool kickLevelFarming,
+            bool autoClaimRewards,
             CancellationToken cancellationToken)
         {
             AppLogger.Debug(
@@ -93,20 +95,21 @@ namespace Core.Mining
                 twitchGqlService,
                 kickWebView,
                 markRewardClaimed,
+                autoClaimRewards,
                 cancellationToken);
 
             List<DropsCampaign> readyToClaimOnlyCampaigns = campaignSnapshot
-                .Where(c => c.HasReadyToClaimRewards() && !c.HasProgressToMake())
+                .Where(c => c.HasReadyToClaimRewards() && !c.HasProgressToMake(autoClaimRewards))
                 .ToList();
 
-            int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake());
-            int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake());
+            int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake(autoClaimRewards));
+            int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake(autoClaimRewards));
             AppLogger.Debug(
                 "TwitchMining",
                 $"MiningOrchestrator progress gate twitchWithProgress={twitchWithProgress} kickWithProgress={kickWithProgress} " +
                 $"readyToClaimOnly={readyToClaimOnlyCampaigns.Count}");
 
-            if (!campaignSnapshot.Any(c => c.HasProgressToMake()))
+            if (!campaignSnapshot.Any(c => c.HasProgressToMake(autoClaimRewards)))
             {
                 if (readyToClaimOnlyCampaigns.Any())
                     AppLogger.Info("Miner", $"No remaining mine progress remains; {readyToClaimOnlyCampaigns.Count} campaign(s) are waiting for manual claim.");
@@ -131,11 +134,11 @@ namespace Core.Mining
             cancellationToken.ThrowIfCancellationRequested();
 
             List<DropsCampaign> twitchCampaigns = campaignSnapshot
-                .Where(c => c.Platform == Platform.Twitch && c.HasProgressToMake())
+                .Where(c => c.Platform == Platform.Twitch && c.HasProgressToMake(autoClaimRewards))
                 .ToList();
 
             List<DropsCampaign> kickCampaigns = campaignSnapshot
-                .Where(c => c.Platform == Platform.Kick && c.HasProgressToMake())
+                .Where(c => c.Platform == Platform.Kick && c.HasProgressToMake(autoClaimRewards))
                 .ToList();
 
             AppLogger.Debug(

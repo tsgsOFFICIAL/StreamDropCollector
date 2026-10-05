@@ -27,6 +27,8 @@
                         <Run Text=" &#x2022; " Foreground="{DynamicResource TextMutedBrush}"/>
                         <Run Text="{Binding DisplayName, Mode=OneWay}" FontWeight="SemiBold"
                              Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <Run Text="{Binding CustomSettingsLabel, Mode=OneWay}" FontSize="12"
+                             Foreground="{DynamicResource AccentBrush}"/>
                     </TextBlock>
                     <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
                                Foreground="{DynamicResource TextMutedBrush}">
@@ -42,7 +44,10 @@
                               Content="Enabled" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     <controls:PlatformLoginButton DataContext="{Binding Connection}"
                                                   LoginClick="OnLoginClick" Margin="0,0,8,0"/>
-                    <Button Content="Remove" Width="80" Height="36" Click="OnRemoveClick"/>
+                    <Button Content="Settings" Style="{StaticResource SecondaryButtonStyle}"
+                            Width="80" Height="36" Padding="0" Margin="0,0,8,0" Click="OnSettingsClick"/>
+                    <Button Content="Remove" Style="{StaticResource DangerButtonStyle}"
+                            Width="80" Height="36" Padding="0" Click="OnRemoveClick"/>
                 </StackPanel>
             </Grid>
         </Border>

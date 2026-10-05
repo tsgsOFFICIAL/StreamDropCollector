@@ -1,5 +1,6 @@
 using System.Windows;
 using UI.Accounts;
+using UI.Views;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace UI.Controls
@@ -19,6 +20,14 @@ namespace UI.Controls
         {
             if (DataContext is AccountSession session)
                 await session.LoginAsync();
+        }
+
+        private void OnSettingsClick(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not AccountSession session)
+                return;
+
+            new AccountSettingsWindow(session) { Owner = Window.GetWindow(this) }.ShowDialog();
         }
 
         private void OnRemoveClick(object sender, RoutedEventArgs e)

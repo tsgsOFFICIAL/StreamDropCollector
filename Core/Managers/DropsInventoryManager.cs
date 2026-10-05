@@ -32,6 +32,51 @@ namespace Core.Managers
         public AccountModel Account { get; }
 
         /// <summary>
+        /// Gets whether ready rewards are auto-claimed for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveAutoClaim => Account.Overrides.AutoClaimRewards ?? UISettingsManager.Instance.AutoClaimRewards;
+
+        /// <summary>
+        /// Gets whether Kick level farming is on for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveKickLevelFarming => Account.Overrides.KickLevelFarming ?? UISettingsManager.Instance.KickLevelFarming;
+
+        /// <summary>
+        /// Gets the mining priority for this account (account override, else global setting).
+        /// </summary>
+        public MiningPriorityMode EffectiveMiningPriority => Account.Overrides.MiningPriorityMode ?? UISettingsManager.Instance.MiningPriorityMode;
+
+        /// <summary>
+        /// Applies this account's game filter, or the global filter when the account has no override.
+        /// </summary>
+        private bool IsCampaignAllowed(DropsCampaign campaign) =>
+            Account.Overrides.GameWhitelistSlugs is { } slugs
+                ? UISettingsManager.IsAllowedByGameFilter(campaign, slugs, Account.Overrides.GameFilterBlacklistMode)
+                : UISettingsManager.Instance.IsCampaignAllowedByWhitelist(campaign);
+
+        /// <summary>
+        /// Lists the games (slug and display name) seen in this account's most recent campaign load, before any game filter.
+        /// </summary>
+        public IReadOnlyList<(string Slug, string Name)> GetKnownGames()
+        {
+            lock (_campaignSnapshotSync)
+            {
+                return _lastKnownCampaigns
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                    .Select(c => (Slug: c.Slug.Trim().ToLowerInvariant(), Name: c.GameName))
+                    .GroupBy(x => x.Slug, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.First())
+                    .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+        }
+
+        /// <summary>
+        /// Re-applies this account's overrides after they were edited: refilters campaigns and re-evaluates mining.
+        /// </summary>
+        public void NotifyAccountSettingsChanged() => _ = ApplyGameWhitelistChangeAsync(Account.Platform);
+
+        /// <summary>
         /// Gets or sets a value indicating whether this engine drives the shared Twitch EventSub watcher.
         /// Only one Twitch account should do so, since the Helix service holds a single mined-channel watch.
         /// </summary>
@@ -252,6 +297,9 @@ namespace Core.Managers
         /// <param name="mode">The new mining priority mode to apply.</param>
         private void OnMiningPriorityModeChanged(MiningPriorityMode mode)
         {
+            if (Account.Overrides.MiningPriorityMode.HasValue)
+                return;
+
             _ = ApplyMiningPriorityModeChangeAsync(mode);
         }
         /// <summary>
@@ -259,6 +307,9 @@ namespace Core.Managers
         /// </summary>
         private void OnKickLevelFarmingChanged(bool enabled)
         {
+            if (Account.Overrides.KickLevelFarming.HasValue)
+                return;
+
             AppLogger.Info("Miner", $"Kick level farming {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
 
             if (_isPaused || KickWebView == null)
@@ -272,6 +323,9 @@ namespace Core.Managers
         /// <param name="platform">The platform for which the game whitelist has changed.</param>
         private void OnGameWhitelistChanged(Platform platform)
         {
+            if (platform != Account.Platform || Account.Overrides.GameWhitelistSlugs != null)
+                return;
+
             _ = ApplyGameWhitelistChangeAsync(platform);
         }
         /// <summary>
@@ -387,7 +441,7 @@ namespace Core.Managers
                 UISettingsManager.Instance.UpdateAvailableGameFilterOptions(sourceCampaigns);
 
                 // Materialize before iterating to avoid concurrent modification
-                List<DropsCampaign> filteredCampaigns = ActiveCampaignFilter.FilterForDisplay(sourceCampaigns);
+                List<DropsCampaign> filteredCampaigns = ActiveCampaignFilter.FilterForDisplay(sourceCampaigns, IsCampaignAllowed);
 
                 ActiveCampaigns.Clear();
                 foreach (DropsCampaign campaign in filteredCampaigns)
@@ -409,7 +463,7 @@ namespace Core.Managers
                     _selection.CurrentTwitchCampaign,
                     _twitchProgress,
                     reward => TwitchDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl),
-                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog),
+                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog, EffectiveAutoClaim),
                     (campPct, dropPct) => TwitchProgressChanged?.Invoke(campPct, dropPct),
                     VerboseLog);
             }
@@ -422,7 +476,7 @@ namespace Core.Managers
                     _selection.CurrentKickCampaign,
                     _kickProgress,
                     reward => KickDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl),
-                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog),
+                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog, EffectiveAutoClaim),
                     (campPct, dropPct) => KickProgressChanged?.Invoke(campPct, dropPct),
                     VerboseLog);
             }
@@ -727,7 +781,7 @@ namespace Core.Managers
             {
                 UISettingsManager.Instance.UpdateAvailableGameFilterOptions(allCampaigns);
 
-                List<DropsCampaign> activeCampaignsList = ActiveCampaignFilter.FilterForDisplay(allCampaigns);
+                List<DropsCampaign> activeCampaignsList = ActiveCampaignFilter.FilterForDisplay(allCampaigns, IsCampaignAllowed);
 
                 ActiveCampaigns.Clear();
                 foreach (DropsCampaign? c in activeCampaignsList)
@@ -902,8 +956,8 @@ namespace Core.Managers
                 VerboseLog("StartMining", $"AFTER reset | twitchApplied={_twitchProgress.AppliedMinuteBucket} | kickApplied={_kickProgress.AppliedMinuteBucket}");
 
                 int twitchActive = campaignSnapshot.Count(c => c.Platform == Platform.Twitch);
-                int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake());
-                int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake());
+                int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake(EffectiveAutoClaim));
+                int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake(EffectiveAutoClaim));
                 AppLogger.Debug(
                     "TwitchMining",
                     $"StartMiningStreams gates helixAuth={_twitchHelixService.IsAuthenticated} " +
@@ -967,7 +1021,8 @@ namespace Core.Managers
                     },
                     (campaignId, rewardId) => _campaignUpdater.MarkRewardClaimed(ActiveCampaigns, _selection, campaignId, rewardId),
                     () => _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection),
-                    UISettingsManager.Instance.KickLevelFarming,
+                    EffectiveKickLevelFarming,
+                    EffectiveAutoClaim,
                     token);
 
                 if (!result.CompletedSelectionCycle)
@@ -1292,9 +1347,9 @@ namespace Core.Managers
                 IsKickEligibleAsync = async () => _selection.CurrentKickCampaign != null
                     && !string.IsNullOrWhiteSpace(_currentKickLogin)
                     && await _kickLiveChannelApi.IsChannelEligibleAsync(_currentKickLogin, _selection.CurrentKickCampaign),
-                HasTwitchCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Twitch && c.HasProgressToMake()),
+                HasTwitchCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Twitch && c.HasProgressToMake(EffectiveAutoClaim)),
                 HasKickCampaignsWithProgress = () => _selection.CurrentKickCampaign.IsLevelFarming()
-                    || ActiveCampaigns.Any(c => c.Platform == Platform.Kick && c.HasProgressToMake()),
+                    || ActiveCampaigns.Any(c => c.Platform == Platform.Kick && c.HasProgressToMake(EffectiveAutoClaim)),
                 GetLastKnownTwitchOnline = () => _lastKnownTwitchOnlineState,
                 GetLastKnownKickOnline = () => _lastKnownKickOnlineState,
                 SetLastKnownTwitchOnline = value => _lastKnownTwitchOnlineState = value,
@@ -1320,7 +1375,7 @@ namespace Core.Managers
             CampaignSelectionResult result = CampaignPrioritizer.SelectBest(
                 campaigns,
                 _pinnedCampaignStore.CampaignId,
-                UISettingsManager.Instance.MiningPriorityMode);
+                EffectiveMiningPriority);
 
             if (result.PinReleased)
                 _pinnedCampaignStore.Clear();
@@ -1330,7 +1385,7 @@ namespace Core.Managers
                 AppLogger.Debug(
                     "TwitchMining",
                     $"SelectBestCampaign picked='{picked.Name}' platform={picked.Platform} slug='{picked.Slug}' " +
-                    $"from {campaigns.Count} candidates mode={UISettingsManager.Instance.MiningPriorityMode}");
+                    $"from {campaigns.Count} candidates mode={EffectiveMiningPriority}");
             }
             else
             {
