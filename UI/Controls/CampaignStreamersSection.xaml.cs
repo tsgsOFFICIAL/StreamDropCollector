@@ -38,6 +38,23 @@ namespace UI.Controls
         /// <summary>Whether the campaign has at least one eligible streamer.</summary>
         public bool HasStreamers => _allStreamers.Count > 0;
 
+        private bool _discoveryFinished;
+
+        /// <summary>Whether a Kick general-drop campaign is still waiting for its streamer list to be discovered.</summary>
+        public bool IsDiscovering =>
+            !_discoveryFinished
+            && _allStreamers.Count == 0
+            && _campaign is { IsGeneralDrop: true, Platform: Platform.Kick };
+
+        /// <summary>Whether the section is shown at all (streamers found, or still looking for them).</summary>
+        public bool ShowSection => HasStreamers || IsDiscovering;
+
+        private void NotifyDiscoveryChanged()
+        {
+            OnPropertyChanged(nameof(IsDiscovering));
+            OnPropertyChanged(nameof(ShowSection));
+        }
+
         /// <summary>Whether the streamer count exceeds the inline display limit.</summary>
         public bool NeedsCollapse => _allStreamers.Count > InlineLimit;
 
@@ -170,6 +187,7 @@ namespace UI.Controls
             {
                 _engine.KickStreamerMetadataChanged += OnKickStreamerMetadataChanged;
                 _engine.TwitchStreamerMetadataChanged += OnTwitchStreamerMetadataChanged;
+                _engine.KickGeneralDropDiscoveryCompletedEvent += OnKickGeneralDropDiscoveryCompleted;
             }
 
             Unloaded += (_, _) =>
@@ -179,6 +197,7 @@ namespace UI.Controls
 
                 _engine.KickStreamerMetadataChanged -= OnKickStreamerMetadataChanged;
                 _engine.TwitchStreamerMetadataChanged -= OnTwitchStreamerMetadataChanged;
+                _engine.KickGeneralDropDiscoveryCompletedEvent -= OnKickGeneralDropDiscoveryCompleted;
             };
         }
 
@@ -204,6 +223,17 @@ namespace UI.Controls
                 ApplyChannelMetadata(snapshots);
             });
         }
+
+        private void OnKickGeneralDropDiscoveryCompleted() =>
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_campaign?.Platform != Platform.Kick)
+                    return;
+
+                EnsureGeneralDropStreamersLoaded();
+                _discoveryFinished = true;
+                NotifyDiscoveryChanged();
+            });
 
         private void OnSectionDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
@@ -296,6 +326,8 @@ namespace UI.Controls
             _searchQuery = string.Empty;
             _liveCount = 0;
             _liveStatusKnown = false;
+            // A section created after discovery already finished must not wait for an event that won't come again.
+            _discoveryFinished = _engine?.KickGeneralDropDiscoveryCompleted ?? false;
 
             if (campaign != null)
             {
@@ -314,6 +346,7 @@ namespace UI.Controls
             OnPropertyChanged(nameof(ShowsLiveUi));
             OnPropertyChanged(nameof(TotalCount));
             OnPropertyChanged(nameof(LiveCountText));
+            NotifyDiscoveryChanged();
             OnPropertyChanged(nameof(IsExpanded));
             OnPropertyChanged(nameof(SearchQuery));
             OnPropertyChanged(nameof(FilterLiveOnly));
@@ -349,6 +382,7 @@ namespace UI.Controls
                 _allStreamers.Add(new EligibleStreamer(login));
 
             OnPropertyChanged(nameof(HasStreamers));
+            NotifyDiscoveryChanged();
             OnPropertyChanged(nameof(NeedsCollapse));
             OnPropertyChanged(nameof(ShowExpandedPanel));
             OnPropertyChanged(nameof(ShowsLiveUi));

@@ -157,6 +157,16 @@ namespace Core.Managers
         /// <remarks>The first value is seconds until the campaign completes; the second is seconds until the next reward. Zero means unknown or finished.</remarks>
         public event Action<int, int>? KickTimeRemainingChanged;
 
+        /// <summary>
+        /// Gets whether Kick general-drop streamer discovery has finished at least once for this engine.
+        /// </summary>
+        public bool KickGeneralDropDiscoveryCompleted { get; private set; }
+
+        /// <summary>
+        /// Occurs when Kick general-drop streamer discovery finishes, whether or not it found any streamers.
+        /// </summary>
+        public event Action? KickGeneralDropDiscoveryCompletedEvent;
+
         private void RaiseProgress(Platform platform, DropsCampaign? campaign, byte campaignPct, byte dropPct)
         {
             PlatformProgressState state = platform == Platform.Twitch ? _twitchProgress : _kickProgress;
@@ -946,8 +956,13 @@ namespace Core.Managers
 
                     // Chips for general drops are built from the discovered logins; tell the UI now rather than
                     // after the (slow) live-status scan, which would otherwise leave the section hidden.
+                    KickGeneralDropDiscoveryCompleted = true;
                     IReadOnlyDictionary<string, LiveChannelSnapshot> current = _kickStreamerMetadata;
-                    Application.Current.Dispatcher.Invoke(() => KickStreamerMetadataChanged?.Invoke(current));
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        KickGeneralDropDiscoveryCompletedEvent?.Invoke();
+                        KickStreamerMetadataChanged?.Invoke(current);
+                    });
 
                     ScheduleKickStreamerMetadataRefresh();
                 }

@@ -228,11 +228,29 @@
 
     <StackPanel x:Name="ContentHost"
                 DataContext="{Binding ElementName=Root}"
-                Visibility="{Binding HasStreamers, Converter={StaticResource BooleanToVisibilityConverter}}">
+                Visibility="{Binding ShowSection, Converter={StaticResource BooleanToVisibilityConverter}}">
         <Border BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0"
                 Margin="0,16,0,0"
-                Padding="0,14,0,0">
+                Padding="0,14,0,0"
+                Visibility="{Binding IsDiscovering, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Eligible streamers"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="Finding streamers…"
+                           FontSize="12"
+                           Margin="12,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMutedBrush}"/>
+            </StackPanel>
+        </Border>
+        <Border BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Margin="0,16,0,0"
+                Padding="0,14,0,0"
+                Visibility="{Binding HasStreamers, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel>
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
