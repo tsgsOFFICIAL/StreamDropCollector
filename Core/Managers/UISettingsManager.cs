@@ -710,22 +710,26 @@ namespace Core.Managers
         /// </summary>
         /// <param name="campaign">The campaign to evaluate against the allow-list or exclude-list configuration.</param>
         /// <returns><see langword="true"/> if the campaign should be included; otherwise, <see langword="false"/>.</returns>
-        public bool IsCampaignAllowedByWhitelist(DropsCampaign campaign)
-        {
-            List<string> whitelist = campaign.Platform == Platform.Twitch
-                ? _twitchGameWhitelistSlugs
-                : _kickGameWhitelistSlugs;
+        public bool IsCampaignAllowedByWhitelist(DropsCampaign campaign) =>
+            IsAllowedByGameFilter(
+                campaign,
+                campaign.Platform == Platform.Twitch ? _twitchGameWhitelistSlugs : _kickGameWhitelistSlugs,
+                campaign.Platform == Platform.Twitch ? _twitchGameFilterBlacklistMode : _kickGameFilterBlacklistMode);
 
+        /// <summary>
+        /// Evaluates a campaign against an explicit game list, used for both the global and per-account filters.
+        /// </summary>
+        /// <param name="campaign">The campaign to evaluate.</param>
+        /// <param name="whitelist">Selected game slugs; empty allows everything.</param>
+        /// <param name="excludeMode">When true the selected games are excluded instead of being the only ones allowed.</param>
+        public static bool IsAllowedByGameFilter(DropsCampaign campaign, IReadOnlyCollection<string> whitelist, bool excludeMode)
+        {
             // No games selected => allow everything (regardless of mode).
             if (whitelist.Count == 0)
                 return true;
 
             string slug = campaign.Slug?.Trim().ToLowerInvariant() ?? string.Empty;
             bool inList = whitelist.Contains(slug, StringComparer.OrdinalIgnoreCase);
-
-            bool excludeMode = campaign.Platform == Platform.Twitch
-                ? _twitchGameFilterBlacklistMode
-                : _kickGameFilterBlacklistMode;
 
             // Exclude mode: allow everything EXCEPT the selected games.
             // Allow mode: allow ONLY the selected games.

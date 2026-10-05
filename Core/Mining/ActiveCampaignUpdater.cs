@@ -1,3 +1,4 @@
+using Core.Managers;
 using Core.Enums;
 using Core.Logging;
 using Core.Mining.Kick;
@@ -27,7 +28,8 @@ namespace Core.Mining
             Platform platform,
             string campaignId,
             int minutesToAdd,
-            Action<string, string>? verboseLog = null)
+            Action<string, string>? verboseLog = null,
+            bool? autoClaimRewards = null)
         {
             if (minutesToAdd <= 0)
                 return;
@@ -39,7 +41,7 @@ namespace Core.Mining
             Application.Current.Dispatcher.Invoke(() =>
             {
                 DropsCampaign? campaign = activeCampaigns.FirstOrDefault(c => c.Platform == platform && c.Id == campaignId);
-                if (campaign == null || !campaign.HasProgressToMake())
+                if (campaign == null || !campaign.HasProgressToMake(autoClaimRewards ?? UISettingsManager.Instance.AutoClaimRewards))
                 {
                     verboseLog?.Invoke(
                         "MinuteTick",

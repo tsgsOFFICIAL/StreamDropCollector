@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Core.Logging;
 using Core.Interfaces;
+using Core.Models;
 using System.Windows;
 
 namespace UI.Views
@@ -17,6 +18,11 @@ namespace UI.Views
         private int _asyncScriptHandlerAttached;
         private readonly SemaphoreSlim _uiOperationLock = new(1, 1);
         private readonly ConcurrentDictionary<string, TaskCompletionSource<AsyncScriptResponse>> _pendingAsyncScripts = new();
+
+        /// <summary>
+        /// Gets the identifier of the account whose browser profile this host uses (empty for the shared profile).
+        /// </summary>
+        public string AccountId { get; }
 
         /// <summary>
         /// Gets the underlying WebView2 control exposed by this host.
@@ -79,9 +85,21 @@ namespace UI.Views
         /// <remarks>This constructor configures the window to be completely invisible and non-activating,
         /// making it suitable for scenarios where a background WebView is required without any user interface or
         /// taskbar presence.</remarks>
-        public HiddenWebViewHost()
+        public HiddenWebViewHost() : this(null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a hidden host bound to an account's isolated browser profile.
+        /// </summary>
+        /// <param name="account">Account whose profile (cookies, storage) this host uses; <see langword="null"/> uses the shared default profile.</param>
+        public HiddenWebViewHost(AccountModel? account)
         {
             InitializeComponent();
+
+            AccountId = account?.Id ?? string.Empty;
+            if (account?.UserDataFolder is { } userDataFolder)
+                WebViewElement.CreationProperties = new CoreWebView2CreationProperties { UserDataFolder = userDataFolder };
 
             if (!App.IsDebugMode)
             {
@@ -945,7 +963,7 @@ namespace UI.Views
                         typeElem.GetString() == "INVALID_CLAIM" &&
                         d2.TryGetProperty("connect_url", out JsonElement urlElem))
                     {
-                        Core.Mining.KickUnlinkedClaims.Mark(campaignId, rewardId, urlElem.GetString());
+                        Core.Mining.KickUnlinkedClaims.Mark(AccountId, campaignId, rewardId, urlElem.GetString());
                     }
                 }
 
@@ -975,6 +993,16 @@ namespace UI.Views
         /// web view signals that navigation has finished.</remarks>
         /// <param name="url">The destination URL to navigate to. Cannot be null or empty.</param>
         /// <returns>A task that represents the asynchronous navigation operation.</returns>
+        public Task NavigateToBlankAsync() =>
+            RunExclusiveUiAsync(() =>
+            {
+                WebView.CoreWebView2?.Navigate("about:blank");
+                return Task.CompletedTask;
+            });
+
+        /// <summary>
+        /// Navigates to the URL, appending a cache-busting parameter, and waits for the page to be ready.
+        /// </summary>
         public Task NavigateAsync(string url) =>
             RunExclusiveUiAsync(async () =>
             {

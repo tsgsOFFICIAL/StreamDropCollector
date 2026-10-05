@@ -9,6 +9,11 @@ namespace Core.Interfaces
     public interface IWebViewHost
     {
         /// <summary>
+        /// Gets the identifier of the account this host's browser profile belongs to (empty for shared hosts).
+        /// </summary>
+        string AccountId { get; }
+
+        /// <summary>
         /// Ensures the underlying WebView2 is initialized and ready.
         /// Must be called from the UI thread (Dispatcher) when appropriate.
         /// </summary>
@@ -125,6 +130,11 @@ namespace Core.Interfaces
         /// Navigate the webview to a URL (used to set origin/referrer).
         /// </summary>
         Task NavigateAsync(string url);
+
+        /// <summary>
+        /// Navigates to a blank page, stopping any playing stream and its network activity.
+        /// </summary>
+        Task NavigateToBlankAsync();
         /// <summary>
         /// Executes JS in the webview and returns the resulting JSON/string.
         /// </summary>

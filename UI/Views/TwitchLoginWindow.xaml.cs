@@ -1,4 +1,6 @@
+using Microsoft.Web.WebView2.Wpf;
 ﻿using Core.Helpers;
+using Core.Models;
 using Microsoft.Web.WebView2.Core;
 using System.Windows;
 
@@ -14,9 +16,12 @@ namespace UI.Views
         /// <summary>
         /// Initializes the Twitch login window and navigates to the Twitch login page when loaded.
         /// </summary>
-        public TwitchLoginWindow()
+        /// <param name="account">Account whose browser profile receives the login; <see langword="null"/> uses the shared profile.</param>
+        public TwitchLoginWindow(AccountModel? account = null)
         {
             InitializeComponent();
+            if (account?.UserDataFolder is { } userDataFolder)
+                Web.CreationProperties = new CoreWebView2CreationProperties { UserDataFolder = userDataFolder };
             Loaded += OnLoaded;
             Closed += (_, _) => _cts.Cancel();
         }

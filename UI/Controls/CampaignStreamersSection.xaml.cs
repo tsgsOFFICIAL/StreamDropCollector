@@ -157,15 +157,27 @@ namespace UI.Controls
         public CampaignStreamersSection()
         {
             InitializeComponent();
+            _engine = UI.Accounts.AccountManager.Instance.SelectedSession?.Engine;
             DataContextChanged += OnSectionDataContextChanged;
-            DropsInventoryManager.Instance.KickStreamerMetadataChanged += OnKickStreamerMetadataChanged;
-            DropsInventoryManager.Instance.TwitchStreamerMetadataChanged += OnTwitchStreamerMetadataChanged;
+
+            if (_engine != null)
+            {
+                _engine.KickStreamerMetadataChanged += OnKickStreamerMetadataChanged;
+                _engine.TwitchStreamerMetadataChanged += OnTwitchStreamerMetadataChanged;
+            }
+
             Unloaded += (_, _) =>
             {
-                DropsInventoryManager.Instance.KickStreamerMetadataChanged -= OnKickStreamerMetadataChanged;
-                DropsInventoryManager.Instance.TwitchStreamerMetadataChanged -= OnTwitchStreamerMetadataChanged;
+                if (_engine == null)
+                    return;
+
+                _engine.KickStreamerMetadataChanged -= OnKickStreamerMetadataChanged;
+                _engine.TwitchStreamerMetadataChanged -= OnTwitchStreamerMetadataChanged;
             };
         }
+
+        /// <summary>Mining engine of the account the inventory is showing when this section was created.</summary>
+        private readonly DropsInventoryManager? _engine;
 
         private void OnKickStreamerMetadataChanged(IReadOnlyDictionary<string, LiveChannelSnapshot> snapshots) =>
             OnPlatformStreamerMetadataChanged(Platform.Kick, snapshots);
@@ -282,10 +294,10 @@ namespace UI.Controls
                     _allStreamers.Add(new EligibleStreamer(login));
             }
 
-            if (campaign?.Platform == Platform.Kick)
-                ApplyChannelMetadata(DropsInventoryManager.Instance.KickStreamerMetadata);
-            else if (campaign?.Platform == Platform.Twitch)
-                ApplyChannelMetadata(DropsInventoryManager.Instance.TwitchStreamerMetadata);
+            if (campaign?.Platform == Platform.Kick && _engine != null)
+                ApplyChannelMetadata(_engine.KickStreamerMetadata);
+            else if (campaign?.Platform == Platform.Twitch && _engine != null)
+                ApplyChannelMetadata(_engine.TwitchStreamerMetadata);
 
             OnPropertyChanged(nameof(HasStreamers));
             OnPropertyChanged(nameof(NeedsCollapse));
@@ -304,10 +316,10 @@ namespace UI.Controls
             UpdateClosedFooter();
         }
 
-        private static IReadOnlyList<string> ResolveEligibleLogins(DropsCampaign campaign) => campaign.Platform switch
+        private IReadOnlyList<string> ResolveEligibleLogins(DropsCampaign campaign) => campaign.Platform switch
         {
-            Platform.Twitch => DropsInventoryManager.Instance.GetTwitchEligibleLoginsForCampaign(campaign),
-            Platform.Kick => DropsInventoryManager.Instance.GetKickEligibleLoginsForCampaign(campaign),
+            Platform.Twitch when _engine != null => _engine.GetTwitchEligibleLoginsForCampaign(campaign),
+            Platform.Kick when _engine != null => _engine.GetKickEligibleLoginsForCampaign(campaign),
             _ => EligibleStreamerParser.ParseChannelLogins(campaign)
         };
 

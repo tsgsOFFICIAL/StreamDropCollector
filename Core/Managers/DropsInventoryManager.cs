@@ -19,18 +19,102 @@ using Core.Helpers;
 namespace Core.Managers
 {
     /// <summary>
-    /// Central manager for active drop campaigns, stream mining, progress tracking, and reward claiming across Twitch and Kick.
+    /// Mining engine for a single account: active drop campaigns, stream mining, progress tracking, and reward claiming.
     /// </summary>
-    /// <remarks>This class follows the singleton pattern. It coordinates hidden WebView hosts, selects campaigns to mine,
-    /// raises UI-facing progress events, and persists pinned campaign and last-mined streamer state.</remarks>
-    public sealed class DropsInventoryManager
+    /// <remarks>One instance exists per configured account, so any number of accounts mine in parallel. It coordinates
+    /// the account's hidden WebView host, selects campaigns to mine, raises UI-facing progress events, and shares the
+    /// pinned campaign and last-mined streamer stores with the other accounts.</remarks>
+    public sealed class DropsInventoryManager : IDisposable
     {
-        private static readonly Lazy<DropsInventoryManager> _instance = new(() => new DropsInventoryManager());
+        /// <summary>
+        /// Gets the account this engine mines for.
+        /// </summary>
+        public AccountModel Account { get; }
 
         /// <summary>
-        /// Gets the singleton instance of the drops inventory manager.
+        /// Gets whether ready rewards are auto-claimed for this account (account override, else global setting).
         /// </summary>
-        public static DropsInventoryManager Instance => _instance.Value;
+        public bool EffectiveAutoClaim => Account.Overrides.AutoClaimRewards ?? UISettingsManager.Instance.AutoClaimRewards;
+
+        /// <summary>
+        /// Gets whether Kick level farming is on for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveKickLevelFarming => Account.Overrides.KickLevelFarming ?? UISettingsManager.Instance.KickLevelFarming;
+
+        /// <summary>
+        /// Gets the mining priority for this account (account override, else global setting).
+        /// </summary>
+        public MiningPriorityMode EffectiveMiningPriority => Account.Overrides.MiningPriorityMode ?? UISettingsManager.Instance.MiningPriorityMode;
+
+        /// <summary>
+        /// Applies this account's game filter, or the global filter when the account has no override.
+        /// </summary>
+        private bool IsCampaignAllowed(DropsCampaign campaign) =>
+            Account.Overrides.GameWhitelistSlugs is { } slugs
+                ? UISettingsManager.IsAllowedByGameFilter(campaign, slugs, Account.Overrides.GameFilterBlacklistMode)
+                : UISettingsManager.Instance.IsCampaignAllowedByWhitelist(campaign);
+
+        /// <summary>
+        /// Lists the games (slug and display name) seen in this account's most recent campaign load, before any game filter.
+        /// </summary>
+        public IReadOnlyList<(string Slug, string Name)> GetKnownGames()
+        {
+            lock (_campaignSnapshotSync)
+            {
+                return _lastKnownCampaigns
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                    .Select(c => (Slug: c.Slug.Trim().ToLowerInvariant(), Name: c.GameName))
+                    .GroupBy(x => x.Slug, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.First())
+                    .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+        }
+
+        /// <summary>
+        /// Re-applies this account's overrides after they were edited: refilters campaigns and re-evaluates mining.
+        /// </summary>
+        public void NotifyAccountSettingsChanged() => _ = ApplyAccountSettingsChangeAsync();
+
+        private async Task ApplyAccountSettingsChangeAsync()
+        {
+            try
+            {
+                RefreshActiveCampaignsFromLatestSnapshot();
+
+                // Unlike a campaign-list change, this must re-evaluate even with zero campaigns:
+                // turning level farming off has to stop the farmed stream.
+                if (_isPaused || (TwitchWebView == null && KickWebView == null))
+                    return;
+
+                await StartMiningStreams(true);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Miner", "Failed to apply account settings change.", ex);
+            }
+        }
+
+        /// <summary>
+        /// Navigates a host away from its stream page so playback and watch-time stop.
+        /// </summary>
+        private static async Task StopStreamAsync(IWebViewHost host)
+        {
+            try
+            {
+                await await Application.Current.Dispatcher.InvokeAsync(() => host.NavigateToBlankAsync());
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("Miner", $"Failed to stop stream playback: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether this engine drives the shared Twitch EventSub watcher.
+        /// Only one Twitch account should do so, since the Helix service holds a single mined-channel watch.
+        /// </summary>
+        public bool UseHelixWatcher { get; set; }
 
         /// <summary>
         /// Gets the collection of currently active drop campaigns displayed in the inventory UI.
@@ -126,8 +210,8 @@ namespace Core.Managers
         private readonly ActiveCampaignUpdater _campaignUpdater = new();
         private readonly PlatformProgressState _twitchProgress = new();
         private readonly PlatformProgressState _kickProgress = new();
-        private readonly PinnedCampaignStore _pinnedCampaignStore = new();
-        private readonly LastMinedStreamersStore _lastMinedStreamers = new();
+        private readonly PinnedCampaignStore _pinnedCampaignStore = PinnedCampaignStore.Shared;
+        private readonly LastMinedStreamersStore _lastMinedStreamers = LastMinedStreamersStore.Shared;
         private readonly ITwitchHelixService _twitchHelixService = TwitchHelixService.Instance;
         private readonly GeneralDropDiscoveryCache _twitchGeneralDropCache = new();
         private readonly GeneralDropDiscoveryCache _kickGeneralDropCache = new();
@@ -208,13 +292,13 @@ namespace Core.Managers
 
 
         /// <summary>
-        /// Initializes a new instance of the DropsInventoryManager class.
+        /// Initializes a new mining engine for the given account.
         /// </summary>
-        /// <remarks>This constructor is private to enforce the singleton pattern. It sets up event
-        /// handlers and initializes internal state required for managing drops inventory. Instances of this class can
-        /// only be created internally within the class.</remarks>
-        private DropsInventoryManager()
+        /// <param name="account">The account this engine mines for.</param>
+        public DropsInventoryManager(AccountModel account)
         {
+            Account = account;
+
             UISettingsManager.Instance.MiningPriorityModeChanged += OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
@@ -247,6 +331,9 @@ namespace Core.Managers
         /// <param name="mode">The new mining priority mode to apply.</param>
         private void OnMiningPriorityModeChanged(MiningPriorityMode mode)
         {
+            if (Account.Overrides.MiningPriorityMode.HasValue)
+                return;
+
             _ = ApplyMiningPriorityModeChangeAsync(mode);
         }
         /// <summary>
@@ -254,6 +341,9 @@ namespace Core.Managers
         /// </summary>
         private void OnKickLevelFarmingChanged(bool enabled)
         {
+            if (Account.Overrides.KickLevelFarming.HasValue)
+                return;
+
             AppLogger.Info("Miner", $"Kick level farming {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
 
             if (_isPaused || KickWebView == null)
@@ -267,6 +357,9 @@ namespace Core.Managers
         /// <param name="platform">The platform for which the game whitelist has changed.</param>
         private void OnGameWhitelistChanged(Platform platform)
         {
+            if (platform != Account.Platform || Account.Overrides.GameWhitelistSlugs != null)
+                return;
+
             _ = ApplyGameWhitelistChangeAsync(platform);
         }
         /// <summary>
@@ -382,7 +475,7 @@ namespace Core.Managers
                 UISettingsManager.Instance.UpdateAvailableGameFilterOptions(sourceCampaigns);
 
                 // Materialize before iterating to avoid concurrent modification
-                List<DropsCampaign> filteredCampaigns = ActiveCampaignFilter.FilterForDisplay(sourceCampaigns);
+                List<DropsCampaign> filteredCampaigns = ActiveCampaignFilter.FilterForDisplay(sourceCampaigns, IsCampaignAllowed);
 
                 ActiveCampaigns.Clear();
                 foreach (DropsCampaign campaign in filteredCampaigns)
@@ -404,7 +497,7 @@ namespace Core.Managers
                     _selection.CurrentTwitchCampaign,
                     _twitchProgress,
                     reward => TwitchDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl),
-                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog),
+                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog, EffectiveAutoClaim),
                     (campPct, dropPct) => TwitchProgressChanged?.Invoke(campPct, dropPct),
                     VerboseLog);
             }
@@ -417,7 +510,7 @@ namespace Core.Managers
                     _selection.CurrentKickCampaign,
                     _kickProgress,
                     reward => KickDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl),
-                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog),
+                    (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog, EffectiveAutoClaim),
                     (campPct, dropPct) => KickProgressChanged?.Invoke(campPct, dropPct),
                     VerboseLog);
             }
@@ -428,10 +521,10 @@ namespace Core.Managers
         /// <param name="twitch">The host instance to associate with the Twitch web view. Cannot be null.</param>
         /// <param name="kick">The host instance to associate with the Kick web view. Cannot be null.</param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="twitch"/> or <paramref name="kick"/> is null.</exception>
-        public void InitializeWebViews(IWebViewHost twitch, IWebViewHost kick)
+        public void InitializeWebViews(IWebViewHost? twitch, IWebViewHost? kick)
         {
-            TwitchWebView = twitch ?? throw new ArgumentNullException(nameof(twitch));
-            KickWebView = kick ?? throw new ArgumentNullException(nameof(kick));
+            TwitchWebView = twitch;
+            KickWebView = kick;
             RefreshMiningServices();
             ScheduleKickStreamerMetadataRefresh();
             ScheduleTwitchStreamerMetadataRefresh();
@@ -633,6 +726,9 @@ namespace Core.Managers
 
         private void UpdateTwitchMinedChannelWatcher(string? login)
         {
+            if (!UseHelixWatcher)
+                return;
+
             AppLogger.Debug("TwitchMining", $"UpdateTwitchMinedChannelWatcher login={login ?? "(null)"} helixAuth={_twitchHelixService.IsAuthenticated}");
 
             if (!_twitchHelixService.IsAuthenticated)
@@ -719,7 +815,7 @@ namespace Core.Managers
             {
                 UISettingsManager.Instance.UpdateAvailableGameFilterOptions(allCampaigns);
 
-                List<DropsCampaign> activeCampaignsList = ActiveCampaignFilter.FilterForDisplay(allCampaigns);
+                List<DropsCampaign> activeCampaignsList = ActiveCampaignFilter.FilterForDisplay(allCampaigns, IsCampaignAllowed);
 
                 ActiveCampaigns.Clear();
                 foreach (DropsCampaign? c in activeCampaignsList)
@@ -786,6 +882,32 @@ namespace Core.Managers
                 }
             });
         }
+        /// <summary>
+        /// Stops all mining activity and detaches this engine from shared settings events.
+        /// </summary>
+        public void Dispose()
+        {
+            _isPaused = true;
+            _startMiningCts?.Cancel();
+
+            UISettingsManager.Instance.MiningPriorityModeChanged -= OnMiningPriorityModeChanged;
+            UISettingsManager.Instance.GameWhitelistChanged -= OnGameWhitelistChanged;
+            UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
+            _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;
+
+            _recheckTimer?.Stop();
+            _recheckTimer?.Dispose();
+            _streamHealthMonitor.Dispose();
+            _liveProgressTimer.Dispose();
+            _progressVerifyTimer.Dispose();
+            _kickLevelTimer.Dispose();
+            _kickMetadataTimer.Dispose();
+            _twitchMetadataTimer.Dispose();
+
+            UpdateTwitchMinedChannelWatcher(null);
+            UseHelixWatcher = false;
+        }
+
         /// <summary>
         /// Temporarily pauses stream mining and waits for any active mine cycle to exit.
         /// </summary>
@@ -868,8 +990,8 @@ namespace Core.Managers
                 VerboseLog("StartMining", $"AFTER reset | twitchApplied={_twitchProgress.AppliedMinuteBucket} | kickApplied={_kickProgress.AppliedMinuteBucket}");
 
                 int twitchActive = campaignSnapshot.Count(c => c.Platform == Platform.Twitch);
-                int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake());
-                int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake());
+                int twitchWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Twitch && c.HasProgressToMake(EffectiveAutoClaim));
+                int kickWithProgress = campaignSnapshot.Count(c => c.Platform == Platform.Kick && c.HasProgressToMake(EffectiveAutoClaim));
                 AppLogger.Debug(
                     "TwitchMining",
                     $"StartMiningStreams gates helixAuth={_twitchHelixService.IsAuthenticated} " +
@@ -887,6 +1009,9 @@ namespace Core.Managers
                 _streamHealthMonitor.Stop();
                 _recheckTimer?.Dispose();
                 _recheckTimer = null;
+
+                bool hadTwitchStream = _currentTwitchLogin != null;
+                bool hadKickStream = _currentKickLogin != null;
 
                 _selection.CurrentTwitchCampaign = null;
                 _selection.CurrentKickCampaign = null;
@@ -933,8 +1058,19 @@ namespace Core.Managers
                     },
                     (campaignId, rewardId) => _campaignUpdater.MarkRewardClaimed(ActiveCampaigns, _selection, campaignId, rewardId),
                     () => _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection),
-                    UISettingsManager.Instance.KickLevelFarming,
+                    EffectiveKickLevelFarming,
+                    EffectiveAutoClaim,
                     token);
+
+                // A platform that was streaming but has nothing selected now must stop playing (and earning watch time).
+                if (!token.IsCancellationRequested)
+                {
+                    if (hadKickStream && result.Kick == null && KickWebView is { } kickHost)
+                        await StopStreamAsync(kickHost);
+
+                    if (hadTwitchStream && result.Twitch == null && TwitchWebView is { } twitchHost)
+                        await StopStreamAsync(twitchHost);
+                }
 
                 if (!result.CompletedSelectionCycle)
                 {
@@ -1258,9 +1394,9 @@ namespace Core.Managers
                 IsKickEligibleAsync = async () => _selection.CurrentKickCampaign != null
                     && !string.IsNullOrWhiteSpace(_currentKickLogin)
                     && await _kickLiveChannelApi.IsChannelEligibleAsync(_currentKickLogin, _selection.CurrentKickCampaign),
-                HasTwitchCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Twitch && c.HasProgressToMake()),
+                HasTwitchCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Twitch && c.HasProgressToMake(EffectiveAutoClaim)),
                 HasKickCampaignsWithProgress = () => _selection.CurrentKickCampaign.IsLevelFarming()
-                    || ActiveCampaigns.Any(c => c.Platform == Platform.Kick && c.HasProgressToMake()),
+                    || ActiveCampaigns.Any(c => c.Platform == Platform.Kick && c.HasProgressToMake(EffectiveAutoClaim)),
                 GetLastKnownTwitchOnline = () => _lastKnownTwitchOnlineState,
                 GetLastKnownKickOnline = () => _lastKnownKickOnlineState,
                 SetLastKnownTwitchOnline = value => _lastKnownTwitchOnlineState = value,
@@ -1286,7 +1422,7 @@ namespace Core.Managers
             CampaignSelectionResult result = CampaignPrioritizer.SelectBest(
                 campaigns,
                 _pinnedCampaignStore.CampaignId,
-                UISettingsManager.Instance.MiningPriorityMode);
+                EffectiveMiningPriority);
 
             if (result.PinReleased)
                 _pinnedCampaignStore.Clear();
@@ -1296,7 +1432,7 @@ namespace Core.Managers
                 AppLogger.Debug(
                     "TwitchMining",
                     $"SelectBestCampaign picked='{picked.Name}' platform={picked.Platform} slug='{picked.Slug}' " +
-                    $"from {campaigns.Count} candidates mode={UISettingsManager.Instance.MiningPriorityMode}");
+                    $"from {campaigns.Count} candidates mode={EffectiveMiningPriority}");
             }
             else
             {

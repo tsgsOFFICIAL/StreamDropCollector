@@ -26,7 +26,13 @@ namespace Core.Mining
         /// Applies whitelist + active window filters and orders for dashboard display.
         /// </summary>
         public static List<DropsCampaign> FilterForDisplay(IEnumerable<DropsCampaign> source) =>
-            ApplyActiveWindow(ApplyWhitelist(source))
+            FilterForDisplay(source, UISettingsManager.Instance.IsCampaignAllowedByWhitelist);
+
+        /// <summary>
+        /// Filters campaigns with a caller-supplied game filter (for example a per-account override), then by active window.
+        /// </summary>
+        public static List<DropsCampaign> FilterForDisplay(IEnumerable<DropsCampaign> source, Func<DropsCampaign, bool> isAllowed) =>
+            ApplyActiveWindow(source.Where(isAllowed))
                 .OrderBy(x => x.Platform)
                 .ThenBy(x => x.GameName)
                 .ToList();
