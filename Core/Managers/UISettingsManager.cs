@@ -439,7 +439,12 @@ namespace Core.Managers
                 }
 
                 if (Version.TryParse(serverUpdateInfo.Version, out Version? serverVersion) && Version.TryParse(localVersionInfo.FileVersion, out Version? localVersion))
-                    UpdateAvailable = serverVersion > localVersion;
+                {
+                    // A nightly build ("1.3.0-nightly.<sha>") shares its FileVersion with the stable release of the same
+                    // number, so it must still be offered that release; otherwise nightly users never move to stable.
+                    bool isNightly = localVersionInfo.ProductVersion?.Contains("-nightly", StringComparison.OrdinalIgnoreCase) == true;
+                    UpdateAvailable = serverVersion > localVersion || (isNightly && serverVersion == localVersion);
+                }
                 else
                     UpdateAvailable = false;
 
