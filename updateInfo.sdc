@@ -1,8 +1,18 @@
 {
-  "version": "1.1.3",
-  "type": "Hotfix",
-  "changelog": "Fixed Kick drop claims consistently failing due to a WebView message race with concurrent channel status polling.",
+  "version": "1.3.0",
+  "type": "Feature",
+  "changelog": "Added multi-account support: log in to as many Twitch and Kick accounts as you like, and every account mines in parallel in its own isolated browser profile. Each account has its own card on the dashboard, can be enabled, disabled (which closes its browser immediately) or removed, and can override the global auto-claim, level farming, mining priority and game filter settings. The Inventory page has an account picker, and you are warned before adding more than 10 accounts.",
   "historic_versions": [
+    {
+      "version": "1.2.0",
+      "type": "Feature",
+      "changelog": "Added optional Kick level farming: when no Kick drops are available, the app watches a top streamer to earn viewer levels, and shows your level, XP and progress to the next level on the dashboard."
+    },
+    {
+      "version": "1.1.3",
+      "type": "Hotfix",
+      "changelog": "Fixed Kick drop claims consistently failing due to a WebView message race with concurrent channel status polling."
+    },
     {
       "version": "1.1.2",
       "type": "Hotfix",
