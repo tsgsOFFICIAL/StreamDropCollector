@@ -60,6 +60,11 @@ namespace Core.Managers
         public event Action<byte, byte>? KickProgressChanged;
 
         /// <summary>
+        /// Raised when the Kick viewer level progress is refreshed.
+        /// </summary>
+        public event Action<KickLevelProgress>? KickLevelChanged;
+
+        /// <summary>
         /// Occurs when the miner status label changes (for example, Idle, Starting, Evaluating, or Mining).
         /// </summary>
         public event Action<string>? MinerStatusChanged;
@@ -142,6 +147,8 @@ namespace Core.Managers
         // Timer for live ticking
         private readonly System.Timers.Timer _liveProgressTimer = new(1000);
         private readonly System.Timers.Timer _progressVerifyTimer = new(TimeSpan.FromMinutes(2).TotalMilliseconds);
+        private readonly System.Timers.Timer _kickLevelTimer = new(TimeSpan.FromSeconds(30).TotalMilliseconds);
+        private int _kickLevelRefreshing;
         private System.Timers.Timer? _recheckTimer;
         private readonly SemaphoreSlim _progressVerifyLock = new(1, 1);
         private int _progressVerifyScheduled;
@@ -210,12 +217,16 @@ namespace Core.Managers
         {
             UISettingsManager.Instance.MiningPriorityModeChanged += OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
+            UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
 
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
             _liveProgressTimer.AutoReset = true;
 
             _progressVerifyTimer.Elapsed += (_, _) => ScheduleServerProgressVerification();
             _progressVerifyTimer.AutoReset = true;
+
+            _kickLevelTimer.Elapsed += (_, _) => ScheduleKickLevelRefresh();
+            _kickLevelTimer.AutoReset = true;
 
             _kickMetadataTimer.Elapsed += (_, _) => ScheduleKickStreamerMetadataRefresh();
             _kickMetadataTimer.AutoReset = true;
@@ -237,6 +248,18 @@ namespace Core.Managers
         private void OnMiningPriorityModeChanged(MiningPriorityMode mode)
         {
             _ = ApplyMiningPriorityModeChangeAsync(mode);
+        }
+        /// <summary>
+        /// Re-evaluates mining when the Kick level farming toggle changes.
+        /// </summary>
+        private void OnKickLevelFarmingChanged(bool enabled)
+        {
+            AppLogger.Info("Miner", $"Kick level farming {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
+
+            if (_isPaused || KickWebView == null)
+                return;
+
+            _ = StartMiningStreams(true);
         }
         /// <summary>
         /// Handles changes to the game whitelist for the specified platform.
@@ -775,6 +798,7 @@ namespace Core.Managers
             _streamHealthMonitor.Stop();
             _liveProgressTimer.Stop();
             _progressVerifyTimer.Stop();
+            _kickLevelTimer.Stop();
             UpdateTwitchMinedChannelWatcher(null);
 
             await _startMiningLock.WaitAsync();
@@ -909,6 +933,7 @@ namespace Core.Managers
                     },
                     (campaignId, rewardId) => _campaignUpdater.MarkRewardClaimed(ActiveCampaigns, _selection, campaignId, rewardId),
                     () => _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection),
+                    UISettingsManager.Instance.KickLevelFarming,
                     token);
 
                 if (!result.CompletedSelectionCycle)
@@ -939,6 +964,15 @@ namespace Core.Managers
 
                 _liveProgressTimer?.Start();
                 _progressVerifyTimer.Start();
+                if (_selection.CurrentKickCampaign != null)
+                {
+                    _kickLevelTimer.Start();
+                    ScheduleKickLevelRefresh();
+                }
+                else
+                {
+                    _kickLevelTimer.Stop();
+                }
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(TimeSpan.FromSeconds(45));
@@ -1022,6 +1056,32 @@ namespace Core.Managers
             }
 
             _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
+        }
+
+        /// <summary>
+        /// Refreshes the Kick viewer level on the UI dispatcher, skipping when a refresh is already in flight.
+        /// </summary>
+        private void ScheduleKickLevelRefresh()
+        {
+            if (_isPaused || KickWebView is not { } host || _selection.CurrentKickCampaign == null)
+                return;
+
+            if (Interlocked.CompareExchange(ref _kickLevelRefreshing, 1, 0) != 0)
+                return;
+
+            _ = Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    KickLevelProgress? level = await KickLevelClient.FetchAsync(host);
+                    if (level != null)
+                        KickLevelChanged?.Invoke(level);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _kickLevelRefreshing, 0);
+                }
+            });
         }
 
         /// <summary>
@@ -1199,7 +1259,8 @@ namespace Core.Managers
                     && !string.IsNullOrWhiteSpace(_currentKickLogin)
                     && await _kickLiveChannelApi.IsChannelEligibleAsync(_currentKickLogin, _selection.CurrentKickCampaign),
                 HasTwitchCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Twitch && c.HasProgressToMake()),
-                HasKickCampaignsWithProgress = () => ActiveCampaigns.Any(c => c.Platform == Platform.Kick && c.HasProgressToMake()),
+                HasKickCampaignsWithProgress = () => _selection.CurrentKickCampaign.IsLevelFarming()
+                    || ActiveCampaigns.Any(c => c.Platform == Platform.Kick && c.HasProgressToMake()),
                 GetLastKnownTwitchOnline = () => _lastKnownTwitchOnlineState,
                 GetLastKnownKickOnline = () => _lastKnownKickOnlineState,
                 SetLastKnownTwitchOnline = value => _lastKnownTwitchOnlineState = value,

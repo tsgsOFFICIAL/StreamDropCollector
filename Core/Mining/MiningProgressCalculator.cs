@@ -1,3 +1,4 @@
+using Core.Mining.Kick;
 using Core.Managers;
 using Core.Logging;
 using Core.Models;
@@ -14,7 +15,7 @@ namespace Core.Mining
         /// </summary>
         public static byte CalculateLiveCampaignProgress(DropsCampaign? campaign)
         {
-            if (campaign == null)
+            if (campaign == null || campaign.IsLevelFarming())
                 return 0;
 
             int totalRequiredMinutes = campaign.Rewards.Sum(r => r.RequiredMinutes);

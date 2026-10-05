@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Windows;
 using Core.Logging;
 using Core.Managers;
+using Core.Mining.Kick;
 using Core.Services;
 using Core.Services.Twitch.Helix;
 using Core.Models;
@@ -166,6 +167,16 @@ namespace UI.Views
                 });
             };
 
+            DropsInventoryManager.Instance.KickLevelChanged += level =>
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    KickProgress.LevelBadgeUrl = level.BadgeImageUrl ?? string.Empty;
+                    KickProgress.LevelPercent = level.PercentExact;
+                    KickProgress.LevelText = $"Level {level.Level} • {level.ProgressXp:N0} / {level.ProgressXp + level.XpToNextLevel:N0} XP";
+                });
+            };
+
             DropsInventoryManager.Instance.MinerStatusChanged += status =>
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
@@ -213,6 +224,7 @@ namespace UI.Views
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     KickProgress.CampaignName = campaign;
+                    KickProgress.IsLevelFarming = campaign == KickLevelFarmingCampaign.DisplayName;
                     KickProgress.CampaignImageUrl = imageUrl ?? string.Empty;
                 });
             };

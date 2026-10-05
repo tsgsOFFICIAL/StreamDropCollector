@@ -1,6 +1,7 @@
 using Core.Enums;
 using Core.Helpers;
 using Core.Logging;
+using Core.Mining.Kick;
 using Core.Models;
 using Core.Stores;
 
@@ -109,7 +110,8 @@ namespace Core.Mining
                 MiningBaseline baseline = MiningBaselineInitializer.Create(best);
                 DateTime? suggestedNextCheck = MiningBaselineInitializer.EstimateSoonestRewardCompletion(best);
 
-                lastMinedStreamers.Remember(platform, best.Slug, streamUrl);
+                if (!best.IsLevelFarming())
+                    lastMinedStreamers.Remember(platform, best.Slug, streamUrl);
                 AppLogger.Info("Miner", $"{platform}: watching {login} for '{best.Name}'.");
 
                 return new PlatformMiningResult(best, streamUrl, login, baseline, suggestedNextCheck);

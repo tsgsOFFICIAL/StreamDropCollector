@@ -49,8 +49,8 @@
                         Visibility="{Binding CampaignName, Converter={StaticResource StringToVisibilityConverter}}">
                 <Border Width="32" Height="42" CornerRadius="4" ClipToBounds="True"
                         Background="{DynamicResource MainBackgroundBrush}" Margin="0,0,8,0"
-                        Visibility="{Binding CampaignImageUrl, Converter={StaticResource StringToVisibilityConverter}}">
-                    <Image local:ImageEx.SourceUrl="{Binding CampaignImageUrl}" Stretch="UniformToFill"/>
+                        Visibility="{Binding DisplayCampaignImageUrl, Converter={StaticResource StringToVisibilityConverter}}">
+                    <Image local:ImageEx.SourceUrl="{Binding DisplayCampaignImageUrl}" Stretch="Uniform"/>
                 </Border>
                 <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                     <Run Text="Campaign: " Foreground="{DynamicResource TextSecondaryBrush}"/>
@@ -60,9 +60,9 @@
             </StackPanel>
 
             <ProgressBar Margin="0,10,0,5" Minimum="0" Maximum="100"
-                         Value="{Binding CampaignProgress}"/>
+                         Value="{Binding DisplayCampaignProgress, Mode=OneWay}"/>
 
-            <TextBlock Text="{Binding CampaignProgress, StringFormat='{}{0}% Complete'}"
+            <TextBlock Text="{Binding CampaignProgressText}"
                        Foreground="{DynamicResource TextMutedBrush}" FontSize="12"/>
 
             <TextBlock Text="Drop Progress" Margin="0,10,0,0"
@@ -87,6 +87,19 @@
 
             <TextBlock Text="{Binding DropProgress, StringFormat='{}{0}% Complete'}"
                        Foreground="{DynamicResource TextMutedBrush}" FontSize="12"/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                        Visibility="{Binding LevelLineText, Converter={StaticResource StringToVisibilityConverter}}">
+                <Image Width="20" Height="20" Margin="0,0,6,0" Stretch="Uniform"
+                       local:ImageEx.SourceUrl="{Binding LevelBadgeUrl}"
+                       Visibility="{Binding LevelBadgeUrl, Converter={StaticResource StringToVisibilityConverter}}"/>
+                <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                    <Run Text="{Binding LevelLineText, Mode=OneWay}" FontWeight="SemiBold"
+                         Foreground="{Binding BrandBrushKey, Mode=OneWay, Converter={StaticResource ResourceKeyToBrushConverter}}"/>
+                    <Run Text="{Binding LevelPercent, StringFormat='  ({0:F1}% to next level)', Mode=OneWay}"
+                         Foreground="{DynamicResource TextMutedBrush}"/>
+                </TextBlock>
+            </StackPanel>
 
             <TextBlock Margin="0,5,0,0"
                        Visibility="{Binding MinedChannel, Converter={StaticResource StringToVisibilityConverter}}">

@@ -31,7 +31,7 @@ namespace UI.Models
         public byte CampaignProgress
         {
             get => _campaignProgress;
-            set { _campaignProgress = value; OnPropertyChanged(); }
+            set { _campaignProgress = value; OnPropertyChanged(); NotifyLevelDerived(); }
         }
 
         private byte _dropProgress;
@@ -58,7 +58,7 @@ namespace UI.Models
         public string CampaignImageUrl
         {
             get => _campaignImageUrl;
-            set { _campaignImageUrl = value; OnPropertyChanged(); }
+            set { _campaignImageUrl = value; OnPropertyChanged(); NotifyLevelDerived(); }
         }
 
         private string _dropName = string.Empty;
@@ -86,6 +86,65 @@ namespace UI.Models
         {
             get => _minedChannel;
             set { _minedChannel = value; OnPropertyChanged(); }
+        }
+
+        private bool _isLevelFarming;
+        private string _levelText = string.Empty;
+        private double _levelPercent;
+        private string _levelBadgeUrl = string.Empty;
+
+        /// <summary>True while the active "campaign" is level farming, so the campaign bar shows level progress instead.</summary>
+        public bool IsLevelFarming
+        {
+            get => _isLevelFarming;
+            set { _isLevelFarming = value; NotifyLevelDerived(); }
+        }
+
+        /// <summary>Level summary (for example "Level 5 - 1,200 / 4,800 XP"); empty when unknown.</summary>
+        public string LevelText
+        {
+            get => _levelText;
+            set { _levelText = value; NotifyLevelDerived(); }
+        }
+
+        /// <summary>Completion percentage (0-100) of the current level.</summary>
+        public double LevelPercent
+        {
+            get => _levelPercent;
+            set { _levelPercent = value; NotifyLevelDerived(); }
+        }
+
+        /// <summary>Kick's level badge image URL.</summary>
+        public string LevelBadgeUrl
+        {
+            get => _levelBadgeUrl;
+            set { _levelBadgeUrl = value; NotifyLevelDerived(); }
+        }
+
+        /// <summary>Value for the campaign bar: level progress while farming, otherwise campaign progress.</summary>
+        public double DisplayCampaignProgress => IsLevelFarming && !string.IsNullOrEmpty(LevelText) ? LevelPercent : CampaignProgress;
+
+        /// <summary>Caption under the campaign bar.</summary>
+        public string CampaignProgressText => IsLevelFarming && !string.IsNullOrEmpty(LevelText)
+            ? $"{LevelText} • {LevelPercent:F1}% to next level"
+            : $"{CampaignProgress}% Complete";
+
+        /// <summary>Image beside the campaign name: the level badge while farming, otherwise the campaign image.</summary>
+        public string DisplayCampaignImageUrl => IsLevelFarming && !string.IsNullOrEmpty(LevelBadgeUrl) ? LevelBadgeUrl : CampaignImageUrl;
+
+        /// <summary>Compact level line shown only when the campaign bar is not already showing level progress.</summary>
+        public string LevelLineText => IsLevelFarming ? string.Empty : LevelText;
+
+        private void NotifyLevelDerived()
+        {
+            OnPropertyChanged(nameof(IsLevelFarming));
+            OnPropertyChanged(nameof(LevelText));
+            OnPropertyChanged(nameof(LevelPercent));
+            OnPropertyChanged(nameof(LevelBadgeUrl));
+            OnPropertyChanged(nameof(DisplayCampaignProgress));
+            OnPropertyChanged(nameof(CampaignProgressText));
+            OnPropertyChanged(nameof(DisplayCampaignImageUrl));
+            OnPropertyChanged(nameof(LevelLineText));
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

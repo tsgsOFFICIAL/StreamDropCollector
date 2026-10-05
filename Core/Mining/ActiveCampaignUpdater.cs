@@ -1,5 +1,6 @@
 using Core.Enums;
 using Core.Logging;
+using Core.Mining.Kick;
 using Core.Models;
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -29,6 +30,10 @@ namespace Core.Mining
             Action<string, string>? verboseLog = null)
         {
             if (minutesToAdd <= 0)
+                return;
+
+            // Level farming has no inventory entry to update; keep it selected.
+            if (platform == Platform.Kick && campaignId == KickLevelFarmingCampaign.CampaignId)
                 return;
 
             Application.Current.Dispatcher.Invoke(() =>

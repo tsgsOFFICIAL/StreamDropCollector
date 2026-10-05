@@ -1,6 +1,7 @@
 using Core.Enums;
 using Core.Interfaces;
 using Core.Logging;
+using Core.Mining.Kick;
 using Core.Models;
 using Core.Stores;
 
@@ -34,6 +35,7 @@ namespace Core.Mining
         /// <param name="onKickSelectionPreview">Raised when a Kick stream is chosen, before navigation.</param>
         /// <param name="markRewardClaimed">Marks a reward claimed in the active inventory.</param>
         /// <param name="updateSelectionFlags">Refreshes current-campaign highlight flags in the inventory.</param>
+        /// <param name="kickLevelFarming">When true, watches a top-viewed Kick channel if no Kick campaign has progress to make.</param>
         /// <param name="cancellationToken">Cancellation token for the mining cycle.</param>
         /// <returns>Selection results, miner status, and the next scheduled re-evaluation time.</returns>
         public async Task<MiningOrchestratorResult> RunAsync(
@@ -55,6 +57,7 @@ namespace Core.Mining
             Action<DropsCampaign, string> onKickSelectionPreview,
             Func<string, string, bool> markRewardClaimed,
             Action updateSelectionFlags,
+            bool kickLevelFarming,
             CancellationToken cancellationToken)
         {
             AppLogger.Debug(
@@ -67,6 +70,11 @@ namespace Core.Mining
                 AppLogger.Debug("Miner", "[MiningOrchestrator] No active campaigns with progress to make. Stopping stream mining.");
                 AppLogger.Info("Miner", "No active campaigns found during start; switching to Idle.");
                 AppLogger.Warn("TwitchMining", "MiningOrchestrator ABORT - campaign snapshot empty.");
+
+                PlatformMiningResult? farmingOnly = await TryFarmKickAsync();
+                if (farmingOnly != null)
+                    return BuildFarmingOnlyResult(farmingOnly, DateTime.Now.AddHours(1));
+
                 return new MiningOrchestratorResult
                 {
                     CompletedSelectionCycle = false,
@@ -107,6 +115,10 @@ namespace Core.Mining
                 AppLogger.Info("Miner", "No campaigns with progress after claim pass; switching to Idle.");
                 AppLogger.Warn("TwitchMining", "MiningOrchestrator ABORT - no campaigns with HasProgressToMake().");
                 updateSelectionFlags();
+
+                PlatformMiningResult? farmingAfterClaims = await TryFarmKickAsync();
+                if (farmingAfterClaims != null)
+                    return BuildFarmingOnlyResult(farmingAfterClaims, nextCheckAt);
 
                 return new MiningOrchestratorResult
                 {
@@ -167,6 +179,7 @@ namespace Core.Mining
             if (kickCampaigns.Count == 0)
             {
                 AppLogger.Warn("KickSelection", "MiningOrchestrator SKIP Kick selection - no Kick campaigns with progress.");
+                kickResult = await TryFarmKickAsync();
             }
             else if (kickWebView == null)
             {
@@ -214,6 +227,34 @@ namespace Core.Mining
                 Twitch = twitchResult,
                 Kick = kickResult
             };
+
+            async Task<PlatformMiningResult?> TryFarmKickAsync()
+            {
+                if (!kickLevelFarming || kickWebView == null)
+                    return null;
+
+                AppLogger.Info("Miner", "No Kick drops to mine; starting level farming.");
+                return await PlatformMiningSession.TrySelectAsync(
+                    Platform.Kick,
+                    "KickSelection",
+                    [KickLevelFarmingCampaign.Create()],
+                    campaigns => Task.FromResult<DropsCampaign?>(campaigns.FirstOrDefault()),
+                    selectKickUrlAsync,
+                    isKickEligibleAsync,
+                    navigateKickAsync,
+                    prepareKickStreamPageAsync,
+                    lastMinedStreamers,
+                    onKickSelectionPreview,
+                    cancellationToken);
+            }
         }
+
+        private static MiningOrchestratorResult BuildFarmingOnlyResult(PlatformMiningResult farming, DateTime nextCheckAt) => new()
+        {
+            CompletedSelectionCycle = true,
+            MinerStatus = "Mining",
+            NextCheckAt = MiningBaselineInitializer.Earliest(nextCheckAt, DateTime.Now.AddMinutes(30)),
+            Kick = farming
+        };
     }
 }

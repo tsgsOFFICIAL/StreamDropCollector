@@ -64,6 +64,10 @@ namespace Core.Models
         /// </summary>
         public MiningPriorityMode MiningPriorityMode { get; set; } = MiningPriorityMode.AvailabilityThenProgress;
         /// <summary>
+        /// Gets or sets a value indicating whether Kick level farming runs when no Kick drop campaign has progress to make.
+        /// </summary>
+        public bool KickLevelFarming { get; set; }
+        /// <summary>
         /// Gets or sets the Twitch game slug whitelist used to filter eligible campaigns.
         /// </summary>
         public List<string> TwitchGameWhitelistSlugs { get; set; } = new List<string>();

@@ -93,6 +93,10 @@
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Auto-claim rewards when ready"
                                   Margin="0,0,0,12"/>
+                        <CheckBox IsChecked="{Binding KickLevelFarming, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Kick level farming (watch a top streamer when no Kick drops are available)"
+                                  Margin="0,0,0,12"/>
                         <controls:SettingsLabeledRow Label="Mining priority">
                             <ComboBox Width="260"
                                       Style="{StaticResource NeonFlatComboBoxStyle}"

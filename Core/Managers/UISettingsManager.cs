@@ -41,6 +41,11 @@ namespace Core.Managers
         /// Occurs when the game whitelist or blacklist mode changes for a platform.
         /// </summary>
         public event Action<Platform>? GameWhitelistChanged;
+
+        /// <summary>
+        /// Occurs when <see cref="KickLevelFarming"/> changes after settings have finished loading.
+        /// </summary>
+        public event Action<bool>? KickLevelFarmingChanged;
         private static readonly string _settingsFilePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector", "Settings.json");
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -66,6 +71,7 @@ namespace Core.Managers
         private bool _twitchGameFilterBlacklistMode;
         private bool _kickGameFilterBlacklistMode;
         private bool _isUpdatingGameFilterOptions;
+        private bool _kickLevelFarming;
         private bool _isLoadingSettings;
 
         /// <summary>
@@ -184,6 +190,19 @@ namespace Core.Managers
             {
                 if (SetField(ref _miningPriorityMode, value) && !_isLoadingSettings)
                     MiningPriorityModeChanged?.Invoke(value);
+            }
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether the miner watches a top-viewed Kick channel to gain levels
+        /// when no Kick drop campaign has progress to make.
+        /// </summary>
+        public bool KickLevelFarming
+        {
+            get => _kickLevelFarming;
+            set
+            {
+                if (SetField(ref _kickLevelFarming, value) && !_isLoadingSettings)
+                    KickLevelFarmingChanged?.Invoke(value);
             }
         }
         /// <summary>
@@ -454,6 +473,7 @@ namespace Core.Managers
                     UpdateFrequency = settings.UpdateFrequency;
                     AutoClaimRewards = settings.AutoClaimRewards;
                     MiningPriorityMode = settings.MiningPriorityMode;
+                    KickLevelFarming = settings.KickLevelFarming;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
                     NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
                     VerboseDebugLogging = settings.VerboseDebugLogging;
@@ -500,6 +520,7 @@ namespace Core.Managers
                     UpdateFrequency = UpdateFrequency,
                     AutoClaimRewards = AutoClaimRewards,
                     MiningPriorityMode = MiningPriorityMode,
+                    KickLevelFarming = KickLevelFarming,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,
                     NotifyOnAutoClaimed = NotifyOnAutoClaimed,
                     VerboseDebugLogging = VerboseDebugLogging,
