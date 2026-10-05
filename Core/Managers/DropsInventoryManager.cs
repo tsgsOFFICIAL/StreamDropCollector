@@ -473,12 +473,8 @@ namespace Core.Managers
                     return;
                 }
 
-                if (!ActiveCampaigns.Any())
-                {
-                    AppLogger.Warn("Miner", "Whitelist changed but there are no active campaigns after filtering; re-evaluation skipped.");
-                    return;
-                }
-
+                // Re-evaluate even with zero campaigns left: a whitelist that excludes everything currently being mined
+                // must stop that stream (the orchestrator turns an empty list into Idle).
                 if (TwitchWebView == null && KickWebView == null)
                 {
                     AppLogger.Warn("Miner", "Whitelist changed but no webviews are initialized; re-evaluation skipped.");
