@@ -1,8 +1,13 @@
 {
-  "version": "1.3.1",
+  "version": "1.3.2",
   "type": "Patch",
-  "changelog": "Reworked the update experience: Update Now now opens a progress window with a live log and progress bar, and downloads are far more reliable on slow connections (limited parallel downloads, automatic retries, stall detection, Cancel and Retry). An update that fails partway can no longer leave you with a half-updated install. Nightly builds are now also offered the matching stable release.",
+  "changelog": "Maintenance release with no functional changes.",
   "historic_versions": [
+    {
+      "version": "1.3.1",
+      "type": "Patch",
+      "changelog": "Reworked the update experience: Update Now now opens a progress window with a live log and progress bar, and downloads are far more reliable on slow connections (limited parallel downloads, automatic retries, stall detection, Cancel and Retry). An update that fails partway can no longer leave you with a half-updated install. Nightly builds are now also offered the matching stable release."
+    },
     {
       "version": "1.3.0",
       "type": "Feature",
