@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using Core.Services.Mining.Kick;
 using System.Windows.Input;
@@ -614,15 +615,26 @@ namespace Core.Managers
             List<DropsCampaign> kickCampaigns = await Application.Current.Dispatcher.InvokeAsync(() =>
                 ActiveCampaigns.Where(c => c.Platform == Platform.Kick).ToList());
 
+            // Campaigns with short streamer lists (typically general drops) go first so their chips fill in quickly.
+            const int priorityLoginLimit = 20;
             HashSet<string> logins = new(StringComparer.OrdinalIgnoreCase);
+            List<string> priorityLogins = [];
+            List<string> otherLogins = [];
+            List<(DropsCampaign Campaign, IReadOnlyList<string> Logins)> campaignLogins = [];
             foreach (DropsCampaign campaign in kickCampaigns)
             {
-                IReadOnlyList<string> campaignLogins = await _kickLiveChannelApi
+                campaignLogins.Add((campaign, await _kickLiveChannelApi
                     .GetEligibleLoginsAsync(campaign, allowDirectoryDiscovery: false, ct)
-                    .ConfigureAwait(false);
+                    .ConfigureAwait(false)));
+            }
 
-                foreach (string login in campaignLogins)
-                    logins.Add(login);
+            foreach ((DropsCampaign _, IReadOnlyList<string> list) in campaignLogins.OrderBy(x => x.Logins.Count))
+            {
+                foreach (string login in list)
+                {
+                    if (logins.Add(login))
+                        (list.Count <= priorityLoginLimit ? priorityLogins : otherLogins).Add(login);
+                }
             }
 
             if (logins.Count == 0)
@@ -636,26 +648,37 @@ namespace Core.Managers
             await _kickMetadataLock.WaitAsync(ct);
             try
             {
-                Dictionary<string, LiveChannelSnapshot> snapshots = new(StringComparer.OrdinalIgnoreCase);
+                ConcurrentDictionary<string, LiveChannelSnapshot> snapshots = new(StringComparer.OrdinalIgnoreCase);
+                ParallelOptions options = new() { MaxDegreeOfParallelism = 6, CancellationToken = ct };
 
-                foreach (string login in logins)
+                void Publish()
                 {
-                    ct.ThrowIfCancellationRequested();
+                    Dictionary<string, LiveChannelSnapshot> published = new(snapshots, StringComparer.OrdinalIgnoreCase);
+                    _kickStreamerMetadata = published;
+                    Application.Current.Dispatcher.Invoke(() =>
+                        KickStreamerMetadataChanged?.Invoke(published));
+                }
 
-                    LiveChannelSnapshot? snapshot = await _kickLiveChannelApi.GetChannelAsync(login, ct);
+                async ValueTask Fetch(string login, CancellationToken token)
+                {
+                    LiveChannelSnapshot? snapshot = await _kickLiveChannelApi.GetChannelAsync(login, token);
                     if (snapshot != null)
                         snapshots[login] = snapshot;
                 }
 
-                _kickStreamerMetadata = snapshots;
+                await Parallel.ForEachAsync(priorityLogins, options, Fetch);
+
+                // Show the short lists straight away; the long ones follow.
+                if (otherLogins.Count > 0)
+                    Publish();
+
+                await Parallel.ForEachAsync(otherLogins, options, Fetch);
+
+                Publish();
 
                 AppLogger.Debug(
                     "KickMetadata",
                     $"Refreshed {snapshots.Count}/{logins.Count} Kick streamer snapshots ({snapshots.Values.Count(s => s.IsLive)} live).");
-
-                IReadOnlyDictionary<string, LiveChannelSnapshot> published = _kickStreamerMetadata;
-                Application.Current.Dispatcher.Invoke(() =>
-                    KickStreamerMetadataChanged?.Invoke(published));
             }
             finally
             {
@@ -920,6 +943,12 @@ namespace Core.Managers
                         ActiveCampaigns.Where(c => c.Platform == Platform.Kick).ToList());
 
                     await _kickLiveChannelApi.PreloadGeneralDropDirectoriesAsync(snapshot);
+
+                    // Chips for general drops are built from the discovered logins; tell the UI now rather than
+                    // after the (slow) live-status scan, which would otherwise leave the section hidden.
+                    IReadOnlyDictionary<string, LiveChannelSnapshot> current = _kickStreamerMetadata;
+                    Application.Current.Dispatcher.Invoke(() => KickStreamerMetadataChanged?.Invoke(current));
+
                     ScheduleKickStreamerMetadataRefresh();
                 }
                 catch (Exception ex)

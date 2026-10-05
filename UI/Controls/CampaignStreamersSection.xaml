@@ -260,7 +260,7 @@
                                 Visibility="{Binding ShowsLiveUi, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Ellipse Width="8" Height="8" Fill="#FF4D4D" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <TextBlock FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center">
-                            <Run Text="{Binding LiveCount, Mode=OneWay}" FontWeight="Bold" Foreground="#FF4D4D"/>
+                            <Run Text="{Binding LiveCountText, Mode=OneWay}" FontWeight="Bold" Foreground="#FF4D4D"/>
                             <Run Text=" live now"/>
                         </TextBlock>
                     </StackPanel>

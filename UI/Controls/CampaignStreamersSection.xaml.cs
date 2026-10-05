@@ -61,8 +61,14 @@ namespace UI.Controls
 
                 _liveCount = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(LiveCountText));
             }
         }
+
+        private bool _liveStatusKnown;
+
+        /// <summary>The live count, or "?" while the first live-status scan for this campaign is still running.</summary>
+        public string LiveCountText => _liveStatusKnown ? LiveCount.ToString() : "?";
 
         /// <summary>Whether the full streamer list panel is expanded.</summary>
         public bool IsExpanded
@@ -258,6 +264,8 @@ namespace UI.Controls
             if (!anyChanged)
                 return;
 
+            _liveStatusKnown = true;
+            OnPropertyChanged(nameof(LiveCountText));
             UpdateLiveCount();
             RefreshPreview();
             if (IsExpanded)
@@ -287,6 +295,7 @@ namespace UI.Controls
             _filterLiveOnly = true;
             _searchQuery = string.Empty;
             _liveCount = 0;
+            _liveStatusKnown = false;
 
             if (campaign != null)
             {
@@ -304,6 +313,7 @@ namespace UI.Controls
             OnPropertyChanged(nameof(ShowExpandedPanel));
             OnPropertyChanged(nameof(ShowsLiveUi));
             OnPropertyChanged(nameof(TotalCount));
+            OnPropertyChanged(nameof(LiveCountText));
             OnPropertyChanged(nameof(IsExpanded));
             OnPropertyChanged(nameof(SearchQuery));
             OnPropertyChanged(nameof(FilterLiveOnly));
@@ -398,7 +408,7 @@ namespace UI.Controls
                 return;
             }
 
-            FooterText = $"{TotalCount} eligible · {LiveCount} live - expand to browse";
+            FooterText = $"{TotalCount} eligible · {LiveCountText} live - expand to browse";
         }
 
         private void UpdateExpandedFooter(string query)
@@ -407,14 +417,14 @@ namespace UI.Controls
 
             if (FilterLiveOnly)
             {
-                int totalLive = _allStreamers.Count(s => s.IsLive);
+                string totalLive = _liveStatusKnown ? _allStreamers.Count(s => s.IsLive).ToString() : "?";
                 FooterText =
                     $"Showing {FilteredStreamers.Count} of {totalLive} live{suffix} · {TotalCount} total eligible";
             }
             else
             {
                 FooterText =
-                    $"Showing {FilteredStreamers.Count} of {TotalCount} eligible{suffix} ({LiveCount} live)";
+                    $"Showing {FilteredStreamers.Count} of {TotalCount} eligible{suffix} ({LiveCountText} live)";
             }
         }
 
