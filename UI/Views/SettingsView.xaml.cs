@@ -26,10 +26,25 @@ namespace UI.Views
             DataContext = UISettingsManager.Instance;
         }
 
-        private async void OnUpdateButtonClick(object sender, RoutedEventArgs e)
+        private void OnUpdateButtonClick(object sender, RoutedEventArgs e)
         {
-            if (UISettingsManager.Instance.UpdateAvailable)
-                await UpdateManager.Instance.DownloadUpdate(); // Download and apply the update
+            if (!UISettingsManager.Instance.UpdateAvailable || UpdateManager.Instance.IsUpdating)
+                return;
+
+            // Disable the button while the update window (progress bar and log) is open.
+            System.Windows.Controls.Button button = (System.Windows.Controls.Button)sender;
+            button.IsEnabled = false;
+            button.Content = "Updating...";
+
+            try
+            {
+                new UpdateWindow { Owner = Window.GetWindow(this) }.ShowDialog();
+            }
+            finally
+            {
+                button.Content = "Update Now";
+                button.IsEnabled = true;
+            }
         }
 
         private void OnRemoveAllAccountsButtonClick(object sender, RoutedEventArgs e)

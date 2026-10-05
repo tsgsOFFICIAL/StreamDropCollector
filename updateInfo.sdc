@@ -1,8 +1,13 @@
 {
-  "version": "1.3.0",
-  "type": "Feature",
-  "changelog": "Added multi-account support: log in to as many Twitch and Kick accounts as you like, and every account mines in parallel in its own isolated browser profile. Each account has its own card on the dashboard, can be enabled, disabled (which closes its browser immediately) or removed, and can override the global auto-claim, level farming, mining priority and game filter settings. The Inventory page has an account picker, and you are warned before adding more than 10 accounts.",
+  "version": "1.3.1",
+  "type": "Patch",
+  "changelog": "Reworked the update experience: Update Now now opens a progress window with a live log and progress bar, and downloads are far more reliable on slow connections (limited parallel downloads, automatic retries, stall detection, Cancel and Retry). An update that fails partway can no longer leave you with a half-updated install. Nightly builds are now also offered the matching stable release.",
   "historic_versions": [
+    {
+      "version": "1.3.0",
+      "type": "Feature",
+      "changelog": "Added multi-account support: log in to as many Twitch and Kick accounts as you like, and every account mines in parallel in its own isolated browser profile. Each account has its own card on the dashboard, can be enabled, disabled (which closes its browser immediately) or removed, and can override the global auto-claim, level farming, mining priority and game filter settings. The Inventory page has an account picker, and you are warned before adding more than 10 accounts."
+    },
     {
       "version": "1.2.0",
       "type": "Feature",

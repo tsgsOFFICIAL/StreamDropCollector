@@ -1,127 +1,165 @@
 ﻿using System.Text.Json.Serialization;
 using System.Security.Authentication;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Net.Http;
-using System.Net;
 using System.IO;
 using Core.Logging;
 
 namespace Core.Services
 {
+    /// <summary>
+    /// Downloads a folder of a GitHub repository (the published release binaries) with bounded parallelism, per-file
+    /// retries and stall detection, and reports byte-accurate progress plus a human-readable log.
+    /// </summary>
+    /// <remarks>
+    /// Any file that cannot be downloaded after all retries fails the whole download, so a flaky connection can never
+    /// produce a half-updated installation. Unchanged files (matching the cached SHA) are copied from the installed copy.
+    /// </remarks>
     public partial class GitHubDirectoryDownloaderService : IDisposable
     {
+        private const int MaxParallelDownloads = 6;
+        private const int MaxAttempts = 4;
+        private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(45);
+
         private readonly HttpClient _httpClient;
         private readonly string _repositoryOwner;
         private readonly string _repositoryName;
         private readonly string _folderPath;
         private readonly string _basePath;
-        private long _totalFileSize = 0;
-        private long _downloadedFileSize = 0;
-        private object _lockTotalSize = new object();
-        private object _lockDownloadedSize = new object();
-        private List<Task> _downloadTasks;
-        private List<Task> _subfolderTasks;
-        private Dictionary<string, string> _fileHashes; // For storing file paths and SHA values
         private readonly string _shaCacheFile;
-        private HashSet<string> _currentFiles;
+        private ConcurrentDictionary<string, string> _fileHashes;
+
+        private long _totalBytes;
+        private long _doneBytes;
+        private long _lastReportTicks;
+
+        /// <summary>Raised when overall download progress changes (throttled).</summary>
         public event EventHandler<ProgressEventArgs>? ProgressUpdated;
 
-        /// <summary>
-        /// Initializes a new instance of the GitHubDirectoryDownloaderService class for downloading the contents of a specific
-        /// directory from a GitHub repository to a local path.
-        /// </summary>
-        /// <remarks>This constructor configures the downloader to access the specified repository and
-        /// directory, and prepares the local environment for file downloads and SHA caching. The downloader uses a
-        /// custom HttpClient with a five-minute timeout and a user agent header for GitHub API requests.</remarks>
-        /// <param name="repositoryOwner">The owner of the GitHub repository. Cannot be null or empty.</param>
-        /// <param name="repositoryName">The name of the GitHub repository. Cannot be null or empty.</param>
-        /// <param name="folderPath">The path to the directory within the repository to download. The path should use forward slashes ('/') and
-        /// be relative to the repository root.</param>
-        /// <param name="basePath">The local base directory where the downloaded files and cache will be stored. Cannot be null or empty.</param>
+        /// <summary>Raised with a human-readable line describing what the downloader is doing.</summary>
+        public event EventHandler<string>? LogMessage;
+
+        /// <summary>Creates a downloader for a repository folder.</summary>
+        /// <param name="repositoryOwner">GitHub account that owns the repository.</param>
+        /// <param name="repositoryName">Repository name.</param>
+        /// <param name="folderPath">Folder inside the repository to download.</param>
+        /// <param name="basePath">Installation data folder (holds the SHA cache and the currently installed files).</param>
         public GitHubDirectoryDownloaderService(string repositoryOwner, string repositoryName, string folderPath, string basePath)
         {
-            #region HttpClient Settings
-            HttpClientHandler httpClientHandler = new HttpClientHandler();
-            httpClientHandler.AllowAutoRedirect = true;
-            httpClientHandler.SslProtocols = SslProtocols.Tls12; // Set the SSL/TLS version (for example, TLS 1.2)
+            HttpClientHandler httpClientHandler = new()
+            {
+                AllowAutoRedirect = true,
+                SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+            };
 
-            //httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) =>
-            //{
-            //    return true;
-            //};
-
-            _httpClient = new HttpClient(httpClientHandler);
-            _httpClient.Timeout = new TimeSpan(0, 5, 0);
+            _httpClient = new HttpClient(httpClientHandler) { Timeout = TimeSpan.FromMinutes(2) };
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "GitHubDirectoryDownloaderService");
 
-            // Replace with token, IF token exists locally (development purposes only)
+            // Use a token if one exists locally (development purposes only) to avoid API rate limits.
             string githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN") ?? "";
             if (!string.IsNullOrEmpty(githubToken))
                 _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("token", githubToken);
-            #endregion
 
             _repositoryOwner = repositoryOwner;
             _repositoryName = repositoryName;
-            _folderPath = folderPath;
-            _downloadTasks = new List<Task>();
-            _subfolderTasks = new List<Task>();
+            _folderPath = folderPath.Trim('/');
             _basePath = basePath;
             _shaCacheFile = Path.Combine(_basePath, "sha_cache.tsgs");
-            _currentFiles = new HashSet<string>();
-            _fileHashes = LoadSHAHashes() ?? new Dictionary<string, string>(); // Load the SHA cache or initialize a new one
+            _fileHashes = new ConcurrentDictionary<string, string>(LoadShaHashes() ?? new Dictionary<string, string>());
         }
 
         /// <summary>
-        /// Updates the SHA hash cache to include only the specified files and saves the updated cache to disk.
+        /// Downloads every file of the folder into <paramref name="downloadPath"/>.
         /// </summary>
-        /// <remarks>This method removes any cached SHA hashes for files that are no longer present in the
-        /// provided set and persists the updated cache to the configured cache file. Existing cache entries for files
-        /// not in the set are discarded.</remarks>
-        /// <param name="currentFiles">A set of file paths representing the files to retain in the SHA hash cache. Only hashes for these files will
-        /// be preserved.</param>
-        private void SaveSHAHashes(HashSet<string> currentFiles)
-        {
-            // Remove stale entries from the SHA cache
-            _fileHashes = _fileHashes
-                .Where(kv => currentFiles.Contains(kv.Key))
-                .ToDictionary(kv => kv.Key, kv => kv.Value);
-
-            string cacheJson = JsonSerializer.Serialize(_fileHashes);
-            File.WriteAllText(_shaCacheFile, cacheJson);
-        }
-        /// <summary>
-        /// Loads a dictionary of SHA hash values from the cache file if it exists.
-        /// </summary>
-        /// <returns>A dictionary containing SHA hash values loaded from the cache file; or null if the cache file does not exist
-        /// or cannot be deserialized.</returns>
-        private Dictionary<string, string>? LoadSHAHashes()
-        {
-            if (File.Exists(_shaCacheFile))
-            {
-                string cacheJson = File.ReadAllText(_shaCacheFile);
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(cacheJson);
-            }
-
-            return null;
-        }
-        /// <summary>
-        /// Asynchronously downloads all files and subdirectories to the specified local directory.
-        /// </summary>
-        /// <param name="downloadPath">The full path to the local directory where the downloaded files and subdirectories will be saved. Must not
-        /// be null or empty.</param>
-        /// <returns>A task that represents the asynchronous download operation.</returns>
-        public async Task DownloadDirectoryAsync(string downloadPath)
+        /// <param name="downloadPath">Destination folder (created if needed).</param>
+        /// <param name="cancellationToken">Cancels the download.</param>
+        /// <exception cref="OperationCanceledException">The download was cancelled.</exception>
+        /// <exception cref="InvalidOperationException">A file could not be downloaded, or GitHub's rate limit was hit.</exception>
+        public async Task DownloadDirectoryAsync(string downloadPath, CancellationToken cancellationToken = default)
         {
             try
             {
-                await StartDownloadAsync(downloadPath);
+                Log("Contacting GitHub for the latest files...");
+                List<GitHubContent> files = [];
+                await ListFilesAsync($"https://api.github.com/repos/{_repositoryOwner}/{_repositoryName}/contents/{_folderPath}", files, cancellationToken);
 
-                AppLogger.Debug("GitHubDownloader", "waiting for tasks to complete");
-                await Task.WhenAll(_downloadTasks);
-                await Task.WhenAll(_subfolderTasks);
+                _totalBytes = files.Sum(f => (long)(f.Size ?? 0));
+                _doneBytes = 0;
+                Log($"Found {files.Count} files ({FormatBytes(_totalBytes)}).");
+                Report(force: true);
 
-                SaveSHAHashes(_currentFiles);
+                Directory.CreateDirectory(downloadPath);
+
+                int skipped = 0;
+                int completed = 0;
+                Exception? firstFailure = null;
+                object failureLock = new();
+                using SemaphoreSlim gate = new(MaxParallelDownloads);
+                using CancellationTokenSource failFast = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+                async Task ProcessAsync(GitHubContent item)
+                {
+                    await gate.WaitAsync(failFast.Token);
+                    try
+                    {
+                        string relative = item.Path![(_folderPath.Length)..].TrimStart('/');
+                        string destination = Path.Combine(downloadPath, relative.Replace('/', Path.DirectorySeparatorChar));
+                        string installed = Path.Combine(_basePath, relative.Replace('/', Path.DirectorySeparatorChar));
+                        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+
+                        if (_fileHashes.TryGetValue(item.Path!, out string? knownSha) && knownSha == item.Sha && TryCopyInstalled(installed, destination))
+                        {
+                            Interlocked.Add(ref _doneBytes, item.Size ?? 0);
+                            Interlocked.Increment(ref skipped);
+                            Report();
+                            return;
+                        }
+
+                        await DownloadFileWithRetriesAsync(item, destination, failFast.Token);
+                        _fileHashes[item.Path!] = item.Sha!;
+
+                        int n = Interlocked.Increment(ref completed);
+                        Log($"[{n}] {relative} ({FormatBytes(item.Size ?? 0)})");
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        lock (failureLock)
+                            firstFailure ??= ex;
+
+                        failFast.Cancel(); // stop the other downloads as soon as one file has permanently failed
+                        throw;
+                    }
+                    finally
+                    {
+                        gate.Release();
+                    }
+                }
+
+                try
+                {
+                    await Task.WhenAll(files.Select(ProcessAsync));
+                }
+                catch (Exception) when (firstFailure != null)
+                {
+                    // Siblings of a failed file are cancelled; report the real failure instead of their cancellation.
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstFailure).Throw();
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (Interlocked.Read(ref _doneBytes) < _totalBytes)
+                    throw new InvalidOperationException("The download did not complete. Check your connection and try again.");
+
+                SaveShaHashes(files.Select(f => f.Path!).ToHashSet());
+                Log($"Downloaded {completed} file(s), reused {skipped} unchanged file(s).");
+                Report(force: true);
+            }
+            catch (OperationCanceledException)
+            {
+                Log("Download cancelled.");
+                throw;
             }
             catch (Exception ex)
             {
@@ -129,231 +167,221 @@ namespace Core.Services
                 throw;
             }
         }
-        /// <summary>
-        /// Asynchronously downloads the contents of a GitHub repository folder to the specified local directory,
-        /// retrieving files and subfolders recursively.
-        /// </summary>
-        /// <remarks>This method processes both files and subdirectories recursively, ensuring that only
-        /// changed or new files are downloaded. If the API rate limit is reached, the operation is aborted and progress
-        /// is reported with the reset time, if available.</remarks>
-        /// <param name="downloadPath">The full path to the local directory where the downloaded files and folders will be saved. If the directory
-        /// does not exist, it will be created.</param>
-        /// <param name="apiUrl">The GitHub API URL to retrieve the folder contents. If not specified, a default URL is constructed based on
-        /// the repository and folder settings.</param>
-        /// <returns>A task that represents the asynchronous download operation.</returns>
-        /// <exception cref="Exception">Thrown if the GitHub API rate limit is exceeded during the download process.</exception>
-        private async Task StartDownloadAsync(string downloadPath, string apiUrl = null!)
+
+        private async Task ListFilesAsync(string apiUrl, List<GitHubContent> files, CancellationToken ct)
         {
-            string originalApiUrl = apiUrl;
+            string json = await GetStringWithRetriesAsync(apiUrl, ct);
+            GitHubContent[] contents = JsonSerializer.Deserialize<GitHubContent[]>(json) ?? [];
 
-            // Construct the API url
-            apiUrl ??= $"https://api.github.com/repos/{_repositoryOwner}/{_repositoryName}/contents/{_folderPath}";
+            foreach (GitHubContent item in contents.Where(c => c.Type == "file"))
+                files.Add(item);
 
-            HttpResponseMessage response = await _httpClient.GetAsync(apiUrl);
-            string responseMessage = await response.Content.ReadAsStringAsync();
+            foreach (GitHubContent folder in contents.Where(c => c.Type == "dir"))
+                await ListFilesAsync(folder.Url!, files, ct);
+        }
 
-            // Rate limit was reached.
-            if (responseMessage.Contains("API rate limit exceeded"))
+        private async Task<string> GetStringWithRetriesAsync(string url, CancellationToken ct)
+        {
+            for (int attempt = 1; ; attempt++)
             {
-                // Get the rate limit reset time (epoch seconds)
-                string? resetTimeString = response.Headers.GetValues("x-ratelimit-reset").FirstOrDefault();
-                DateTime resetLocal = DateTime.Now.AddHours(1);
-
-                if (long.TryParse(resetTimeString, out long resetEpoch))
+                try
                 {
-                    // Convert epoch seconds to DateTime in UTC
-                    DateTime resetUtc = DateTimeOffset.FromUnixTimeSeconds(resetEpoch).UtcDateTime;
+                    using HttpResponseMessage response = await _httpClient.GetAsync(url, ct);
+                    string body = await response.Content.ReadAsStringAsync(ct);
 
-                    // Convert UTC to local time
-                    resetLocal = resetUtc.ToLocalTime();
+                    if (body.Contains("API rate limit exceeded", StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException(BuildRateLimitMessage(response));
 
-                    AppLogger.Warn("GitHubDownloader", $"Rate limit resets at: {resetLocal}");
-                    OnProgressChanged(new ProgressEventArgs(0, $"API rate limit exceeded, try again after {resetLocal:T}"));
+                    response.EnsureSuccessStatusCode();
+                    return body;
                 }
-                else
+                catch (InvalidOperationException)
                 {
-                    AppLogger.Warn("GitHubDownloader", "Failed to parse x-ratelimit-reset header.");
-                    OnProgressChanged(new ProgressEventArgs(0, $"API rate limit exceeded, try again later"));
+                    throw; // rate limit: retrying immediately cannot help
                 }
-
-                Dispose();
-                throw new Exception($"API rate limit exceeded\nRate limit resets at: {resetLocal}");
-            }
-
-            if (response.IsSuccessStatusCode)
-            {
-                string json = await response.Content.ReadAsStringAsync();
-                GitHubContent[] contents = JsonSerializer.Deserialize<GitHubContent[]>(json) ?? Array.Empty<GitHubContent>();
-
-                if (!Directory.Exists(downloadPath))
+                catch (Exception ex) when (attempt < MaxAttempts && !ct.IsCancellationRequested)
                 {
-                    Directory.CreateDirectory(downloadPath);
+                    Log($"Could not list files ({ex.Message}). Retrying ({attempt}/{MaxAttempts - 1})...");
+                    await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
                 }
-
-                lock (_lockTotalSize)
-                {
-                    _totalFileSize += contents.Sum(content => content.Size ?? 0);
-                }
-
-                foreach (GitHubContent item in contents)
-                {
-                    switch (item.Type)
-                    {
-                        case "file":
-                            string downloadUrl = item.DownloadUrl!;
-                            string localFilePath = Path.Combine(downloadPath, item.Name!);
-                            string oldFilePath = Path.Combine(downloadPath.Replace("\\Update", ""), item.Name!);
-
-                            // Check if file needs to be downloaded
-                            string? localSha = _fileHashes.ContainsKey(item.Path!) ? _fileHashes[item.Path!] : null;
-                            if (localSha != item.Sha)
-                            {
-                                lock (_downloadTasks)
-                                {
-                                    _downloadTasks.Add(DownloadFileAsync(item, localFilePath));
-                                }
-                            }
-                            else
-                            {
-                                // Move file manually if it's already downloaded, from the base path to the download path
-                                AppLogger.Debug("GitHubDownloader", $"Skipping unchanged file: {item.Name}");
-                                File.Copy(oldFilePath, localFilePath, true);
-                                lock (_lockDownloadedSize)
-                                {
-                                    _downloadedFileSize += (long)item.Size!;
-                                    OnProgressChanged(new ProgressEventArgs((int)(((double)_downloadedFileSize / _totalFileSize) * 100)));
-                                }
-                            }
-                            break;
-                        case "dir":
-                            string subFolderPath = item.Path!;
-                            string subfolderDownloadDirectory = Path.Combine(downloadPath, item.Name!);
-
-                            lock (_subfolderTasks)
-                            {
-                                _subfolderTasks.Add(StartDownloadAsync(subfolderDownloadDirectory, item.Url!));
-                            }
-                            break;
-                    }
-                }
-
-                _currentFiles.UnionWith(contents.Where(c => c.Type == "file").Select(c => c.Path!));
-            }
-            else
-            {
-                OnProgressChanged(new ProgressEventArgs(0, "Something went wrong"));
-                Dispose();
             }
         }
-        /// <summary>
-        /// Asynchronously downloads a file from the specified GitHub content item and saves it to the given file path.
-        /// </summary>
-        /// <param name="item">The GitHub content item representing the file to download. Must not be null and must contain a valid
-        /// download URL.</param>
-        /// <param name="filePath">The full path, including the file name, where the downloaded file will be saved. If the file exists, it will
-        /// be overwritten.</param>
-        /// <returns>A task that represents the asynchronous download operation.</returns>
-        private async Task DownloadFileAsync(GitHubContent item, string filePath)
+
+        private string BuildRateLimitMessage(HttpResponseMessage response)
+        {
+            string? resetValue = response.Headers.TryGetValues("x-ratelimit-reset", out IEnumerable<string>? values) ? values.FirstOrDefault() : null;
+            string message = long.TryParse(resetValue, out long epoch)
+                ? $"GitHub API rate limit exceeded. Try again after {DateTimeOffset.FromUnixTimeSeconds(epoch).LocalDateTime:T}."
+                : "GitHub API rate limit exceeded. Try again later.";
+
+            AppLogger.Warn("GitHubDownloader", message);
+            return message;
+        }
+
+        private async Task DownloadFileWithRetriesAsync(GitHubContent item, string destination, CancellationToken ct)
+        {
+            string partial = destination + ".part";
+
+            for (int attempt = 1; ; attempt++)
+            {
+                long countedForFile = 0;
+
+                try
+                {
+                    using CancellationTokenSource stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    stall.CancelAfter(StallTimeout);
+
+                    using HttpResponseMessage response = await _httpClient.GetAsync(item.DownloadUrl!, HttpCompletionOption.ResponseHeadersRead, stall.Token);
+                    response.EnsureSuccessStatusCode();
+
+                    await using Stream source = await response.Content.ReadAsStreamAsync(stall.Token);
+                    await using (FileStream target = File.Create(partial))
+                    {
+                        byte[] buffer = new byte[81920];
+                        int read;
+                        while ((read = await source.ReadAsync(buffer, stall.Token)) > 0)
+                        {
+                            stall.CancelAfter(StallTimeout); // data is flowing; reset the stall timer
+                            await target.WriteAsync(buffer.AsMemory(0, read), stall.Token);
+                            countedForFile += read;
+                            Interlocked.Add(ref _doneBytes, read);
+                            Report();
+                        }
+                    }
+
+                    File.Move(partial, destination, overwrite: true);
+                    return;
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    Interlocked.Add(ref _doneBytes, -countedForFile); // this attempt's bytes are void
+                    TryDelete(partial);
+
+                    string reason = ex is OperationCanceledException ? "connection stalled" : ex.Message;
+                    if (attempt >= MaxAttempts)
+                        throw new InvalidOperationException($"Failed to download {item.Name} after {MaxAttempts} attempts ({reason}).", ex);
+
+                    Log($"{item.Name}: {reason}. Retrying ({attempt}/{MaxAttempts - 1})...");
+                    await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+                }
+            }
+        }
+
+        private static bool TryCopyInstalled(string installed, string destination)
         {
             try
             {
-                AppLogger.Debug("GitHubDownloader", $"[START] Downloading file: {item.Name} | Size: {item.Size ?? -1} bytes");
+                if (!File.Exists(installed))
+                    return false;
 
-                Stopwatch sw = Stopwatch.StartNew();
-                using HttpResponseMessage response = await _httpClient.GetAsync(item.DownloadUrl!);
-                sw.Stop();
-                AppLogger.Debug("GitHubDownloader", $"[HEADERS DONE] {item.Name} in {sw.ElapsedMilliseconds} ms | Status: {response.StatusCode}");
-
-                if (response.IsSuccessStatusCode)
-                {
-                    using FileStream fileStream = File.Create(filePath);
-                    sw.Restart();
-                    await response.Content.CopyToAsync(fileStream);
-                    sw.Stop();
-                    AppLogger.Debug("GitHubDownloader", $"[DOWNLOAD DONE] {item.Name} ({fileStream.Length} bytes) in {sw.ElapsedMilliseconds} ms");
-
-                    _fileHashes[item.Path!] = item.Sha!;
-
-                    lock (_lockDownloadedSize)
-                    {
-                        _downloadedFileSize += fileStream.Length;
-                        OnProgressChanged(new ProgressEventArgs((int)(((double)_downloadedFileSize / _totalFileSize) * 100)));
-                    }
-                }
-                else
-                {
-                    string error = await response.Content.ReadAsStringAsync();
-                    AppLogger.Warn("GitHubDownloader", $"[FAIL] {item.Name}: {response.StatusCode} | {error}");
-                }
+                File.Copy(installed, destination, true);
+                return true;
             }
-            catch (TaskCanceledException tcex)
+            catch (IOException)
             {
-                AppLogger.Warn("GitHubDownloader", $"[TIMEOUT/CANCEL] {item.Name}: {tcex.Message} (IsTimeout: {!tcex.CancellationToken.IsCancellationRequested})");
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Error("GitHubDownloader", $"[ERROR] {item.Name}", ex);
+                return false;
             }
         }
-        /// <summary>
-        /// Raises the progress changed event to notify subscribers of progress updates.
-        /// </summary>
-        /// <remarks>Override this method in a derived class to provide custom handling when progress
-        /// changes. This method invokes the ProgressUpdated event if there are any subscribers.</remarks>
-        /// <param name="e">The event data containing information about the progress update.</param>
-        protected virtual void OnProgressChanged(ProgressEventArgs e)
+
+        private static void TryDelete(string path)
         {
-            ProgressUpdated?.Invoke(this, e);
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
         }
-        /// <summary>
-        /// Releases all resources used by the current instance of the class.
-        /// </summary>
-        /// <remarks>Call this method when you are finished using the instance to free unmanaged resources
-        /// and perform other cleanup operations. After calling this method, the instance should not be used.</remarks>
+
+        private void Report(bool force = false)
+        {
+            long now = Stopwatch.GetTimestamp();
+            if (!force && now - Interlocked.Read(ref _lastReportTicks) < Stopwatch.Frequency / 10)
+                return;
+
+            Interlocked.Exchange(ref _lastReportTicks, now);
+
+            long total = Math.Max(_totalBytes, 1);
+            long done = Math.Clamp(Interlocked.Read(ref _doneBytes), 0, total);
+            ProgressUpdated?.Invoke(this, new ProgressEventArgs((int)(done * 100 / total), string.Empty, done, _totalBytes));
+        }
+
+        private void Log(string message) => LogMessage?.Invoke(this, message);
+
+        /// <summary>Formats a byte count for display (for example "12.3 MB").</summary>
+        public static string FormatBytes(long bytes)
+        {
+            string[] units = ["B", "KB", "MB", "GB"];
+            double value = bytes;
+            int unit = 0;
+            while (value >= 1024 && unit < units.Length - 1)
+            {
+                value /= 1024;
+                unit++;
+            }
+
+            return unit == 0 ? $"{bytes} B" : $"{value:0.#} {units[unit]}";
+        }
+
+        private void SaveShaHashes(HashSet<string> currentFiles)
+        {
+            Dictionary<string, string> kept = _fileHashes
+                .Where(kv => currentFiles.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            File.WriteAllText(_shaCacheFile, JsonSerializer.Serialize(kept));
+        }
+
+        private Dictionary<string, string>? LoadShaHashes()
+        {
+            try
+            {
+                return File.Exists(_shaCacheFile)
+                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(_shaCacheFile))
+                    : null;
+            }
+            catch (Exception ex) when (ex is IOException or JsonException)
+            {
+                AppLogger.Warn("GitHubDownloader", $"Ignoring unreadable SHA cache: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>Releases the HTTP client.</summary>
         public void Dispose()
         {
             _httpClient.Dispose();
             GC.SuppressFinalize(this);
         }
     }
-    /// <summary>
-    /// Provides data for events that report progress updates, including the current progress percentage and status
-    /// information.
-    /// </summary>
-    /// <remarks>Use this class with events that need to communicate progress information, such as
-    /// long-running operations or background tasks. The progress value typically represents a percentage from 0 to 100,
-    /// and the status can be used to convey additional context or state.</remarks>
+
+    /// <summary>Describes download progress.</summary>
     public class ProgressEventArgs : EventArgs
     {
-        /// <summary>
-        /// Gets or sets the current progress value.
-        /// </summary>
+        /// <summary>Gets or sets the overall percentage (0-100).</summary>
         public int Progress { get; set; }
-        /// <summary>
-        /// Gets or sets the current status message.
-        /// </summary>
+
+        /// <summary>Gets or sets an optional status message.</summary>
         public string Status { get; set; }
 
-        /// <summary>
-        /// Initializes a new instance of the ProgressEventArgs class with the specified progress value and status
-        /// message.
-        /// </summary>
-        /// <param name="progress">The current progress value, typically expressed as a percentage. Must be between 0 and 100.</param>
-        /// <param name="status">An optional status message that describes the current progress. If not specified, an empty string is used.</param>
-        public ProgressEventArgs(int progress, string status = "")
+        /// <summary>Gets or sets the number of bytes downloaded so far.</summary>
+        public long DownloadedBytes { get; set; }
+
+        /// <summary>Gets or sets the total number of bytes to download.</summary>
+        public long TotalBytes { get; set; }
+
+        /// <summary>Creates progress arguments.</summary>
+        public ProgressEventArgs(int progress, string status = "", long downloadedBytes = 0, long totalBytes = 0)
         {
             Progress = progress;
             Status = status;
+            DownloadedBytes = downloadedBytes;
+            TotalBytes = totalBytes;
         }
     }
 
-    /// <summary>
-    /// Represents a content item in a GitHub repository, such as a file or directory, as returned by the GitHub API.
-    /// </summary>
-    /// <remarks>This class provides properties that map to the fields of the GitHub content API response,
-    /// including file metadata, URLs for accessing the content, and related links. It can be used to deserialize
-    /// responses from endpoints such as the GitHub repository contents API. For more information, see the GitHub REST
-    /// API documentation.</remarks>
+    /// <summary>An entry returned by the GitHub contents API.</summary>
     public class GitHubContent
     {
         [JsonPropertyName("name")]
@@ -377,12 +405,6 @@ namespace Core.Services
         [JsonPropertyName("_links")]
         public GitHubContentLinks? Links { get; set; }
 
-        /// <summary>
-        /// Represents the set of URLs associated with a GitHub content resource, including API, Git, and HTML links.
-        /// </summary>
-        /// <remarks>This class is typically used to deserialize the 'links' object returned by the GitHub
-        /// API for content resources. Each property corresponds to a specific type of link provided by GitHub for
-        /// accessing the content in different formats or contexts.</remarks>
         public class GitHubContentLinks
         {
             [JsonPropertyName("self")]

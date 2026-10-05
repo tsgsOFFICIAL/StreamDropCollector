@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Core.Services;
 using Core.Logging;
 using System.IO;
@@ -20,53 +20,90 @@ namespace Core.Managers
         private readonly string _repositoryOwner = "tsgsOFFICIAL";
         private readonly string _repositoryName = "StreamDropCollector";
         private readonly string _folderPath = "UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64";
+        private const string ExecutableName = "Stream Drop Collector.exe";
 
         /// <summary>
         /// Occurs when update download progress changes.
         /// </summary>
         public event EventHandler<ProgressEventArgs>? DownloadProgress;
 
+        /// <summary>
+        /// Occurs with a human-readable line describing the current update step (for display in a log view).
+        /// </summary>
+        public event EventHandler<string>? LogMessage;
+
+        /// <summary>
+        /// Gets a value indicating whether an update is currently being downloaded.
+        /// </summary>
+        public bool IsUpdating { get; private set; }
+
         private UpdateManager()
         { }
 
         /// <summary>
-        /// Downloads the latest update for the application from the configured GitHub repository and restarts the
-        /// application to apply the update.
+        /// Downloads the latest update and, when it is complete and verified, restarts the application to apply it.
         /// </summary>
-        /// <remarks>This method initiates an asynchronous download of the update files and then restarts
-        /// the application upon successful completion. Any errors encountered during the update process are logged for
-        /// debugging purposes. This method should typically be called from the UI thread, as it may cause the
-        /// application to exit and restart.</remarks>
-        public async Task DownloadUpdate()
+        /// <remarks>Never partially applies an update: if any file cannot be downloaded the installed copy is left untouched.
+        /// On success this method does not return, because the process exits to let the updater take over.</remarks>
+        /// <param name="cancellationToken">Cancels the download.</param>
+        /// <returns><see langword="true"/> when the update was started; <see langword="false"/> when it failed or was cancelled.</returns>
+        public async Task<bool> DownloadUpdate(CancellationToken cancellationToken = default)
         {
+            if (IsUpdating)
+                return false;
+
+            IsUpdating = true;
             string basePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector");
             string updatePath = Path.Combine(basePath, "Update");
 
-            using GitHubDirectoryDownloaderService downloader = new GitHubDirectoryDownloaderService(_repositoryOwner, _repositoryName, _folderPath, basePath);
-            downloader.ProgressUpdated += OnProgressChanged!;
-
             try
             {
-                await downloader.DownloadDirectoryAsync(updatePath);
+                Log("Preparing update...");
+                Directory.CreateDirectory(basePath);
 
-                Process.Start(Path.Combine(updatePath, "Stream Drop Collector"), "--updating");
+                // Stale files from an earlier attempt would otherwise be copied over the installation.
+                if (Directory.Exists(updatePath))
+                    Directory.Delete(updatePath, recursive: true);
+
+                using GitHubDirectoryDownloaderService downloader = new(_repositoryOwner, _repositoryName, _folderPath, basePath);
+                downloader.ProgressUpdated += (_, e) => DownloadProgress?.Invoke(this, e);
+                downloader.LogMessage += (_, message) => Log(message);
+
+                await downloader.DownloadDirectoryAsync(updatePath, cancellationToken);
+
+                string newExecutable = Path.Combine(updatePath, ExecutableName);
+                if (!File.Exists(newExecutable))
+                    throw new FileNotFoundException("The downloaded update is incomplete (the application executable is missing).", newExecutable);
+
+                Log("Download complete and verified. Restarting to apply the update...");
+                await Task.Delay(1500, CancellationToken.None); // let the user read the final log lines
+
+                Process.Start(newExecutable, "--updating");
                 Environment.Exit(0);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                Log("Update cancelled. Nothing was changed.");
+                return false;
             }
             catch (Exception ex)
             {
-                NotificationManager.ShowNotification("Update Error", $"An error occurred while updating the application.\n{ex.Message}\n\nTry again after this time", 300);
                 AppLogger.Error("UpdateManager", "DownloadUpdate failed.", ex);
+                Log($"Update failed: {ex.Message}");
+                Log("Your installed version was not modified. You can retry.");
+                return false;
+            }
+            finally
+            {
+                IsUpdating = false;
             }
         }
-        /// <summary>
-        /// Raises the event that reports progress updates during an operation.
-        /// </summary>
-        /// <param name="sender">The source of the event. Typically, this is the object that initiated the progress update.</param>
-        /// <param name="e">A ProgressEventArgs object that contains the progress data, such as the percentage completed. Must not be
-        /// null.</param>
-        private void OnProgressChanged(object sender, ProgressEventArgs e)
+
+        private void Log(string message)
         {
-            DownloadProgress?.Invoke(this, e);
+            AppLogger.Info("UpdateManager", message);
+            LogMessage?.Invoke(this, message);
         }
     }
 }
