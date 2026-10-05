@@ -175,7 +175,19 @@ namespace UI.Accounts
             session.ModelChanged += OnSessionModelChanged;
             session.Connected += OnSessionConnected;
             session.PropertyChanged += OnSessionPropertyChanged;
-            Sessions.Add(session);
+
+            // Keep Twitch accounts above Kick accounts, preserving creation order within each platform.
+            int index = Sessions.Count;
+            for (int i = 0; i < Sessions.Count; i++)
+            {
+                if (Sessions[i].Model.Platform > model.Platform)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            Sessions.Insert(index, session);
             return session;
         }
 
