@@ -277,6 +277,7 @@ namespace Core.Managers
         private readonly SemaphoreSlim _kickMetadataLock = new(1, 1);
         private readonly System.Timers.Timer _kickMetadataTimer = new(TimeSpan.FromSeconds(45).TotalMilliseconds);
         private int _kickMetadataRefreshScheduled;
+        private int _kickMetadataRerunRequested;
         private IReadOnlyDictionary<string, LiveChannelSnapshot> _kickStreamerMetadata =
             new Dictionary<string, LiveChannelSnapshot>(StringComparer.OrdinalIgnoreCase);
 
@@ -570,7 +571,12 @@ namespace Core.Managers
                 return;
 
             if (Interlocked.CompareExchange(ref _kickMetadataRefreshScheduled, 1, 0) != 0)
+            {
+                // A refresh is already running with the logins it saw at its start (for example before general-drop
+                // discovery finished), so run once more when it completes instead of dropping this request.
+                Interlocked.Exchange(ref _kickMetadataRerunRequested, 1);
                 return;
+            }
 
             _ = Task.Run(async () =>
             {
@@ -590,6 +596,9 @@ namespace Core.Managers
                 finally
                 {
                     Interlocked.Exchange(ref _kickMetadataRefreshScheduled, 0);
+
+                    if (Interlocked.Exchange(ref _kickMetadataRerunRequested, 0) == 1)
+                        ScheduleKickStreamerMetadataRefresh();
                 }
             });
         }
