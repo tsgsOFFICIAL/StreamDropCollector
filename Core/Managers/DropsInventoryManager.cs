@@ -1485,6 +1485,7 @@ namespace Core.Managers
                 SetLastKnownTwitchOnline = value => _lastKnownTwitchOnlineState = value,
                 SetLastKnownKickOnline = value => _lastKnownKickOnlineState = value,
                 RequestReevaluationAsync = () => StartMiningStreams(true),
+                IsEvaluationInProgress = () => _startMiningLock.CurrentCount == 0,
                 LogKickPlaybackDiagnosticsAsync = () => _selection.CurrentKickCampaign != null && _kickPageReader != null
                     ? _kickPageReader.LogPlaybackDiagnosticsAsync()
                     : Task.CompletedTask

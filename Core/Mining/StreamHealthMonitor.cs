@@ -43,6 +43,12 @@ namespace Core.Mining
             /// <summary>Triggers a full stream re-selection when a mined channel goes ineligible.</summary>
             public required Func<Task> RequestReevaluationAsync { get; init; }
 
+            /// <summary>
+            /// Optional: returns whether a stream selection cycle is currently running. While it is, the mined channel
+            /// is cleared or still being chosen, so an "ineligible" result would be a false alarm.
+            /// </summary>
+            public Func<bool>? IsEvaluationInProgress { get; init; }
+
             /// <summary>Optional: logs the real Kick &lt;video&gt; element playback state (paused, currentTime, buffered, errors) each tick.</summary>
             public Func<Task>? LogKickPlaybackDiagnosticsAsync { get; init; }
         }
@@ -61,6 +67,12 @@ namespace Core.Mining
             {
                 await await Application.Current.Dispatcher.InvokeAsync(async () =>
                 {
+                    if (host.IsEvaluationInProgress?.Invoke() == true)
+                    {
+                        AppLogger.Debug("HealthCheck", "HealthCheck tick skipped - stream evaluation in progress.");
+                        return;
+                    }
+
                     bool twitchHasProgress = host.HasTwitchCampaignsWithProgress();
                     bool kickHasProgress = host.HasKickCampaignsWithProgress();
                     bool twitchWasOnline = host.GetLastKnownTwitchOnline();
@@ -80,6 +92,14 @@ namespace Core.Mining
 
                     bool twitchEligible = await host.IsTwitchEligibleAsync();
                     bool kickEligible = await host.IsKickEligibleAsync();
+
+                    // An evaluation may have started while the checks above were awaiting; their result then describes
+                    // the stream being replaced, not the new one.
+                    if (host.IsEvaluationInProgress?.Invoke() == true)
+                    {
+                        AppLogger.Debug("HealthCheck", "HealthCheck result discarded - stream evaluation started during the check.");
+                        return;
+                    }
 
                     AppLogger.Debug("HealthCheck", $"Twitch eligible: {twitchEligible} | Kick eligible: {kickEligible}");
                     AppLogger.Debug(
