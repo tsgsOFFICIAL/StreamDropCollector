@@ -19,18 +19,23 @@ using Core.Helpers;
 namespace Core.Managers
 {
     /// <summary>
-    /// Central manager for active drop campaigns, stream mining, progress tracking, and reward claiming across Twitch and Kick.
+    /// Mining engine for a single account: active drop campaigns, stream mining, progress tracking, and reward claiming.
     /// </summary>
-    /// <remarks>This class follows the singleton pattern. It coordinates hidden WebView hosts, selects campaigns to mine,
-    /// raises UI-facing progress events, and persists pinned campaign and last-mined streamer state.</remarks>
-    public sealed class DropsInventoryManager
+    /// <remarks>One instance exists per configured account, so any number of accounts mine in parallel. It coordinates
+    /// the account's hidden WebView host, selects campaigns to mine, raises UI-facing progress events, and shares the
+    /// pinned campaign and last-mined streamer stores with the other accounts.</remarks>
+    public sealed class DropsInventoryManager : IDisposable
     {
-        private static readonly Lazy<DropsInventoryManager> _instance = new(() => new DropsInventoryManager());
+        /// <summary>
+        /// Gets the account this engine mines for.
+        /// </summary>
+        public AccountModel Account { get; }
 
         /// <summary>
-        /// Gets the singleton instance of the drops inventory manager.
+        /// Gets or sets a value indicating whether this engine drives the shared Twitch EventSub watcher.
+        /// Only one Twitch account should do so, since the Helix service holds a single mined-channel watch.
         /// </summary>
-        public static DropsInventoryManager Instance => _instance.Value;
+        public bool UseHelixWatcher { get; set; }
 
         /// <summary>
         /// Gets the collection of currently active drop campaigns displayed in the inventory UI.
@@ -126,8 +131,8 @@ namespace Core.Managers
         private readonly ActiveCampaignUpdater _campaignUpdater = new();
         private readonly PlatformProgressState _twitchProgress = new();
         private readonly PlatformProgressState _kickProgress = new();
-        private readonly PinnedCampaignStore _pinnedCampaignStore = new();
-        private readonly LastMinedStreamersStore _lastMinedStreamers = new();
+        private readonly PinnedCampaignStore _pinnedCampaignStore = PinnedCampaignStore.Shared;
+        private readonly LastMinedStreamersStore _lastMinedStreamers = LastMinedStreamersStore.Shared;
         private readonly ITwitchHelixService _twitchHelixService = TwitchHelixService.Instance;
         private readonly GeneralDropDiscoveryCache _twitchGeneralDropCache = new();
         private readonly GeneralDropDiscoveryCache _kickGeneralDropCache = new();
@@ -208,13 +213,13 @@ namespace Core.Managers
 
 
         /// <summary>
-        /// Initializes a new instance of the DropsInventoryManager class.
+        /// Initializes a new mining engine for the given account.
         /// </summary>
-        /// <remarks>This constructor is private to enforce the singleton pattern. It sets up event
-        /// handlers and initializes internal state required for managing drops inventory. Instances of this class can
-        /// only be created internally within the class.</remarks>
-        private DropsInventoryManager()
+        /// <param name="account">The account this engine mines for.</param>
+        public DropsInventoryManager(AccountModel account)
         {
+            Account = account;
+
             UISettingsManager.Instance.MiningPriorityModeChanged += OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
@@ -428,10 +433,10 @@ namespace Core.Managers
         /// <param name="twitch">The host instance to associate with the Twitch web view. Cannot be null.</param>
         /// <param name="kick">The host instance to associate with the Kick web view. Cannot be null.</param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="twitch"/> or <paramref name="kick"/> is null.</exception>
-        public void InitializeWebViews(IWebViewHost twitch, IWebViewHost kick)
+        public void InitializeWebViews(IWebViewHost? twitch, IWebViewHost? kick)
         {
-            TwitchWebView = twitch ?? throw new ArgumentNullException(nameof(twitch));
-            KickWebView = kick ?? throw new ArgumentNullException(nameof(kick));
+            TwitchWebView = twitch;
+            KickWebView = kick;
             RefreshMiningServices();
             ScheduleKickStreamerMetadataRefresh();
             ScheduleTwitchStreamerMetadataRefresh();
@@ -633,6 +638,9 @@ namespace Core.Managers
 
         private void UpdateTwitchMinedChannelWatcher(string? login)
         {
+            if (!UseHelixWatcher)
+                return;
+
             AppLogger.Debug("TwitchMining", $"UpdateTwitchMinedChannelWatcher login={login ?? "(null)"} helixAuth={_twitchHelixService.IsAuthenticated}");
 
             if (!_twitchHelixService.IsAuthenticated)
@@ -786,6 +794,32 @@ namespace Core.Managers
                 }
             });
         }
+        /// <summary>
+        /// Stops all mining activity and detaches this engine from shared settings events.
+        /// </summary>
+        public void Dispose()
+        {
+            _isPaused = true;
+            _startMiningCts?.Cancel();
+
+            UISettingsManager.Instance.MiningPriorityModeChanged -= OnMiningPriorityModeChanged;
+            UISettingsManager.Instance.GameWhitelistChanged -= OnGameWhitelistChanged;
+            UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
+            _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;
+
+            _recheckTimer?.Stop();
+            _recheckTimer?.Dispose();
+            _streamHealthMonitor.Dispose();
+            _liveProgressTimer.Dispose();
+            _progressVerifyTimer.Dispose();
+            _kickLevelTimer.Dispose();
+            _kickMetadataTimer.Dispose();
+            _twitchMetadataTimer.Dispose();
+
+            UpdateTwitchMinedChannelWatcher(null);
+            UseHelixWatcher = false;
+        }
+
         /// <summary>
         /// Temporarily pauses stream mining and waits for any active mine cycle to exit.
         /// </summary>

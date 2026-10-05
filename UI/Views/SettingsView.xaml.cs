@@ -39,8 +39,10 @@ namespace UI.Views
 
             string mainExe = Process.GetCurrentProcess().MainModule!.FileName;
             string folderToNuke = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Stream Drop Collector.exe.WebView2", "EBWebView", "Default", "Network");
+            string accountsFolder = Core.Models.AccountModel.AccountsRootFolder;
+            string accountsFile = Path.Combine(Path.GetDirectoryName(accountsFolder)!, "Accounts.json");
 
-            if (!Directory.Exists(folderToNuke))
+            if (!Directory.Exists(folderToNuke) && !Directory.Exists(accountsFolder) && !File.Exists(accountsFile))
             {
                 MessageBox.Show("Nothing to nuke.");
                 return;
@@ -50,7 +52,7 @@ namespace UI.Views
             ProcessStartInfo psi = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/C timeout /t 5 && rmdir /s /q \"{folderToNuke}\" && start \"\" \"{mainExe}\"",
+                Arguments = $"/C timeout /t 5 & rmdir /s /q \"{folderToNuke}\" & rmdir /s /q \"{accountsFolder}\" & del /q \"{accountsFile}\" & start \"\" \"{mainExe}\"",
                 UseShellExecute = true,
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden

@@ -15,6 +15,11 @@ namespace Core.Stores
             "Stream Drop Collector",
             "PinnedCampaignCache.json");
 
+        /// <summary>
+        /// Gets the process-wide store shared by all account miners.
+        /// </summary>
+        public static PinnedCampaignStore Shared { get; } = new();
+
         private readonly string _filePath;
 
         /// <summary>

@@ -141,12 +141,14 @@ namespace UI
                         [
                             "Update",
                             "Stream Drop Collector.exe.WebView2",
+                            "Accounts",
                             "logs"
                         ];
 
                         string[] filesToKeep =
                         [
                             "Settings.json",
+                            "Accounts.json",
                             "sha_cache.tsgs",
                             "GqlHashCache.json",
                             "LastMinedStreamers.json",

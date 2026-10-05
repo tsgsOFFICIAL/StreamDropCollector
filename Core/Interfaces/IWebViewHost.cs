@@ -9,6 +9,11 @@ namespace Core.Interfaces
     public interface IWebViewHost
     {
         /// <summary>
+        /// Gets the identifier of the account this host's browser profile belongs to (empty for shared hosts).
+        /// </summary>
+        string AccountId { get; }
+
+        /// <summary>
         /// Ensures the underlying WebView2 is initialized and ready.
         /// Must be called from the UI thread (Dispatcher) when appropriate.
         /// </summary>

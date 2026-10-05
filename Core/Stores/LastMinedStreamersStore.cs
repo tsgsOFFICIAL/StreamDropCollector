@@ -15,10 +15,16 @@ namespace Core.Stores
             "Stream Drop Collector",
             "LastMinedStreamers.json");
 
+        /// <summary>
+        /// Gets the process-wide store shared by all account miners so concurrent saves never overwrite each other.
+        /// </summary>
+        public static LastMinedStreamersStore Shared { get; } = new();
+
         private readonly object _sync = new();
         private readonly Dictionary<string, string> _twitchBySlug = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _kickBySlug = new(StringComparer.OrdinalIgnoreCase);
         private readonly string _filePath;
+        private readonly object _fileLock = new();
 
         /// <summary>
         /// Creates a store that loads remembered streamers from the default app-data path.
@@ -180,7 +186,8 @@ namespace Core.Stores
                     Directory.CreateDirectory(directory);
 
                 string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_filePath, json);
+                lock (_fileLock)
+                    File.WriteAllText(_filePath, json);
             }
             catch (Exception ex)
             {

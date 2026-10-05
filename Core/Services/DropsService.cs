@@ -32,8 +32,8 @@ namespace Core.Services
         /// Yields nothing if neither host is connected.
         /// </returns>
         public async IAsyncEnumerable<IReadOnlyList<DropsCampaign>> GetAllActiveCampaignsAsync(
-            IWebViewHost kickHost, ConnectionStatus? kickStatus,
-            IWebViewHost twitchHost, ConnectionStatus? twitchStatus,
+            IWebViewHost? kickHost, ConnectionStatus? kickStatus,
+            IWebViewHost? twitchHost, ConnectionStatus? twitchStatus,
             IGqlService? gqlService,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
@@ -44,7 +44,7 @@ namespace Core.Services
             List<Task<IReadOnlyList<DropsCampaign>>> pending = [];
             Dictionary<Task<IReadOnlyList<DropsCampaign>>, string> taskLabels = new();
 
-            if (kickStatus == ConnectionStatus.Connected)
+            if (kickStatus == ConnectionStatus.Connected && kickHost != null)
             {
                 Task<IReadOnlyList<DropsCampaign>> kickTask = _kickProvider.GetActiveCampaignsAsync(kickHost, ct);
                 pending.Add(kickTask);
@@ -55,7 +55,7 @@ namespace Core.Services
                 AppLogger.Debug("DropsService", $"Kick campaigns SKIPPED - status={kickStatus} (not Connected).");
             }
 
-            if (twitchStatus == ConnectionStatus.Connected)
+            if (twitchStatus == ConnectionStatus.Connected && twitchHost != null)
             {
                 _twitchProvider = new TwitchDropsProvider(gqlService!);
                 Task<IReadOnlyList<DropsCampaign>> twitchTask = _twitchProvider.GetActiveCampaignsAsync(twitchHost, ct);

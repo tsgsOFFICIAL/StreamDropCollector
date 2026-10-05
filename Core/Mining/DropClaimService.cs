@@ -51,7 +51,7 @@ namespace Core.Mining
                         continue;
                     }
 
-                    if (parentCampaign.Platform == Platform.Kick && KickUnlinkedClaims.IsBlocked(parentCampaign.Id, item.Id))
+                    if (parentCampaign.Platform == Platform.Kick && KickUnlinkedClaims.IsBlocked(kickWebView?.AccountId ?? string.Empty, parentCampaign.Id, item.Id))
                     {
                         AppLogger.Debug("DropClaim", $"Skipping Kick claim - account not linked. campaignId={parentCampaign.Id} rewardId={item.Id}");
                         continue;
@@ -93,7 +93,7 @@ namespace Core.Mining
                         if (UISettingsManager.Instance.NotifyOnAutoClaimed)
                             NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}");
                     }
-                    else if (parentCampaign.Platform == Platform.Kick && KickUnlinkedClaims.IsBlocked(parentCampaign.Id, item.Id))
+                    else if (parentCampaign.Platform == Platform.Kick && KickUnlinkedClaims.IsBlocked(kickWebView?.AccountId ?? string.Empty, parentCampaign.Id, item.Id))
                     {
                         NotificationManager.ShowNotification("Account Not Linked", $"Link your game account on Kick, then claim manually: {item.Name}");
                     }

@@ -10,15 +10,15 @@ namespace Core.Mining
     {
         private static readonly ConcurrentDictionary<string, string?> Blocked = new();
 
-        private static string Key(string campaignId, string rewardId) => $"{campaignId}:{rewardId}";
+        private static string Key(string accountId, string campaignId, string rewardId) => $"{accountId}:{campaignId}:{rewardId}";
 
         /// <summary>Marks a reward as needing a manual account link before it can be claimed.</summary>
         /// <returns><see langword="true"/> if newly marked; <see langword="false"/> if it was already marked.</returns>
-        public static bool Mark(string campaignId, string rewardId, string? connectUrl)
-            => Blocked.TryAdd(Key(campaignId, rewardId), connectUrl);
+        public static bool Mark(string accountId, string campaignId, string rewardId, string? connectUrl)
+            => Blocked.TryAdd(Key(accountId, campaignId, rewardId), connectUrl);
 
         /// <summary>Returns whether auto-claim should skip this reward.</summary>
-        public static bool IsBlocked(string campaignId, string rewardId)
-            => Blocked.ContainsKey(Key(campaignId, rewardId));
+        public static bool IsBlocked(string accountId, string campaignId, string rewardId)
+            => Blocked.ContainsKey(Key(accountId, campaignId, rewardId));
     }
 }
