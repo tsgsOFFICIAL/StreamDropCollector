@@ -68,7 +68,10 @@ jobs:
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
                   git fetch origin master
-                  git checkout master
+
+                  # The publish steps above modified the tracked binaries folder. Force the switch to the latest master so a
+                  # tag that is not at master's head (or any other dirty tracked file) cannot block it.
+                  git checkout -f -B master origin/master
 
                   # Restore built output
                   New-Item -ItemType Directory -Force -Path "UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/"
