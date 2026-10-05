@@ -71,6 +71,8 @@ namespace Core.Managers
         private bool _twitchGameFilterBlacklistMode;
         private bool _kickGameFilterBlacklistMode;
         private bool _isUpdatingGameFilterOptions;
+        private readonly Dictionary<string, (Platform platform, string slug, string displayName)> _knownGameOptions =
+            new(StringComparer.OrdinalIgnoreCase);
         private bool _kickLevelFarming;
         private bool _isLoadingSettings;
 
@@ -641,13 +643,18 @@ namespace Core.Managers
             _isUpdatingGameFilterOptions = true;
             try
             {
-                List<(Platform platform, string slug, string displayName)> options = campaigns
-                    .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
-                    .Select(c => (c.Platform, c.Slug.Trim().ToLowerInvariant(), c.GameName))
-                    .Concat((extraGames ?? []).Select(g => (g.Platform, g.Slug, g.Name)))
-                    .GroupBy(x => $"{x.Platform}:{x.Item2}", StringComparer.OrdinalIgnoreCase)
-                    .Select(g => g.First())
-                    .OrderBy(x => x.Platform)
+                // Every account reports only its own platform's games, so remember what earlier accounts reported
+                // instead of letting the last one to load replace the other platform's list.
+                foreach ((Platform platform, string slug, string name) in campaigns
+                             .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                             .Select(c => (c.Platform, c.Slug.Trim().ToLowerInvariant(), c.GameName))
+                             .Concat((extraGames ?? []).Select(g => (g.Platform, g.Slug, g.Name))))
+                {
+                    _knownGameOptions.TryAdd($"{platform}:{slug}", (platform, slug, name));
+                }
+
+                List<(Platform platform, string slug, string displayName)> options = _knownGameOptions.Values
+                    .OrderBy(x => x.platform)
                     .ThenBy(x => x.Item3, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
