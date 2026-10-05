@@ -145,6 +145,35 @@ namespace Core.Managers
         public event Action<byte, byte>? KickProgressChanged;
 
         /// <summary>
+        /// Occurs when the time left on the mined Twitch campaign or its next reward changes.
+        /// </summary>
+        /// <remarks>The first value is seconds until the campaign completes; the second is seconds until the next reward. Zero means unknown or finished.</remarks>
+        public event Action<int, int>? TwitchTimeRemainingChanged;
+
+        /// <summary>
+        /// Occurs when the time left on the mined Kick campaign or its next reward changes.
+        /// </summary>
+        /// <remarks>The first value is seconds until the campaign completes; the second is seconds until the next reward. Zero means unknown or finished.</remarks>
+        public event Action<int, int>? KickTimeRemainingChanged;
+
+        private void RaiseProgress(Platform platform, DropsCampaign? campaign, byte campaignPct, byte dropPct)
+        {
+            PlatformProgressState state = platform == Platform.Twitch ? _twitchProgress : _kickProgress;
+            (int campaignSeconds, int dropSeconds) = MiningProgressCalculator.CalculateRemainingSeconds(campaign, state);
+
+            if (platform == Platform.Twitch)
+            {
+                TwitchProgressChanged?.Invoke(campaignPct, dropPct);
+                TwitchTimeRemainingChanged?.Invoke(campaignSeconds, dropSeconds);
+            }
+            else
+            {
+                KickProgressChanged?.Invoke(campaignPct, dropPct);
+                KickTimeRemainingChanged?.Invoke(campaignSeconds, dropSeconds);
+            }
+        }
+
+        /// <summary>
         /// Raised when the Kick viewer level progress is refreshed.
         /// </summary>
         public event Action<KickLevelProgress>? KickLevelChanged;
@@ -500,7 +529,7 @@ namespace Core.Managers
                     _twitchProgress,
                     reward => TwitchDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl),
                     (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog, EffectiveAutoClaim),
-                    (campPct, dropPct) => TwitchProgressChanged?.Invoke(campPct, dropPct),
+                    (campPct, dropPct) => RaiseProgress(Platform.Twitch, _selection.CurrentTwitchCampaign, campPct, dropPct),
                     VerboseLog);
             }
 
@@ -513,7 +542,7 @@ namespace Core.Managers
                     _kickProgress,
                     reward => KickDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl),
                     (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog, EffectiveAutoClaim),
-                    (campPct, dropPct) => KickProgressChanged?.Invoke(campPct, dropPct),
+                    (campPct, dropPct) => RaiseProgress(Platform.Kick, _selection.CurrentKickCampaign, campPct, dropPct),
                     VerboseLog);
             }
         }
@@ -986,12 +1015,12 @@ namespace Core.Managers
                 TwitchCampaignChanged?.Invoke(string.Empty, null);
                 _twitchProgress.LastReportedDropId = null;
                 TwitchDropChanged?.Invoke(string.Empty, null);
-                TwitchProgressChanged?.Invoke(0, 0);
+                RaiseProgress(Platform.Twitch, null, 0, 0);
                 KickChannelChanged?.Invoke(string.Empty);
                 KickCampaignChanged?.Invoke(string.Empty, null);
                 _kickProgress.LastReportedDropId = null;
                 KickDropChanged?.Invoke(string.Empty, null);
-                KickProgressChanged?.Invoke(0, 0);
+                RaiseProgress(Platform.Kick, null, 0, 0);
                 _twitchProgress.SyncAppliedBucketFromMinedSeconds();
                 _kickProgress.SyncAppliedBucketFromMinedSeconds();
 
@@ -1177,7 +1206,7 @@ namespace Core.Managers
 
                     byte twitchCampPct = MiningProgressCalculator.CalculateLiveCampaignProgress(result.Campaign);
                     byte twitchDropPct = MiningProgressCalculator.CalculateLiveDropProgress(result.Campaign, progress.DropMinedSeconds);
-                    TwitchProgressChanged?.Invoke(twitchCampPct, twitchDropPct);
+                    RaiseProgress(Platform.Twitch, result.Campaign, twitchCampPct, twitchDropPct);
                     LiveProgressTracker.RaiseDropChangedIfNeeded(baseline.NextReward, progress, reward =>
                         TwitchDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl));
                     break;
@@ -1193,7 +1222,7 @@ namespace Core.Managers
 
                     byte kickCampPct = MiningProgressCalculator.CalculateLiveCampaignProgress(result.Campaign);
                     byte kickDropPct = MiningProgressCalculator.CalculateLiveDropProgress(result.Campaign, progress.DropMinedSeconds);
-                    KickProgressChanged?.Invoke(kickCampPct, kickDropPct);
+                    RaiseProgress(Platform.Kick, result.Campaign, kickCampPct, kickDropPct);
                     LiveProgressTracker.RaiseDropChangedIfNeeded(baseline.NextReward, progress, reward =>
                         KickDropChanged?.Invoke(reward?.Name ?? string.Empty, reward?.ImageUrl));
                     break;
@@ -1381,10 +1410,7 @@ namespace Core.Managers
             byte campPct = MiningProgressCalculator.CalculateLiveCampaignProgress(updatedCampaign);
             byte dropPct = MiningProgressCalculator.CalculateLiveDropProgress(updatedCampaign, progress.DropMinedSeconds);
 
-            if (platform == Platform.Twitch)
-                TwitchProgressChanged?.Invoke(campPct, dropPct);
-            else
-                KickProgressChanged?.Invoke(campPct, dropPct);
+            RaiseProgress(platform, updatedCampaign, campPct, dropPct);
 
             return true;
         }

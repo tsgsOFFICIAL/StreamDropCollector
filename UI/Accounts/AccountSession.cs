@@ -394,6 +394,7 @@ namespace UI.Accounts
             if (isTwitch)
             {
                 Engine.TwitchProgressChanged += (camp, drop) => OnUi(() => { Progress.CampaignProgress = camp; Progress.DropProgress = drop; });
+                Engine.TwitchTimeRemainingChanged += (camp, drop) => OnUi(() => Progress.SetTimeRemaining(camp, drop));
                 Engine.TwitchChannelChanged += channel => OnUi(() => Progress.MinedChannel = channel);
                 Engine.TwitchCampaignChanged += (name, image) => OnUi(() => { Progress.CampaignName = name; Progress.CampaignImageUrl = image ?? string.Empty; });
                 Engine.TwitchDropChanged += (name, image) => OnUi(() => { Progress.DropName = name; Progress.DropImageUrl = image ?? string.Empty; });
@@ -401,6 +402,7 @@ namespace UI.Accounts
             else
             {
                 Engine.KickProgressChanged += (camp, drop) => OnUi(() => { Progress.CampaignProgress = camp; Progress.DropProgress = drop; });
+                Engine.KickTimeRemainingChanged += (camp, drop) => OnUi(() => Progress.SetTimeRemaining(camp, drop));
                 Engine.KickChannelChanged += channel => OnUi(() => Progress.MinedChannel = channel);
                 Engine.KickCampaignChanged += (name, image) => OnUi(() =>
                 {

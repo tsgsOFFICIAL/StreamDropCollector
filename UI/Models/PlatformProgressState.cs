@@ -40,8 +40,42 @@ namespace UI.Models
         public byte DropProgress
         {
             get => _dropProgress;
-            set { _dropProgress = value; OnPropertyChanged(); }
+            set { _dropProgress = value; OnPropertyChanged(); OnPropertyChanged(nameof(DropCaptionText)); }
         }
+
+        private int _campaignSecondsRemaining;
+        private int _dropSecondsRemaining;
+
+        /// <summary>Sets the seconds left for the campaign and its next reward (0 when unknown or finished).</summary>
+        public void SetTimeRemaining(int campaignSeconds, int dropSeconds)
+        {
+            _campaignSecondsRemaining = campaignSeconds;
+            _dropSecondsRemaining = dropSeconds;
+            OnPropertyChanged(nameof(CampaignTimeText));
+            OnPropertyChanged(nameof(DropTimeText));
+            OnPropertyChanged(nameof(CampaignCaptionText));
+            OnPropertyChanged(nameof(DropCaptionText));
+        }
+
+        /// <summary>Countdown to campaign completion, or empty when unknown or level farming.</summary>
+        public string CampaignTimeText => IsLevelFarming || _campaignSecondsRemaining <= 0
+            ? string.Empty
+            : $"{Core.Models.DurationFormatter.FormatCountdown(_campaignSecondsRemaining)} left";
+
+        /// <summary>Countdown to the current drop, or empty when unknown.</summary>
+        public string DropTimeText => _dropSecondsRemaining <= 0
+            ? string.Empty
+            : $"{Core.Models.DurationFormatter.FormatCountdown(_dropSecondsRemaining)} left";
+
+        /// <summary>Caption under the campaign bar: progress text plus the countdown when known.</summary>
+        public string CampaignCaptionText => CampaignTimeText.Length == 0
+            ? CampaignProgressText
+            : $"{CampaignProgressText} • {CampaignTimeText}";
+
+        /// <summary>Caption under the drop bar: progress text plus the countdown when known.</summary>
+        public string DropCaptionText => DropTimeText.Length == 0
+            ? $"{DropProgress}% Complete"
+            : $"{DropProgress}% Complete • {DropTimeText}";
 
         private string _campaignName = string.Empty;
 
@@ -140,6 +174,7 @@ namespace UI.Models
         {
             CampaignProgress = 0;
             DropProgress = 0;
+            SetTimeRemaining(0, 0);
             CampaignName = string.Empty;
             CampaignImageUrl = string.Empty;
             DropName = string.Empty;
@@ -160,6 +195,8 @@ namespace UI.Models
             OnPropertyChanged(nameof(LevelBadgeUrl));
             OnPropertyChanged(nameof(DisplayCampaignProgress));
             OnPropertyChanged(nameof(CampaignProgressText));
+            OnPropertyChanged(nameof(CampaignTimeText));
+            OnPropertyChanged(nameof(CampaignCaptionText));
             OnPropertyChanged(nameof(DisplayCampaignImageUrl));
             OnPropertyChanged(nameof(LevelLineText));
         }

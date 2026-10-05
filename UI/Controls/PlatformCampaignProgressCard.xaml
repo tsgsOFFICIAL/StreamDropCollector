@@ -62,7 +62,7 @@
             <ProgressBar Margin="0,10,0,5" Minimum="0" Maximum="100"
                          Value="{Binding DisplayCampaignProgress, Mode=OneWay}"/>
 
-            <TextBlock Text="{Binding CampaignProgressText}"
+            <TextBlock Text="{Binding CampaignCaptionText}"
                        Foreground="{DynamicResource TextMutedBrush}" FontSize="12"/>
 
             <TextBlock Text="Drop Progress" Margin="0,10,0,0"
@@ -85,7 +85,7 @@
             <ProgressBar Margin="0,10,0,5" Minimum="0" Maximum="100"
                          Value="{Binding DropProgress}"/>
 
-            <TextBlock Text="{Binding DropProgress, StringFormat='{}{0}% Complete'}"
+            <TextBlock Text="{Binding DropCaptionText}"
                        Foreground="{DynamicResource TextMutedBrush}" FontSize="12"/>
 
             <StackPanel Orientation="Horizontal" Margin="0,8,0,0"

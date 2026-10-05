@@ -58,6 +58,22 @@ namespace Core.Models
             return $"{mins}m";
         }
 
+        /// <summary>Formats a second count as a live countdown such as "1h 12m 05s", "12m 05s" or "45s".</summary>
+        public static string FormatCountdown(int seconds)
+        {
+            if (seconds <= 0)
+                return string.Empty;
+
+            int hours = seconds / 3600;
+            int mins = seconds % 3600 / 60;
+            int secs = seconds % 60;
+
+            if (hours > 0)
+                return $"{hours}h {mins:D2}m {secs:D2}s";
+
+            return mins > 0 ? $"{mins}m {secs:D2}s" : $"{secs}s";
+        }
+
         /// <summary>Formats the remaining minutes as a "left" label, or "Ready to claim" when none remain.</summary>
         public static string FormatRemaining(int minutes) =>
             minutes <= 0 ? "Ready to claim" : $"{Format(minutes)} left";

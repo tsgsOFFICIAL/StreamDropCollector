@@ -34,6 +34,35 @@ namespace Core.Mining
         }
 
         /// <summary>
+        /// Calculates the seconds left until the whole campaign and the next unclaimed reward are complete.
+        /// </summary>
+        /// <param name="campaign">Campaign being mined, or <see langword="null"/> when nothing is selected.</param>
+        /// <param name="state">Live mining counters for the platform.</param>
+        /// <returns>Seconds remaining for the campaign and for the next reward; 0 when unknown or finished.</returns>
+        public static (int Campaign, int Drop) CalculateRemainingSeconds(DropsCampaign? campaign, PlatformProgressState state)
+        {
+            if (campaign == null || campaign.IsLevelFarming())
+                return (0, 0);
+
+            // Reward minutes only advance once per minute bucket; credit the seconds mined since the last bucket.
+            int secondsIntoMinute = Math.Max(0, state.MinedSeconds - state.AppliedMinuteBucket * 60);
+            int campaignSeconds = campaign.RemainingMinutes > 0
+                ? Math.Max(0, campaign.RemainingMinutes * 60 - secondsIntoMinute)
+                : 0;
+
+            DropsReward? nextReward = campaign.Rewards
+                .Where(r => !r.IsClaimed)
+                .OrderBy(r => r.RequiredMinutes)
+                .FirstOrDefault();
+
+            int dropSeconds = nextReward == null
+                ? 0
+                : Math.Max(0, nextReward.RequiredMinutes * 60 - state.DropMinedSeconds);
+
+            return (campaignSeconds, dropSeconds);
+        }
+
+        /// <summary>
         /// Calculates progress toward the next unclaimed reward in a campaign.
         /// </summary>
         /// <param name="campaign">Campaign whose rewards are evaluated.</param>
