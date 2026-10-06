@@ -1,8 +1,13 @@
 {
-  "version": "1.4.1",
+  "version": "1.4.2",
   "type": "Patch",
-  "changelog": "Reworked how updates are installed: the app now downloads the latest GitHub release, so installs made with Setup are updated by running the new installer (Windows now shows the right version under Installed apps and the uninstaller is kept), while portable installs are updated in place. Downloads retry and recover from stalls, and a GitHub error no longer breaks the update. The version shown in Windows is also corrected on start-up.",
+  "changelog": "The uninstaller now removes everything the app created (caches, logs, leftover update files and the Start with Windows entry) and asks whether to also delete your settings, accounts and saved logins, which are kept by default.",
   "historic_versions": [
+    {
+      "version": "1.4.1",
+      "type": "Patch",
+      "changelog": "Reworked how updates are installed: the app now downloads the latest GitHub release, so installs made with Setup are updated by running the new installer (Windows now shows the right version under Installed apps and the uninstaller is kept), while portable installs are updated in place. Downloads retry and recover from stalls, and a GitHub error no longer breaks the update. The version shown in Windows is also corrected on start-up."
+    },
     {
       "version": "1.4.0",
       "type": "Feature",
