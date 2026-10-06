@@ -36,7 +36,7 @@ namespace Core.Services
                 string userId = activeCampaigns["data"]?["currentUser"]?["id"]?.GetValue<string>() ?? "";
                 gql.UserId = userId;
 
-                KnownGames = CollectKnownGames(campaigns);
+                KnownGames = CollectKnownGames(activeCampaigns["data"]);
 
                 campaigns?.RemoveAll(campaign =>
                 {
@@ -187,25 +187,50 @@ namespace Core.Services
             }
         }
 
-        private static List<(string Slug, string Name)> CollectKnownGames(JsonArray? campaigns)
+        /// <summary>
+        /// Collects every game the dashboard response mentions, wherever it sits (drop campaigns, reward campaigns,
+        /// benefits), so games Twitch only lists outside <c>dropCampaigns</c> are still offered in the game filter.
+        /// </summary>
+        private static List<(string Slug, string Name)> CollectKnownGames(JsonNode? dashboard)
         {
             List<(string Slug, string Name)> games = [];
-            if (campaigns == null)
-                return games;
-
-            foreach (JsonObject campaign in campaigns.OfType<JsonObject>())
-            {
-                JsonObject? game = campaign["game"] as JsonObject;
-                string? name = game?["displayName"]?.GetValue<string>();
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
-
-                string slug = game?["slug"]?.GetValue<string>() ?? Core.Services.Twitch.Helix.TwitchGameSlugHelper.Slugify(name);
-                if (!string.IsNullOrWhiteSpace(slug))
-                    games.Add((slug.Trim().ToLowerInvariant(), name));
-            }
-
+            CollectGames(dashboard, games);
             return games;
+        }
+
+        private static void CollectGames(JsonNode? node, List<(string Slug, string Name)> games)
+        {
+            switch (node)
+            {
+                case JsonObject obj:
+                    if (obj["__typename"]?.GetValue<string>() == "Game")
+                        AddGame(obj, games);
+
+                    foreach (KeyValuePair<string, JsonNode?> property in obj)
+                    {
+                        if (property.Key == "game" && property.Value is JsonObject game)
+                            AddGame(game, games);
+
+                        CollectGames(property.Value, games);
+                    }
+                    break;
+
+                case JsonArray array:
+                    foreach (JsonNode? item in array)
+                        CollectGames(item, games);
+                    break;
+            }
+        }
+
+        private static void AddGame(JsonObject game, List<(string Slug, string Name)> games)
+        {
+            string? name = game["displayName"]?.GetValue<string>() ?? game["name"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(name))
+                return;
+
+            string slug = game["slug"]?.GetValue<string>() ?? Core.Services.Twitch.Helix.TwitchGameSlugHelper.Slugify(name);
+            if (!string.IsNullOrWhiteSpace(slug))
+                games.Add((slug.Trim().ToLowerInvariant(), name));
         }
 
         /// <summary>
