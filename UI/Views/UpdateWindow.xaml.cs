@@ -81,7 +81,7 @@ namespace UI.Views
             {
                 UpdateProgress.Value = e.Progress;
                 ProgressText.Text = e.TotalBytes > 0
-                    ? $"{GitHubDirectoryDownloaderService.FormatBytes(e.DownloadedBytes)} / {GitHubDirectoryDownloaderService.FormatBytes(e.TotalBytes)}  •  {e.Progress}%"
+                    ? $"{UpdateManager.FormatBytes(e.DownloadedBytes)} / {UpdateManager.FormatBytes(e.TotalBytes)}  •  {e.Progress}%"
                     : $"{e.Progress}%";
             });
 

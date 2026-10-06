@@ -1,8 +1,13 @@
 {
-  "version": "1.4.0",
-  "type": "Feature",
-  "changelog": "The game white/black-list now offers every game the platforms list, not just ones with an active campaign, and has a search box (also in per-account settings). Campaigns and rewards show an estimated time to complete, and the dashboard shows a live countdown for the current campaign and drop. Eligible-streamer lists now show a \"Finding streamers…\" placeholder while they load, and the live count shows ? until it is known; live status loads much faster on both Twitch and Kick. Fixed a whitelist that excludes everything not stopping the stream already being mined, Twitch not mining after accounts were re-enabled until a restart, and the health check falsely forcing repeated stream re-evaluations.",
+  "version": "1.4.1",
+  "type": "Patch",
+  "changelog": "Reworked how updates are installed: the app now downloads the latest GitHub release, so installs made with Setup are updated by running the new installer (Windows now shows the right version under Installed apps and the uninstaller is kept), while portable installs are updated in place. Downloads retry and recover from stalls, and a GitHub error no longer breaks the update. The version shown in Windows is also corrected on start-up.",
   "historic_versions": [
+    {
+      "version": "1.4.0",
+      "type": "Feature",
+      "changelog": "The game white/black-list now offers every game the platforms list, not just ones with an active campaign, and has a search box (also in per-account settings). Campaigns and rewards show an estimated time to complete, and the dashboard shows a live countdown for the current campaign and drop. Eligible-streamer lists now show a \"Finding streamers…\" placeholder while they load, and the live count shows ? until it is known; live status loads much faster on both Twitch and Kick. Fixed a whitelist that excludes everything not stopping the stream already being mined, Twitch not mining after accounts were re-enabled until a restart, and the health check falsely forcing repeated stream re-evaluations."
+    },
     {
       "version": "1.3.2",
       "type": "Patch",

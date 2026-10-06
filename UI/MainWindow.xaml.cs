@@ -123,6 +123,9 @@ namespace UI
 
             VersionString = Utility.GetDisplayVersion();
 
+            // Installs updated by copying files (older updater) would otherwise keep showing the old version in Installed apps
+            Task.Run(UpdateManager.SyncRegisteredVersion);
+
             string basePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector");
             string updatePath = Path.Combine(basePath, "Update");
 
@@ -160,6 +163,10 @@ namespace UI
                         {
                             string fileName = Path.GetFileName(file);
                             if (Array.Exists(filesToKeep, f => f.Equals(fileName, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+
+                            // Never delete the Inno Setup uninstaller (unins000.exe/.dat/.msg), or Windows can no longer uninstall the app
+                            if (fileName.StartsWith("unins", StringComparison.OrdinalIgnoreCase))
                                 continue;
 
                             File.Delete(file);

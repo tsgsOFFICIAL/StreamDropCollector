@@ -38,48 +38,26 @@ jobs:
 
             - name: Publish (Framework-Dependent)
               run: |
-                  Remove-Item -Recurse -Force UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/ -ErrorAction SilentlyContinue
+                  Remove-Item -Recurse -Force publish/framework-dependent/ -ErrorAction SilentlyContinue
                   dotnet publish UI/UI.csproj -c Release -r win-x64 `
                     -p:SelfContained=false `
                     -p:Version=${{ steps.vars.outputs.version }} `
                     -p:FileVersion=${{ steps.vars.outputs.version }} `
                     -p:InformationalVersion=${{ steps.vars.outputs.version }} `
                     -p:IncludeSourceRevisionInInformationalVersion=false `
-                    -o UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/
+                    -o publish/framework-dependent/
 
             - name: Zip (Self-Contained)
               run: Compress-Archive -Path publish/self-contained/* -DestinationPath StreamDropCollector-${{ github.ref_name }}-self-contained.zip
 
             - name: Zip (Framework-Dependent)
-              run: Compress-Archive -Path UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/* -DestinationPath StreamDropCollector-${{ github.ref_name }}-framework-dependent.zip
+              run: Compress-Archive -Path publish/framework-dependent/* -DestinationPath StreamDropCollector-${{ github.ref_name }}-framework-dependent.zip
 
             - name: Install Inno Setup
               run: choco install innosetup -y --no-progress
 
             - name: Build installer
               run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Installer\StreamDropCollector.iss'
-
-            - name: Commit published output to master
-              shell: pwsh
-              run: |
-                  # Save built output before switching branches
-                  Copy-Item -Recurse "publish/self-contained/" "$env:TEMP/publish-output/"
-
-                  git config user.name "github-actions[bot]"
-                  git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git fetch origin master
-
-                  # The publish steps above modified the tracked binaries folder. Force the switch to the latest master so a
-                  # tag that is not at master's head (or any other dirty tracked file) cannot block it.
-                  git checkout -f -B master origin/master
-
-                  # Restore built output
-                  New-Item -ItemType Directory -Force -Path "UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/"
-                  Copy-Item -Recurse -Force "$env:TEMP/publish-output/*" "UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/"
-
-                  git add -f UI/bin/Release/net10.0-windows10.0.17763.0/publish/win-x64/
-                  git commit -m "chore: publish ${{ github.ref_name }} binaries [skip ci]"
-                  git push origin master
 
             - name: Get previous tag
               id: prev_tag
