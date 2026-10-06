@@ -62,7 +62,10 @@ begin
   Result := True;
   RemoveUserData := False;
 
-  if not UninstallSilent then
+  // Silent uninstalls keep user data unless they pass /REMOVEUSERDATA=1
+  if ExpandConstant('{param:REMOVEUSERDATA|0}') = '1' then
+    RemoveUserData := True
+  else if not UninstallSilent then
     RemoveUserData := SuppressibleMsgBox(
       'Do you also want to delete your settings, accounts and saved logins?' + #13#10#13#10 +
       'Choose No to keep them, for example if you plan to reinstall later.',
@@ -78,6 +81,7 @@ begin
     (CompareText(Name, 'helix-auth.dat') = 0) or
     (CompareText(Name, 'LastMinedStreamers.json') = 0) or
     (CompareText(Name, 'PinnedCampaignCache.json') = 0) or
+    (CompareText(Name, 'KnownGames.json') = 0) or
     (CompareText(Name, '{#MyAppExeName}.WebView2') = 0);
 end;
 
@@ -112,7 +116,7 @@ begin
   RemoveDir(Dir); // only succeeds when empty, so kept data is never touched
 end;
 
-procedure CurrentUninstallStepChanged(CurUninstallStep: TUninstallStep);
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   AppDir, DataDir: String;
 begin

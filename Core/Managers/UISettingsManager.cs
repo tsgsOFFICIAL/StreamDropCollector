@@ -73,6 +73,9 @@ namespace Core.Managers
         private bool _isUpdatingGameFilterOptions;
         private readonly Dictionary<string, (Platform platform, string slug, string displayName)> _knownGameOptions =
             new(StringComparer.OrdinalIgnoreCase);
+        private static readonly string _knownGamesFilePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector", "KnownGames.json");
+        private readonly object _knownGamesFileLock = new();
+        private bool _knownGamesLoaded;
         private bool _kickLevelFarming;
         private bool _isLoadingSettings;
 
@@ -645,13 +648,20 @@ namespace Core.Managers
             {
                 // Every account reports only its own platform's games, so remember what earlier accounts reported
                 // instead of letting the last one to load replace the other platform's list.
+                LoadKnownGames();
+
+                bool addedGame = false;
                 foreach ((Platform platform, string slug, string name) in campaigns
                              .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
                              .Select(c => (c.Platform, c.Slug.Trim().ToLowerInvariant(), c.GameName))
                              .Concat((extraGames ?? []).Select(g => (g.Platform, g.Slug, g.Name))))
                 {
-                    _knownGameOptions.TryAdd($"{platform}:{slug}", (platform, slug, name));
+                    addedGame |= _knownGameOptions.TryAdd($"{platform}:{slug}", (platform, slug, name));
                 }
+
+                // Twitch only lists campaigns it currently shows, so remember every game ever seen to keep past ones selectable
+                if (addedGame)
+                    SaveKnownGames();
 
                 List<(Platform platform, string slug, string displayName)> options = _knownGameOptions.Values
                     .OrderBy(x => x.platform)
@@ -678,6 +688,56 @@ namespace Core.Managers
             OnPropertyChanged(nameof(TwitchWhitelistSummary));
             OnPropertyChanged(nameof(KickWhitelistSummary));
         }
+
+        /// <summary>Loads the games remembered from earlier runs into the known game options (once).</summary>
+        private void LoadKnownGames()
+        {
+            if (_knownGamesLoaded)
+                return;
+
+            _knownGamesLoaded = true;
+
+            try
+            {
+                if (!File.Exists(_knownGamesFilePath))
+                    return;
+
+                List<KnownGameEntry>? entries = JsonSerializer.Deserialize<List<KnownGameEntry>>(File.ReadAllText(_knownGamesFilePath));
+                foreach (KnownGameEntry entry in entries ?? [])
+                {
+                    if (!string.IsNullOrWhiteSpace(entry.Slug) && !string.IsNullOrWhiteSpace(entry.Name))
+                        _knownGameOptions.TryAdd($"{entry.Platform}:{entry.Slug}", (entry.Platform, entry.Slug, entry.Name));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            {
+                AppLogger.Warn("UISettings", $"Ignoring unreadable known games file: {ex.Message}");
+            }
+        }
+
+        /// <summary>Writes the known game options to disk in the background.</summary>
+        private void SaveKnownGames()
+        {
+            List<KnownGameEntry> entries = [.. _knownGameOptions.Values.Select(g => new KnownGameEntry(g.platform, g.slug, g.displayName))];
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    lock (_knownGamesFileLock)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(_knownGamesFilePath)!);
+                        File.WriteAllText(_knownGamesFilePath, JsonSerializer.Serialize(entries, _jsonOptions));
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    AppLogger.Warn("UISettings", $"Could not save known games: {ex.Message}");
+                }
+            });
+        }
+
+        private sealed record KnownGameEntry(Platform Platform, string Slug, string Name);
 
         /// <summary>
         /// Clears the game filter selection for the specified platform and removes inactive filter entries.

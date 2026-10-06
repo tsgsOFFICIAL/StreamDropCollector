@@ -1,8 +1,13 @@
 {
-  "version": "1.4.2",
+  "version": "1.4.3",
   "type": "Patch",
-  "changelog": "The uninstaller now removes everything the app created (caches, logs, leftover update files and the Start with Windows entry) and asks whether to also delete your settings, accounts and saved logins, which are kept by default.",
+  "changelog": "Fixed the uninstaller not cleaning up: it now removes caches, logs and leftover files and the Start with Windows entry, and asks whether to also delete your settings, accounts and saved logins (kept by default). The game filter now remembers every game it has seen, so games from past campaigns stay selectable on Twitch too.",
   "historic_versions": [
+    {
+      "version": "1.4.2",
+      "type": "Patch",
+      "changelog": "The uninstaller now removes everything the app created (caches, logs, leftover update files and the Start with Windows entry) and asks whether to also delete your settings, accounts and saved logins, which are kept by default."
+    },
     {
       "version": "1.4.1",
       "type": "Patch",
