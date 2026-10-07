@@ -5,7 +5,27 @@ on:
         branches: [master]
 
 jobs:
+    check:
+        runs-on: ubuntu-latest
+        outputs:
+            skip: ${{ steps.tagcheck.outputs.skip }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Skip if commit is tagged for release
+              id: tagcheck
+              run: |
+                  if git tag --points-at "${{ github.sha }}" | grep -q '^v'; then
+                      echo "skip=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "skip=false" >> "$GITHUB_OUTPUT"
+                  fi
+
     build:
+        needs: check
+        if: needs.check.outputs.skip != 'true'
         runs-on: windows-latest
         permissions:
             contents: write
