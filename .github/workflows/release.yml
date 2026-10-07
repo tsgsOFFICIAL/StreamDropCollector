@@ -88,3 +88,22 @@ jobs:
                     --title "StreamDropCollector ${{ github.ref_name }}" `
                     --verify-tag `
                     --notes $notes
+
+            - name: Update last-build badge
+              shell: pwsh
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  $message = "${{ github.ref_name }} · $(Get-Date -AsUTC -Format 'yyyy-MM-dd HH:mm') UTC"
+                  $json = @{ schemaVersion = 1; label = "last build"; message = $message; color = "blue" } | ConvertTo-Json -Compress
+                  $url = "https://x-access-token:$env:GH_TOKEN@github.com/${{ github.repository }}.git"
+                  git clone --depth 1 --branch badges $url badges-branch
+                  if ($LASTEXITCODE -ne 0) {
+                    git init badges-branch
+                    git -C badges-branch checkout --orphan badges
+                    git -C badges-branch remote add origin $url
+                  }
+                  Set-Content -Path badges-branch/latest-build.json -Value $json -Encoding utf8NoBOM
+                  git -C badges-branch add latest-build.json
+                  git -C badges-branch -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update last-build badge" --allow-empty
+                  git -C badges-branch push origin badges
