@@ -5,7 +5,7 @@
 > Mine streams in the background, earn campaign rewards, and claim them automatically, all without lifting a finger.
 
 [![Issues](https://img.shields.io/github/issues/tsgsOFFICIAL/StreamDropCollector)](https://github.com/tsgsOFFICIAL/StreamDropCollector/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/tsgsOFFICIAL/StreamDropCollector)](https://github.com/tsgsOFFICIAL/StreamDropCollector/commits/master)
+[![Downloads](https://img.shields.io/github/downloads/tsgsOFFICIAL/StreamDropCollector/total)](https://github.com/tsgsOFFICIAL/StreamDropCollector/releases)
 [![Last Build](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FtsgsOFFICIAL%2FStreamDropCollector%2Fbadges%2Flatest-build.json)](https://github.com/tsgsOFFICIAL/StreamDropCollector/releases)
 [![Nightly Build](https://github.com/tsgsOFFICIAL/StreamDropCollector/actions/workflows/nightly.yml/badge.svg)](https://github.com/tsgsOFFICIAL/StreamDropCollector/actions/workflows/nightly.yml)
 [![Release Build](https://github.com/tsgsOFFICIAL/StreamDropCollector/actions/workflows/release.yml/badge.svg)](https://github.com/tsgsOFFICIAL/StreamDropCollector/actions/workflows/release.yml)
