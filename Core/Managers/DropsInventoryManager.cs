@@ -1620,8 +1620,18 @@ namespace Core.Managers
                 EffectiveMiningPriority,
                 EffectivePrioritizeBadges);
 
-            if (result.PinReleased)
-                _pinnedCampaignStore.Clear();
+            // The pin is shared across platforms, and a platform's candidate list (or a retry after a failed stream
+            // check) may legitimately omit it, so only release it once the campaign has nothing left to mine.
+            if (result.PinReleased && _pinnedCampaignStore.CampaignId is string pinnedId)
+            {
+                bool stillPursuable = Application.Current.Dispatcher.Invoke(() =>
+                    ActiveCampaigns.Any(c => c.Id == pinnedId && c.HasProgressToMake(EffectiveAutoClaim)));
+
+                if (!stillPursuable)
+                    _pinnedCampaignStore.Clear();
+                else
+                    AppLogger.Debug("Selection", $"Pinned campaign '{pinnedId}' absent from this candidate list; keeping pin.");
+            }
 
             if (result.Campaign is DropsCampaign picked)
             {
