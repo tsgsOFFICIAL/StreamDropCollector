@@ -64,6 +64,10 @@ namespace Core.Models
         /// </summary>
         public MiningPriorityMode MiningPriorityMode { get; set; } = MiningPriorityMode.AvailabilityThenProgress;
         /// <summary>
+        /// Gets or sets a value indicating whether campaigns with an unclaimed badge reward are mined before other campaigns.
+        /// </summary>
+        public bool PrioritizeBadges { get; set; }
+        /// <summary>
         /// Gets or sets a value indicating whether Kick level farming runs when no Kick drop campaign has progress to make.
         /// </summary>
         public bool KickLevelFarming { get; set; }

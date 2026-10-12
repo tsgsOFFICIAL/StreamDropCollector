@@ -13,6 +13,7 @@ namespace Core.Models
     /// <param name="IsClaimed">true if the reward has been claimed; otherwise, false. Defaults to false.</param>
     /// <param name="DropInstanceId">The identifier of the specific drop instance associated with this reward, or null if not applicable.</param>
     /// <param name="IsCurrentReward">true if this reward is currently being progressed; otherwise, false. Defaults to false.</param>
+    /// <param name="IsBadge">true if the reward is a chat badge rather than an in-game item or emote; otherwise, false. Defaults to false.</param>
     public record DropsReward(
         string Id,
         string Name,
@@ -21,7 +22,8 @@ namespace Core.Models
         int ProgressMinutes = 0,
         bool IsClaimed = false,
         string? DropInstanceId = null,
-        bool IsCurrentReward = false)
+        bool IsCurrentReward = false,
+        bool IsBadge = false)
     {
         /// <summary>
         /// Gets the minutes of watch time still needed to earn this reward (0 once claimed or complete).
@@ -116,6 +118,11 @@ namespace Core.Models
         /// Gets a value indicating whether every reward in the campaign has been claimed.
         /// </summary>
         public bool AllRewardsClaimed => Rewards.All(r => r.IsClaimed);
+
+        /// <summary>
+        /// Gets a value indicating whether the campaign still has a badge reward that has not been claimed.
+        /// </summary>
+        public bool HasUnclaimedBadge => Rewards.Any(r => r.IsBadge && !r.IsClaimed);
 
         /// <summary>
         /// Gets the minutes of watch time still needed to finish every reward in the campaign.

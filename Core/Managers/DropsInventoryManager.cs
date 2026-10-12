@@ -356,6 +356,7 @@ namespace Core.Managers
             UISettingsManager.Instance.MiningPriorityModeChanged += OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
+            UISettingsManager.Instance.PrioritizeBadgesChanged += OnPrioritizeBadgesChanged;
             _twitchHelixService.Authenticated += OnTwitchHelixAuthenticated;
 
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
@@ -402,6 +403,18 @@ namespace Core.Managers
             AppLogger.Info("Miner", $"Kick level farming {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
 
             if (_isPaused || KickWebView == null)
+                return;
+
+            _ = StartMiningStreams(true);
+        }
+        /// <summary>
+        /// Re-evaluates mining when the badge prioritization toggle changes.
+        /// </summary>
+        private void OnPrioritizeBadgesChanged(bool enabled)
+        {
+            AppLogger.Info("Miner", $"Badge prioritization {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
+
+            if (_isPaused || (TwitchWebView == null && KickWebView == null) || !ActiveCampaigns.Any())
                 return;
 
             _ = StartMiningStreams(true);
@@ -1067,6 +1080,7 @@ namespace Core.Managers
             UISettingsManager.Instance.MiningPriorityModeChanged -= OnMiningPriorityModeChanged;
             UISettingsManager.Instance.GameWhitelistChanged -= OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
+            UISettingsManager.Instance.PrioritizeBadgesChanged -= OnPrioritizeBadgesChanged;
             _twitchHelixService.Authenticated -= OnTwitchHelixAuthenticated;
             _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;
 
@@ -1595,7 +1609,8 @@ namespace Core.Managers
             CampaignSelectionResult result = CampaignPrioritizer.SelectBest(
                 campaigns,
                 _pinnedCampaignStore.CampaignId,
-                EffectiveMiningPriority);
+                EffectiveMiningPriority,
+                UISettingsManager.Instance.PrioritizeBadges);
 
             if (result.PinReleased)
                 _pinnedCampaignStore.Clear();

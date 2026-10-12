@@ -22,11 +22,13 @@ namespace Core.Mining
         /// <param name="campaigns">Non-empty candidate campaigns for one platform.</param>
         /// <param name="pinnedCampaignId">Optional user-pinned campaign id from <see cref="Persistence.PinnedCampaignStore"/>.</param>
         /// <param name="mode">Mining priority mode from settings.</param>
+        /// <param name="prioritizeBadges">When true, campaigns with an unclaimed badge reward are picked ahead of the rest.</param>
         /// <returns>The selection result, including whether the pin was released because it is no longer pursuable.</returns>
         public static CampaignSelectionResult SelectBest(
             IReadOnlyList<DropsCampaign> campaigns,
             string? pinnedCampaignId,
-            MiningPriorityMode mode)
+            MiningPriorityMode mode,
+            bool prioritizeBadges = false)
         {
             if (pinnedCampaignId != null)
             {
@@ -39,13 +41,13 @@ namespace Core.Mining
                 }
 
                 AppLogger.Debug("Selection", $"Pinned campaign '{pinnedCampaignId}' is no longer pursuable, releasing pin.");
-                return new CampaignSelectionResult(SelectByPriority(campaigns, mode), PinReleased: true);
+                return new CampaignSelectionResult(SelectByPriority(campaigns, mode, prioritizeBadges), PinReleased: true);
             }
 
-            return new CampaignSelectionResult(SelectByPriority(campaigns, mode), PinReleased: false);
+            return new CampaignSelectionResult(SelectByPriority(campaigns, mode, prioritizeBadges), PinReleased: false);
         }
 
-        private static DropsCampaign? SelectByPriority(IReadOnlyList<DropsCampaign> campaigns, MiningPriorityMode mode)
+        private static DropsCampaign? SelectByPriority(IReadOnlyList<DropsCampaign> campaigns, MiningPriorityMode mode, bool prioritizeBadges)
         {
             AppLogger.Debug("Selection", $"Selecting best campaign with mode={mode}, candidates={campaigns.Count}");
 
@@ -78,7 +80,9 @@ namespace Core.Mining
                         .Min(r => r.RequiredMinutes - r.ProgressMinutes))],
             };
 
-            DropsCampaign? selected = prioritizedCampaigns.FirstOrDefault();
+            // The mode order still decides among badge campaigns (and among the rest when none has a badge).
+            DropsCampaign? selected = (prioritizeBadges ? prioritizedCampaigns.FirstOrDefault(c => c.HasUnclaimedBadge) : null)
+                                      ?? prioritizedCampaigns.FirstOrDefault();
             if (selected == null)
                 AppLogger.Warn("Selection", "No campaign selected after priority sort.");
             else

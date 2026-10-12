@@ -46,6 +46,11 @@ namespace Core.Managers
         /// Occurs when <see cref="KickLevelFarming"/> changes after settings have finished loading.
         /// </summary>
         public event Action<bool>? KickLevelFarmingChanged;
+
+        /// <summary>
+        /// Occurs when <see cref="PrioritizeBadges"/> changes after settings have finished loading.
+        /// </summary>
+        public event Action<bool>? PrioritizeBadgesChanged;
         private static readonly string _settingsFilePath = Path.Combine(Environment.ExpandEnvironmentVariables("%APPDATA%"), "Stream Drop Collector", "Settings.json");
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -77,6 +82,7 @@ namespace Core.Managers
         private readonly object _knownGamesFileLock = new();
         private bool _knownGamesLoaded;
         private bool _kickLevelFarming;
+        private bool _prioritizeBadges;
         private bool _isLoadingSettings;
 
         /// <summary>
@@ -208,6 +214,18 @@ namespace Core.Managers
             {
                 if (SetField(ref _kickLevelFarming, value) && !_isLoadingSettings)
                     KickLevelFarmingChanged?.Invoke(value);
+            }
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether campaigns with an unclaimed badge reward are mined before other campaigns.
+        /// </summary>
+        public bool PrioritizeBadges
+        {
+            get => _prioritizeBadges;
+            set
+            {
+                if (SetField(ref _prioritizeBadges, value) && !_isLoadingSettings)
+                    PrioritizeBadgesChanged?.Invoke(value);
             }
         }
         /// <summary>
@@ -484,6 +502,7 @@ namespace Core.Managers
                     AutoClaimRewards = settings.AutoClaimRewards;
                     MiningPriorityMode = settings.MiningPriorityMode;
                     KickLevelFarming = settings.KickLevelFarming;
+                    PrioritizeBadges = settings.PrioritizeBadges;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
                     NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
                     VerboseDebugLogging = settings.VerboseDebugLogging;
@@ -531,6 +550,7 @@ namespace Core.Managers
                     AutoClaimRewards = AutoClaimRewards,
                     MiningPriorityMode = MiningPriorityMode,
                     KickLevelFarming = KickLevelFarming,
+                    PrioritizeBadges = PrioritizeBadges,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,
                     NotifyOnAutoClaimed = NotifyOnAutoClaimed,
                     VerboseDebugLogging = VerboseDebugLogging,

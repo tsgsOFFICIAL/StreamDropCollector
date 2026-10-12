@@ -347,7 +347,8 @@ namespace Core.Services
                                 RequiredMinutes: requiredMinutes,
                                 ProgressMinutes: currentMinutes,
                                 IsClaimed: isClaimed,
-                                DropInstanceId: benefitId
+                                DropInstanceId: benefitId,
+                                IsBadge: benefit["distributionType"]?.GetValue<string>() == "BADGE"
                             ));
                     }
                 }
