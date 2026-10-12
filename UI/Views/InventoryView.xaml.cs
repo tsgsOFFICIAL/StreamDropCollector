@@ -1,5 +1,8 @@
-﻿using System.Windows.Controls;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
+using Core.Managers;
+using Core.Models;
 using UI.Accounts;
 
 namespace UI.Views
@@ -17,6 +20,7 @@ namespace UI.Views
         public static InventoryView Instance => _instance.Value;
 
         private readonly ListCollectionView _enabledAccounts;
+        private ListCollectionView? _campaignView;
 
         private InventoryView()
         {
@@ -30,13 +34,35 @@ namespace UI.Views
             AccountPicker.ItemsSource = _enabledAccounts;
             AccountManager.Instance.EnabledAccountsChanged += () => _enabledAccounts.Refresh();
             AccountPicker.SelectedItem = AccountManager.Instance.SelectedSession;
-            InventoryScroll.DataContext = AccountManager.Instance.SelectedSession?.Engine;
+            HideCompletedBox.IsChecked = UISettingsManager.Instance.HideCompletedCampaigns;
+            BindCampaigns(AccountManager.Instance.SelectedSession);
 
             AccountManager.Instance.SelectedSessionChanged += session =>
             {
                 AccountPicker.SelectedItem = session;
-                InventoryScroll.DataContext = session?.Engine;
+                BindCampaigns(session);
             };
+        }
+
+        private void BindCampaigns(AccountSession? session)
+        {
+            InventoryScroll.DataContext = session?.Engine;
+
+            // A private view per engine so the completed-campaign filter doesn't leak into the shared default view.
+            _campaignView = session?.Engine is { } engine
+                ? new ListCollectionView(engine.ActiveCampaigns) { Filter = IsVisibleCampaign }
+                : null;
+            CampaignList.ItemsSource = _campaignView;
+        }
+
+        private static bool IsVisibleCampaign(object item) =>
+            !(UISettingsManager.Instance.HideCompletedCampaigns && item is DropsCampaign { AllRewardsClaimed: true });
+
+        private void OnHideCompletedChanged(object sender, RoutedEventArgs e)
+        {
+            UISettingsManager.Instance.HideCompletedCampaigns = HideCompletedBox.IsChecked == true;
+            UISettingsManager.Instance.SaveSettings();
+            _campaignView?.Refresh();
         }
 
         private void OnAccountPickerSelectionChanged(object sender, SelectionChangedEventArgs e)

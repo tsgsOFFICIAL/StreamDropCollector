@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using Timer = System.Timers.Timer;
 using System.Net.Http.Headers;
 using System.ComponentModel;
@@ -83,6 +83,7 @@ namespace Core.Managers
         private bool _knownGamesLoaded;
         private bool _kickLevelFarming;
         private bool _prioritizeBadges;
+        private bool _hideCompletedCampaigns = true;
         private bool _isLoadingSettings;
 
         /// <summary>
@@ -227,6 +228,14 @@ namespace Core.Managers
                 if (SetField(ref _prioritizeBadges, value) && !_isLoadingSettings)
                     PrioritizeBadgesChanged?.Invoke(value);
             }
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether the inventory page hides campaigns whose rewards have all been claimed.
+        /// </summary>
+        public bool HideCompletedCampaigns
+        {
+            get => _hideCompletedCampaigns;
+            set => SetField(ref _hideCompletedCampaigns, value);
         }
         /// <summary>
         /// Gets or sets a value indicating whether a notification should be sent when rewards are ready to be claimed.
@@ -503,6 +512,7 @@ namespace Core.Managers
                     MiningPriorityMode = settings.MiningPriorityMode;
                     KickLevelFarming = settings.KickLevelFarming;
                     PrioritizeBadges = settings.PrioritizeBadges;
+                    HideCompletedCampaigns = settings.HideCompletedCampaigns;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
                     NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
                     VerboseDebugLogging = settings.VerboseDebugLogging;
@@ -551,6 +561,7 @@ namespace Core.Managers
                     MiningPriorityMode = MiningPriorityMode,
                     KickLevelFarming = KickLevelFarming,
                     PrioritizeBadges = PrioritizeBadges,
+                    HideCompletedCampaigns = HideCompletedCampaigns,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,
                     NotifyOnAutoClaimed = NotifyOnAutoClaimed,
                     VerboseDebugLogging = VerboseDebugLogging,

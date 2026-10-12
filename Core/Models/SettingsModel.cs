@@ -1,4 +1,4 @@
-﻿using Core.Enums;
+using Core.Enums;
 
 namespace Core.Models
 {
@@ -67,6 +67,10 @@ namespace Core.Models
         /// Gets or sets a value indicating whether campaigns with an unclaimed badge reward are mined before other campaigns.
         /// </summary>
         public bool PrioritizeBadges { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether the inventory page hides campaigns whose rewards have all been claimed.
+        /// </summary>
+        public bool HideCompletedCampaigns { get; set; } = true;
         /// <summary>
         /// Gets or sets a value indicating whether Kick level farming runs when no Kick drop campaign has progress to make.
         /// </summary>
