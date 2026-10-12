@@ -132,11 +132,9 @@ namespace Core.Models
         /// <summary>
         /// Gets the minutes of watch time still needed to finish every reward in the campaign.
         /// </summary>
-        /// <remarks>Kick tracks one progress counter per campaign, so the longest remaining reward decides the total;
-        /// Twitch tracks each drop separately, so the remaining minutes add up.</remarks>
-        public int RemainingMinutes => Platform == Platform.Kick
-            ? Rewards.Select(r => r.RemainingMinutes).DefaultIfEmpty(0).Max()
-            : Rewards.Sum(r => r.RemainingMinutes);
+        /// <remarks>Every reward in a campaign accrues watch time simultaneously (Kick shares one counter, Twitch drops
+        /// all tick together), so the longest remaining reward decides the total rather than the sum.</remarks>
+        public int RemainingMinutes => Rewards.Select(r => r.RemainingMinutes).DefaultIfEmpty(0).Max();
 
         /// <summary>
         /// Gets a short "time to complete" label for the whole campaign.
