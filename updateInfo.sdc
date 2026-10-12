@@ -1,8 +1,13 @@
 {
-  "version": "1.4.4",
+  "version": "1.4.5",
   "type": "Patch",
-  "changelog": "Internal build and release pipeline improvements, no user-facing changes.",
+  "changelog": "Kick campaigns that need a linked game account (such as Riot) are no longer mined while no account is linked, since their rewards could never be claimed. They now show a \"Link your game account on Kick\" note instead of a mine button, and are picked up again as soon as you link.",
   "historic_versions": [
+    {
+      "version": "1.4.4",
+      "type": "Patch",
+      "changelog": "Internal build and release pipeline improvements, no user-facing changes."
+    },
     {
       "version": "1.4.3",
       "type": "Patch",
