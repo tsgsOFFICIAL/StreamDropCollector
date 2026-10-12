@@ -16,6 +16,9 @@
                     <DataTrigger Binding="{Binding Variant, ElementName=Root}" Value="{x:Static models:StatusBadgeVariant.Claimed}">
                         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
                     </DataTrigger>
+                    <DataTrigger Binding="{Binding Variant, ElementName=Root}" Value="{x:Static models:StatusBadgeVariant.Badge}">
+                        <Setter Property="Background" Value="#B388FF"/>
+                    </DataTrigger>
                 </Style.Triggers>
             </Style>
         </Border.Style>

@@ -49,6 +49,12 @@
                                           Variant="{x:Static models:StatusBadgeVariant.Mining}"
                                           Margin="12,0,0,0"
                                           Visibility="{Binding IsCurrentCampaign, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                    <controls:StatusBadge BadgeText="BADGE"
+                                          Variant="{x:Static models:StatusBadgeVariant.Badge}"
+                                          Margin="12,0,0,0"
+                                          ToolTip="This campaign includes a chat badge reward"
+                                          Visibility="{Binding HasBadge, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 </StackPanel>
 
                 <TextBlock Text="Link your game account on Kick to mine this campaign"

@@ -9,6 +9,9 @@ namespace UI.Models
         Mining,
 
         /// <summary>Completed and claimed drop.</summary>
-        Claimed
+        Claimed,
+
+        /// <summary>Marks a chat badge reward (as opposed to an in-game item).</summary>
+        Badge
     }
 }

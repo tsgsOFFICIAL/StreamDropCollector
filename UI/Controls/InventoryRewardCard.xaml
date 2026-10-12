@@ -34,9 +34,20 @@
                                    ImageWidth="50" ImageHeight="50" CornerRadius="6"/>
 
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="{Binding Name}"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource AccentBrush}"/>
+                <WrapPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Name}"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource AccentBrush}"/>
+
+                    <controls:StatusBadge BadgeText="BADGE"
+                                          Variant="{x:Static models:StatusBadgeVariant.Badge}"
+                                          VerticalAlignment="Center"
+                                          ToolTip="This reward is a chat badge"
+                                          Visibility="{Binding IsBadge, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </WrapPanel>
 
                 <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold">
                     <Run Text="{Binding ProgressMinutes, Mode=OneWay}" Foreground="{DynamicResource AccentBrush}"/>

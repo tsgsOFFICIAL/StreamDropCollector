@@ -120,6 +120,11 @@ namespace Core.Models
         public bool AllRewardsClaimed => Rewards.All(r => r.IsClaimed);
 
         /// <summary>
+        /// Gets a value indicating whether the campaign offers any badge reward, claimed or not.
+        /// </summary>
+        public bool HasBadge => Rewards.Any(r => r.IsBadge);
+
+        /// <summary>
         /// Gets a value indicating whether the campaign still has a badge reward that has not been claimed.
         /// </summary>
         public bool HasUnclaimedBadge => Rewards.Any(r => r.IsBadge && !r.IsClaimed);
