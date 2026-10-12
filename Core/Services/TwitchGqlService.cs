@@ -423,18 +423,20 @@ namespace Core.Services
             JsonNode? root = JsonNode.Parse(jsonText);
             JsonNode? result = root?[0];
 
-            bool isConnected = result?["data"]?
-                        ["claimDropRewards"]?
-                        ["isUserAccountConnected"]?
-                        .GetValue<bool>()
-                  ?? false;
+            JsonNode? claimResult = result?["data"]?["claimDropRewards"];
+            string? status = claimResult?["status"]?.GetValue<string>();
 
-            if (isConnected)
-                AppLogger.Info("TwitchGql", "Drop claimed.");
+            // isUserAccountConnected only says whether the game account is linked, which is false for Twitch-only
+            // rewards such as badges even when the claim went through, so success is judged by the claim status.
+            bool claimed = status is "ELIGIBLE_FOR_ALL" or "DROP_INSTANCE_ALREADY_CLAIMED"
+                || claimResult?["isUserAccountConnected"]?.GetValue<bool>() == true;
+
+            if (claimed)
+                AppLogger.Info("TwitchGql", $"Drop claimed. status={status ?? "n/a"}");
             else
-                AppLogger.Debug("TwitchGql", "ClaimDrop returned not connected.");
+                AppLogger.Warn("TwitchGql", $"ClaimDrop was not accepted. status={status ?? "n/a"}, body={jsonText}");
 
-            return isConnected;
+            return claimed;
         }
         /// <summary>
         /// Queries the Twitch Drops dashboard and returns the full dashboard data as a JSON object.
