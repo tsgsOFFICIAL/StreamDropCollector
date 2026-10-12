@@ -162,8 +162,27 @@ namespace Core.Services
                                 node?["item"]?["id"]?.GetValue<string>() == reward.DropInstanceId &&
                                 node?["status"]?.GetValue<string>() == "CLAIMED");
 
+                        // Diagnostics only (no behaviour change): record which earned entry the benefit id matched and
+                        // whether it belongs to this campaign, so recurring benefits that look claimed can be traced.
+                        AppLogger.Debug(
+                            "TwitchDrops",
+                            $"Reward id check. campaignId={dropCampaign.Id} campaign='{dropCampaign.Name}' dropId={reward.Id} " +
+                            $"benefitId={reward.DropInstanceId} inProgressClaimed={updatedReward.IsClaimed} " +
+                            $"earnedMatch={(matchingEarnedDrop != null)}");
+
                         if (matchingEarnedDrop != null)
                         {
+                            string? earnedCampaignId = matchingEarnedDrop["campaign"]?["id"]?.GetValue<string>();
+                            if (!string.Equals(earnedCampaignId, dropCampaign.Id, StringComparison.Ordinal))
+                            {
+                                AppLogger.Warn(
+                                    "TwitchDrops",
+                                    $"Earned entry matched by benefit id but belongs to a different campaign. " +
+                                    $"currentCampaignId={dropCampaign.Id} campaign='{dropCampaign.Name}' dropId={reward.Id} benefitId={reward.DropInstanceId} " +
+                                    $"earnedCampaignId={earnedCampaignId ?? "null"} earnedAt={matchingEarnedDrop["earnedAt"]?.ToString() ?? "null"} " +
+                                    $"inProgressClaimedBefore={updatedReward.IsClaimed} progressBefore={updatedReward.ProgressMinutes}/{reward.RequiredMinutes}");
+                            }
+
                             // This reward has been fully claimed via a game event drop
                             updatedReward = updatedReward with
                             {

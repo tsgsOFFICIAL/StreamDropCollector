@@ -88,6 +88,18 @@ namespace Core.Mining
 
                         if (matchingEarnedDrop != null)
                         {
+                            // Diagnostics only (no behaviour change): flag earned entries from another campaign.
+                            string? earnedCampaignId = matchingEarnedDrop["campaign"]?["id"]?.GetValue<string>();
+                            if (!string.Equals(earnedCampaignId, campaignId, StringComparison.Ordinal))
+                            {
+                                AppLogger.Warn(
+                                    "ProgressSync",
+                                    $"Earned entry matched by benefit id but belongs to a different campaign. " +
+                                    $"currentCampaignId={campaignId} dropId={localReward.Id} benefitId={localReward.DropInstanceId} " +
+                                    $"earnedCampaignId={earnedCampaignId ?? "null"} earnedAt={matchingEarnedDrop["earnedAt"]?.ToString() ?? "null"} " +
+                                    $"inProgressClaimedBefore={isClaimed} progressBefore={progressMinutes}/{localReward.RequiredMinutes}");
+                            }
+
                             isClaimed = true;
                             progressMinutes = localReward.RequiredMinutes;
                         }
