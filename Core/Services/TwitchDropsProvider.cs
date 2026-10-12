@@ -202,9 +202,11 @@ namespace Core.Services
         {
             string? linkUrl = campaign["accountLinkURL"]?.GetValue<string>();
 
+            // Only the bare site counts; subdomains such as id.twitch.tv are OAuth sign-ins for a game's own site.
             return Uri.TryCreate(linkUrl, UriKind.Absolute, out Uri? uri) &&
                    (uri.Host.Equals("twitch.tv", StringComparison.OrdinalIgnoreCase) ||
-                    uri.Host.EndsWith(".twitch.tv", StringComparison.OrdinalIgnoreCase));
+                    uri.Host.Equals("www.twitch.tv", StringComparison.OrdinalIgnoreCase)) &&
+                   uri.AbsolutePath.Trim('/').Length == 0;
         }
 
         /// <summary>
