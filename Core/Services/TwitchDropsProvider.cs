@@ -43,17 +43,25 @@ namespace Core.Services
                     if (campaign is not JsonObject campaignObj)
                         return true; // Remove
 
+                    string campaignLabel = $"{campaignObj["name"]} ({campaignObj["id"]})";
+
                     // Remove if status != "ACTIVE"
                     if (!campaignObj.TryGetPropertyValue("status", out JsonNode? statusNode) ||
                         statusNode?.GetValue<string>() != "ACTIVE")
+                    {
+                        AppLogger.Debug("TwitchDrops", $"Filtered out '{campaignLabel}': status={statusNode}");
                         return true;
+                    }
 
-                    // Remove if not connected
+                    // Remove if not connected (campaigns that link to Twitch itself, e.g. chat badges, need no external account)
                     if (!campaignObj.TryGetPropertyValue("self", out JsonNode? selfNode) ||
                         selfNode is not JsonObject selfObj ||
                         !selfObj.TryGetPropertyValue("isAccountConnected", out JsonNode? connectedNode) ||
-                        connectedNode?.GetValue<bool>() != true)
+                        (connectedNode?.GetValue<bool>() != true && !LinksToTwitchItself(campaignObj)))
+                    {
+                        AppLogger.Debug("TwitchDrops", $"Filtered out '{campaignLabel}': self={selfNode?.ToJsonString() ?? "null"}");
                         return true; // Remove
+                    }
 
                     return false; // Keep
                 });
@@ -185,6 +193,18 @@ namespace Core.Services
                 AppLogger.Error("TwitchDrops", "Fetching active campaigns failed.", ex);
                 return [];
             }
+        }
+
+        /// <summary>
+        /// True when the campaign's account link points at twitch.tv itself, meaning no external game account is needed.
+        /// </summary>
+        private static bool LinksToTwitchItself(JsonObject campaign)
+        {
+            string? linkUrl = campaign["accountLinkURL"]?.GetValue<string>();
+
+            return Uri.TryCreate(linkUrl, UriKind.Absolute, out Uri? uri) &&
+                   (uri.Host.Equals("twitch.tv", StringComparison.OrdinalIgnoreCase) ||
+                    uri.Host.EndsWith(".twitch.tv", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
@@ -348,7 +368,10 @@ namespace Core.Services
 
             // Return null if no rewards
             if (dropCampaign.Rewards.Count == 0)
+            {
+                AppLogger.Debug("TwitchDrops", $"Skipped '{name}' ({id}): no rewards with required minutes. drops={timeBasedDrops?.Count ?? 0}");
                 return null;
+            }
 
             return dropCampaign;
         }
