@@ -519,87 +519,107 @@ namespace Core.Services
 
             JsonArray responseArray = JsonNode.Parse(jsonText)!.AsArray();
 
-            await AppendRemainingEarnedRewardsAsync(responseArray, ct);
+            await AppendRemainingGameEventDropsAsync(responseArray, inventoryHash, ct);
 
             AppLogger.Debug("TwitchGql", "QueryFullDropsDashboard completed successfully.");
             return responseArray;
         }
 
         /// <summary>
-        /// "earnedDropRewards" is paginated (newest claims first, ~150 per page), so claims older than the first page,
-        /// such as a badge claimed weeks ago, would otherwise look unclaimed. Walks every page with the plain query
-        /// (following <c>pageInfo.endCursor</c>) and appends the edges missing from the first Inventory result in place.
+        /// "earnedDropRewards" stops at the newest 150 claims with no further pages, so older claims (a badge from
+        /// weeks ago) are only visible in "gameEventDropsConnection", the claimed-drops history. The Inventory result
+        /// holds its first page and a cursor; Twitch's own inventory page fetches the rest by re-sending the same
+        /// persisted Inventory operation with <c>claimedAfter</c> set to that cursor, which is done here and the edges
+        /// appended in place. Twitch intermittently answers this field with IntegrityCheckFailed, so each page gets a
+        /// few attempts. Failures never fail the dashboard load.
         /// </summary>
-        /// <remarks>
-        /// Later pages use a plain (non-persisted) query with the schema's <c>after: Cursor</c> argument, which the
-        /// persisted Inventory operation gives no way to pass. If a page brings no new edges, paging stops.
-        /// Failures here never fail the dashboard load.
-        /// </remarks>
-        private const string EarnedRewardsPageQuery =
-            "query($after:Cursor){currentUser{inventory{earnedDropRewards(after:$after){edges{node{id item{id} status}}pageInfo{hasNextPage endCursor}}}}}";
-
-        private async Task AppendRemainingEarnedRewardsAsync(JsonArray dashboard, CancellationToken ct)
+        private async Task AppendRemainingGameEventDropsAsync(JsonArray dashboard, string inventoryHash, CancellationToken ct)
         {
-            const int MaxPages = 20;
+            const int MaxPages = 30;
+            const int MaxAttempts = 3;
 
             try
             {
-                JsonObject? earned = dashboard[0]?["data"]?["currentUser"]?["inventory"]?["earnedDropRewards"]?.AsObject();
-                JsonArray? edges = earned?["edges"]?.AsArray();
-                if (earned == null || edges == null)
+                JsonObject? connection = dashboard[0]?["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?.AsObject();
+                JsonArray? edges = connection?["edges"]?.AsArray();
+                if (connection == null || edges == null)
                     return;
 
                 HashSet<string> seen = edges.OfType<JsonObject>()
                     .Select(e => e["node"]?["id"]?.GetValue<string>() ?? "")
                     .ToHashSet();
 
-                // The persisted Inventory result carries no pageInfo for earnedDropRewards, so paging starts from the
-                // plain query's first page (its edges are mostly duplicates and are skipped by id).
-                string? cursor = null;
+                JsonObject? info = connection["pageInfo"]?.AsObject();
 
                 for (int page = 0; page < MaxPages; page++)
                 {
-                    JsonArray payload = new JsonArray
-                    {
-                        new JsonObject
-                        {
-                            ["query"] = EarnedRewardsPageQuery,
-                            ["variables"] = new JsonObject { ["after"] = cursor is null ? null : JsonValue.Create(cursor) }
-                        }
-                    };
-
-                    using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql")
-                    {
-                        Content = JsonContent.Create(payload)
-                    };
-
-                    request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
-                    request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
-                    request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
-
-                    if (!string.IsNullOrEmpty(_deviceId))
-                        request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
-
-                    LogOutgoingRequest("EarnedDropRewards page");
-                    HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
-                    string text = await response.Content.ReadAsStringAsync(ct);
-
-                    JsonObject? nextPage = response.IsSuccessStatusCode
-                        ? JsonNode.Parse(text)?[0]?["data"]?["currentUser"]?["inventory"]?["earnedDropRewards"]?.AsObject()
-                        : null;
-
-                    JsonArray? nextEdges = nextPage?["edges"]?.AsArray();
-                    if (nextEdges == null)
-                    {
-                        AppLogger.Warn("TwitchGql", $"Earned rewards page {page + 1} unavailable; older claims may show as unclaimed. {DescribeGqlFailure(response, text)}");
+                    string? cursor = info?["endCursor"]?.GetValue<string>();
+                    if (info?["hasNextPage"]?.GetValue<bool>() != true || string.IsNullOrEmpty(cursor))
                         return;
+
+                    JsonObject? next = null;
+
+                    for (int attempt = 1; attempt <= MaxAttempts && next == null; attempt++)
+                    {
+                        JsonArray payload = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["operationName"] = "Inventory",
+                                ["variables"] = new JsonObject
+                                {
+                                    ["fetchRewardCampaigns"] = true,
+                                    ["claimedAfter"] = cursor
+                                },
+                                ["extensions"] = new JsonObject
+                                {
+                                    ["persistedQuery"] = new JsonObject
+                                    {
+                                        ["version"] = 1,
+                                        ["sha256Hash"] = inventoryHash
+                                    }
+                                }
+                            }
+                        };
+
+                        using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql")
+                        {
+                            Content = JsonContent.Create(payload)
+                        };
+
+                        request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+                        request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+                        request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+                        if (!string.IsNullOrEmpty(_deviceId))
+                            request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+                        LogOutgoingRequest("Inventory claimedAfter page");
+                        HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
+                        string text = await response.Content.ReadAsStringAsync(ct);
+
+                        next = response.IsSuccessStatusCode
+                            ? JsonNode.Parse(text)?[0]?["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?.AsObject()
+                            : null;
+
+                        if (next?["edges"] == null)
+                        {
+                            AppLogger.Warn("TwitchGql", $"Claimed drops page {page + 2} attempt {attempt}/{MaxAttempts} failed. {DescribeGqlFailure(response, text)}");
+                            next = null;
+
+                            if (attempt < MaxAttempts)
+                                await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
+                        }
                     }
 
+                    if (next == null)
+                        return;
+
+                    JsonArray nextEdges = next["edges"]!.AsArray();
                     int added = 0;
                     foreach (JsonObject edge in nextEdges.OfType<JsonObject>().ToList())
                     {
-                        string id = edge["node"]?["id"]?.GetValue<string>() ?? "";
-                        if (!seen.Add(id))
+                        if (!seen.Add(edge["node"]?["id"]?.GetValue<string>() ?? ""))
                             continue;
 
                         nextEdges.Remove(edge);
@@ -607,26 +627,17 @@ namespace Core.Services
                         added++;
                     }
 
-                    AppLogger.Debug("TwitchGql", $"Fetched earned rewards page {page + 1}: +{added} new edges (total {edges.Count}).");
+                    AppLogger.Debug("TwitchGql", $"Fetched claimed drops page {page + 2}: +{added} new edges (total {edges.Count}).");
 
-                    JsonObject? nextInfo = nextPage!["pageInfo"]?.AsObject();
-                    string? nextCursor = nextInfo?["endCursor"]?.GetValue<string>();
-
-                    if (nextInfo?["hasNextPage"]?.GetValue<bool>() != true || string.IsNullOrEmpty(nextCursor))
+                    if (added == 0)
                         return;
 
-                    if (cursor != null && added == 0)
-                    {
-                        AppLogger.Warn("TwitchGql", "Earned rewards cursor was ignored by Twitch (no new edges); older claims may show as unclaimed.");
-                        return;
-                    }
-
-                    cursor = nextCursor;
+                    info = next["pageInfo"]?.AsObject();
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                AppLogger.Warn("TwitchGql", $"Fetching further earned rewards pages failed; continuing with the first page. {ex.Message}");
+                AppLogger.Warn("TwitchGql", $"Fetching further claimed drops pages failed; continuing with the first page. {ex.Message}");
             }
         }
 

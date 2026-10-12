@@ -119,6 +119,13 @@ namespace Core.Services
                 // i.e. DropInstanceId) and a "CLAIMED" status.
                 JsonArray earnedDropRewardEdges = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["earnedDropRewards"]?["edges"]?.AsArray() ?? new JsonArray();
 
+                // Benefit ids of everything ever claimed ("gameEventDropsConnection", paged by the GQL service). Only
+                // used for badges, which are one-per-account, so a past claim under another campaign still counts.
+                HashSet<string> claimedBenefitIds = (ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?["edges"]?.AsArray() ?? [])
+                    .Select(edge => edge?["node"]?["benefit"]?["id"]?.GetValue<string>())
+                    .OfType<string>()
+                    .ToHashSet();
+
                 // Create a new list with updated campaigns
                 List<DropsCampaign> updatedResult = new List<DropsCampaign>();
 
@@ -188,6 +195,15 @@ namespace Core.Services
                             {
                                 IsClaimed = true,
                                 ProgressMinutes = reward.RequiredMinutes // Mark as fully completed
+                            };
+                        }
+
+                        if (reward.IsBadge && !updatedReward.IsClaimed && claimedBenefitIds.Contains(reward.DropInstanceId))
+                        {
+                            updatedReward = updatedReward with
+                            {
+                                IsClaimed = true,
+                                ProgressMinutes = reward.RequiredMinutes
                             };
                         }
 
