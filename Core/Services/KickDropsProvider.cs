@@ -210,6 +210,24 @@ namespace Core.Services
                         {
                             string campaignId = item.GetProperty("id").GetString()!;
 
+                            // Kick keeps connect_url set after linking, so it only says a link is required;
+                            // user_app_connected says whether this account made it. It is false for campaigns that
+                            // need no link, so only the combination means "unlinked". A missing field is unknown, not unlinked.
+                            bool needsAccountLink =
+                                item.TryGetProperty("connect_url", out JsonElement connectUrlEl) &&
+                                connectUrlEl.ValueKind == JsonValueKind.String &&
+                                !string.IsNullOrEmpty(connectUrlEl.GetString()) &&
+                                item.TryGetProperty("user_app_connected", out JsonElement appConnectedEl) &&
+                                appConnectedEl.ValueKind == JsonValueKind.False;
+
+                            DropsCampaign? linkTarget = campaigns.FirstOrDefault(c => c.Id == campaignId);
+                            if (linkTarget != null && linkTarget.NeedsAccountLink != needsAccountLink)
+                            {
+                                campaigns[campaigns.IndexOf(linkTarget)] = linkTarget with { NeedsAccountLink = needsAccountLink };
+                                if (needsAccountLink)
+                                    AppLogger.Info("KickDrops", $"Campaign needs a linked game account, skipping mining. campaignId={campaignId} name={linkTarget.Name}");
+                            }
+
                             foreach (JsonElement reward in item.GetProperty("rewards").EnumerateArray())
                             {
                                 string rewardId = reward.GetProperty("id").GetString()!;

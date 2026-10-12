@@ -94,6 +94,8 @@ namespace Core.Models
     /// <param name="ConnectUrls">A read-only list of URLs that users can use to connect their accounts for eligibility. Cannot be null.</param>
     /// <param name="IsGeneralDrop">true if the campaign is a general (non-game-specific) drop event; otherwise, false.</param>
     /// <param name="IsCurrentCampaign">true if this campaign is currently being mined; otherwise, false. Defaults to false.</param>
+    /// <param name="NeedsAccountLink">true if the platform reported that this campaign needs a linked game account and the
+    /// signed-in account has none, so mining it can never be claimed; otherwise, false. Defaults to false.</param>
     public record DropsCampaign(
         string Id,
         string Name,
@@ -107,7 +109,8 @@ namespace Core.Models
         Platform Platform,
         IReadOnlyList<string> ConnectUrls,
         bool IsGeneralDrop,
-        bool IsCurrentCampaign = false)
+        bool IsCurrentCampaign = false,
+        bool NeedsAccountLink = false)
     {
         /// <summary>
         /// Gets a value indicating whether every reward in the campaign has been claimed.

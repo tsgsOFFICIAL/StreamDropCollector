@@ -22,9 +22,13 @@ namespace Core.Mining
         /// </summary>
         /// <param name="campaign">The campaign to evaluate.</param>
         /// <param name="autoClaimRewards">When <see langword="true"/>, any unclaimed reward counts as progress to make.</param>
-        /// <returns><see langword="true"/> when progress remains; otherwise <see langword="false"/>.</returns>
+        /// <returns><see langword="true"/> when progress remains; otherwise <see langword="false"/>.
+        /// Always <see langword="false"/> for a campaign that needs an account link the user hasn't made.</returns>
         public static bool HasProgressToMake(this DropsCampaign campaign, bool autoClaimRewards)
         {
+            if (campaign.NeedsAccountLink)
+                return false;
+
             if (autoClaimRewards)
                 return campaign.Rewards.Any(r => !r.IsClaimed);
 
@@ -37,7 +41,7 @@ namespace Core.Mining
         /// <param name="campaign">The campaign to evaluate.</param>
         /// <returns><see langword="true"/> when at least one reward is ready; otherwise <see langword="false"/>.</returns>
         public static bool HasReadyToClaimRewards(this DropsCampaign campaign) =>
-            campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes);
+            !campaign.NeedsAccountLink && campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes);
 
         /// <summary>
         /// Calculates average completion percentage across rewards that require watch time.
