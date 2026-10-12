@@ -43,6 +43,11 @@ namespace Core.Managers
         public bool EffectiveKickLevelFarming => Account.Overrides.KickLevelFarming ?? UISettingsManager.Instance.KickLevelFarming;
 
         /// <summary>
+        /// Gets whether badge campaigns are mined first for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectivePrioritizeBadges => Account.Overrides.PrioritizeBadges ?? UISettingsManager.Instance.PrioritizeBadges;
+
+        /// <summary>
         /// Gets the mining priority for this account (account override, else global setting).
         /// </summary>
         public MiningPriorityMode EffectiveMiningPriority => Account.Overrides.MiningPriorityMode ?? UISettingsManager.Instance.MiningPriorityMode;
@@ -412,6 +417,9 @@ namespace Core.Managers
         /// </summary>
         private void OnPrioritizeBadgesChanged(bool enabled)
         {
+            if (Account.Overrides.PrioritizeBadges.HasValue)
+                return;
+
             AppLogger.Info("Miner", $"Badge prioritization {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
 
             if (_isPaused || (TwitchWebView == null && KickWebView == null) || !ActiveCampaigns.Any())
@@ -1610,7 +1618,7 @@ namespace Core.Managers
                 campaigns,
                 _pinnedCampaignStore.CampaignId,
                 EffectiveMiningPriority,
-                UISettingsManager.Instance.PrioritizeBadges);
+                EffectivePrioritizeBadges);
 
             if (result.PinReleased)
                 _pinnedCampaignStore.Clear();

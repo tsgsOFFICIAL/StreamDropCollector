@@ -36,6 +36,9 @@ namespace UI.Views
             UseGlobalPriority.IsChecked = overrides.MiningPriorityMode is null;
             PriorityBox.SelectedValue = overrides.MiningPriorityMode ?? Core.Managers.UISettingsManager.Instance.MiningPriorityMode;
 
+            UseGlobalBadges.IsChecked = overrides.PrioritizeBadges is null;
+            PrioritizeBadgesBox.IsChecked = overrides.PrioritizeBadges ?? Core.Managers.UISettingsManager.Instance.PrioritizeBadges;
+
             UseGlobalFilter.IsChecked = overrides.GameWhitelistSlugs is null;
             BlacklistBox.IsChecked = overrides.GameFilterBlacklistMode;
 
@@ -78,6 +81,8 @@ namespace UI.Views
             overrides.MiningPriorityMode = UseGlobalPriority.IsChecked == true || PriorityBox.SelectedValue is not MiningPriorityMode mode
                 ? null
                 : mode;
+
+            overrides.PrioritizeBadges = UseGlobalBadges.IsChecked == true ? null : PrioritizeBadgesBox.IsChecked == true;
 
             if (UseGlobalFilter.IsChecked == true)
             {
