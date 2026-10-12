@@ -86,7 +86,8 @@ namespace Core.Mining
                                 node?["item"]?["id"]?.GetValue<string>() == localReward.DropInstanceId &&
                                 node?["status"]?.GetValue<string>() == "CLAIMED");
 
-                        if (matchingEarnedDrop != null)
+                        if (matchingEarnedDrop != null &&
+                            EarnedRewardMatcher.IsClaimedByEarnedEntries(localReward, campaignId, localCampaign.Rewards, earnedDropRewardEdges, matchingDropProgress != null))
                         {
                             // Diagnostics only (no behaviour change): flag earned entries from another campaign.
                             string? earnedCampaignId = matchingEarnedDrop["campaign"]?["id"]?.GetValue<string>();

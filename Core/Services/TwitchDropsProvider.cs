@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using Core.Interfaces;
 using Core.Logging;
+using Core.Mining;
 using Core.Models;
 using Core.Enums;
 
@@ -142,6 +143,7 @@ namespace Core.Services
                     foreach (DropsReward reward in dropCampaign.Rewards)
                     {
                         DropsReward updatedReward = reward; // Start with original
+                        bool hasInProgressRecord = false;
 
                         // 1. Apply in-progress data if available (progress minutes + claim status)
                         if (timeBasedDropsProgress != null)
@@ -151,6 +153,7 @@ namespace Core.Services
 
                             if (matchingDropProgress != null)
                             {
+                                hasInProgressRecord = true;
                                 int progressMinutes = matchingDropProgress["self"]?["currentMinutesWatched"]?.GetValue<int>() ?? reward.ProgressMinutes;
                                 bool isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? reward.IsClaimed;
 
@@ -177,7 +180,8 @@ namespace Core.Services
                             $"benefitId={reward.DropInstanceId} inProgressClaimed={updatedReward.IsClaimed} " +
                             $"earnedMatch={(matchingEarnedDrop != null)}");
 
-                        if (matchingEarnedDrop != null)
+                        if (matchingEarnedDrop != null &&
+                            EarnedRewardMatcher.IsClaimedByEarnedEntries(reward, dropCampaign.Id, dropCampaign.Rewards, earnedDropRewardEdges, hasInProgressRecord))
                         {
                             string? earnedCampaignId = matchingEarnedDrop["campaign"]?["id"]?.GetValue<string>();
                             if (!string.Equals(earnedCampaignId, dropCampaign.Id, StringComparison.Ordinal))
