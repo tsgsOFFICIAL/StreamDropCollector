@@ -527,8 +527,8 @@ namespace Core.Services
 
         /// <summary>
         /// "earnedDropRewards" is paginated (newest claims first, ~150 per page), so claims older than the first page,
-        /// such as a badge claimed weeks ago, would otherwise look unclaimed. Follows <c>pageInfo.endCursor</c> and
-        /// appends the extra edges to the first Inventory result in place.
+        /// such as a badge claimed weeks ago, would otherwise look unclaimed. Walks every page with the plain query
+        /// (following <c>pageInfo.endCursor</c>) and appends the edges missing from the first Inventory result in place.
         /// </summary>
         /// <remarks>
         /// Later pages use a plain (non-persisted) query with the schema's <c>after: Cursor</c> argument, which the
@@ -553,20 +553,18 @@ namespace Core.Services
                     .Select(e => e["node"]?["id"]?.GetValue<string>() ?? "")
                     .ToHashSet();
 
+                // The persisted Inventory result carries no pageInfo for earnedDropRewards, so paging starts from the
+                // plain query's first page (its edges are mostly duplicates and are skipped by id).
+                string? cursor = null;
+
                 for (int page = 0; page < MaxPages; page++)
                 {
-                    JsonObject? pageInfo = earned["pageInfo"]?.AsObject();
-                    string? cursor = pageInfo?["endCursor"]?.GetValue<string>();
-
-                    if (pageInfo?["hasNextPage"]?.GetValue<bool>() != true || string.IsNullOrEmpty(cursor))
-                        return;
-
                     JsonArray payload = new JsonArray
                     {
                         new JsonObject
                         {
                             ["query"] = EarnedRewardsPageQuery,
-                            ["variables"] = new JsonObject { ["after"] = cursor }
+                            ["variables"] = new JsonObject { ["after"] = cursor is null ? null : JsonValue.Create(cursor) }
                         }
                     };
 
@@ -593,7 +591,7 @@ namespace Core.Services
                     JsonArray? nextEdges = nextPage?["edges"]?.AsArray();
                     if (nextEdges == null)
                     {
-                        AppLogger.Warn("TwitchGql", $"Earned rewards page {page + 2} unavailable; older claims may show as unclaimed. {DescribeGqlFailure(response, text)}");
+                        AppLogger.Warn("TwitchGql", $"Earned rewards page {page + 1} unavailable; older claims may show as unclaimed. {DescribeGqlFailure(response, text)}");
                         return;
                     }
 
@@ -609,14 +607,21 @@ namespace Core.Services
                         added++;
                     }
 
-                    if (added == 0)
+                    AppLogger.Debug("TwitchGql", $"Fetched earned rewards page {page + 1}: +{added} new edges (total {edges.Count}).");
+
+                    JsonObject? nextInfo = nextPage!["pageInfo"]?.AsObject();
+                    string? nextCursor = nextInfo?["endCursor"]?.GetValue<string>();
+
+                    if (nextInfo?["hasNextPage"]?.GetValue<bool>() != true || string.IsNullOrEmpty(nextCursor))
+                        return;
+
+                    if (cursor != null && added == 0)
                     {
                         AppLogger.Warn("TwitchGql", "Earned rewards cursor was ignored by Twitch (no new edges); older claims may show as unclaimed.");
                         return;
                     }
 
-                    earned["pageInfo"] = nextPage!["pageInfo"]?.DeepClone();
-                    AppLogger.Debug("TwitchGql", $"Fetched earned rewards page {page + 2}: +{added} edges (total {edges.Count}).");
+                    cursor = nextCursor;
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
