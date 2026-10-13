@@ -48,6 +48,29 @@ namespace Core.Managers
         public bool EffectivePrioritizeBadges => Account.Overrides.PrioritizeBadges ?? UISettingsManager.Instance.PrioritizeBadges;
 
         /// <summary>
+        /// Gets whether Twitch audio-only mining is on for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveTwitchAudioOnly => Account.Overrides.TwitchAudioOnly ?? UISettingsManager.Instance.TwitchAudioOnly;
+
+        /// <summary>
+        /// Gets whether Kick audio-only mining is on for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveKickAudioOnly => Account.Overrides.KickAudioOnly ?? UISettingsManager.Instance.KickAudioOnly;
+
+        /// <summary>
+        /// Gets whether near-zero bandwidth (HEAD-only) mining is on for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveHeadOnly => Account.Overrides.HeadOnlyMining ?? UISettingsManager.Instance.HeadOnlyMining;
+
+        /// <summary>Gets the Twitch stream loop mode for this account.</summary>
+        public AudioLoopMode EffectiveTwitchLoopMode =>
+            EffectiveHeadOnly ? AudioLoopMode.HeadOnly : EffectiveTwitchAudioOnly ? AudioLoopMode.Audio : AudioLoopMode.Off;
+
+        /// <summary>Gets the Kick stream loop mode for this account.</summary>
+        public AudioLoopMode EffectiveKickLoopMode =>
+            EffectiveHeadOnly ? AudioLoopMode.HeadOnly : EffectiveKickAudioOnly ? AudioLoopMode.Audio : AudioLoopMode.Off;
+
+        /// <summary>
         /// Gets the mining priority for this account (account override, else global setting).
         /// </summary>
         public MiningPriorityMode EffectiveMiningPriority => Account.Overrides.MiningPriorityMode ?? UISettingsManager.Instance.MiningPriorityMode;
@@ -286,6 +309,7 @@ namespace Core.Managers
 
         // Timer for live ticking
         private readonly System.Timers.Timer _liveProgressTimer = new(1000);
+
         private readonly System.Timers.Timer _progressVerifyTimer = new(TimeSpan.FromMinutes(2).TotalMilliseconds);
         private readonly System.Timers.Timer _kickLevelTimer = new(TimeSpan.FromSeconds(30).TotalMilliseconds);
         private int _kickLevelRefreshing;
@@ -362,6 +386,9 @@ namespace Core.Managers
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged += OnPrioritizeBadgesChanged;
+            UISettingsManager.Instance.TwitchAudioOnlyChanged += OnTwitchAudioOnlyChanged;
+            UISettingsManager.Instance.KickAudioOnlyChanged += OnKickAudioOnlyChanged;
+            UISettingsManager.Instance.HeadOnlyMiningChanged += OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated += OnTwitchHelixAuthenticated;
 
             _liveProgressTimer.Elapsed += OnLiveProgressTick;
@@ -423,6 +450,52 @@ namespace Core.Managers
             AppLogger.Info("Miner", $"Badge prioritization {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
 
             if (_isPaused || (TwitchWebView == null && KickWebView == null) || !ActiveCampaigns.Any())
+                return;
+
+            _ = StartMiningStreams(true);
+        }
+        /// <summary>
+        /// Re-evaluates mining when the Twitch audio-only toggle changes.
+        /// </summary>
+        private void OnTwitchAudioOnlyChanged(bool enabled)
+        {
+            if (Account.Overrides.TwitchAudioOnly.HasValue)
+                return;
+
+            AppLogger.Info("Miner", $"Twitch audio-only {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
+
+            if (_isPaused || TwitchWebView == null || _selection.CurrentTwitchCampaign == null)
+                return;
+
+            _ = StartMiningStreams(true);
+        }
+        /// <summary>
+        /// Re-evaluates mining when the near-zero bandwidth (HEAD-only) toggle changes.
+        /// </summary>
+        private void OnHeadOnlyMiningChanged(bool enabled)
+        {
+            if (Account.Overrides.HeadOnlyMining.HasValue)
+                return;
+
+            AppLogger.Info("Miner", $"Near-zero bandwidth (HEAD-only) mining {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
+
+            if (_isPaused || (TwitchWebView == null && KickWebView == null)
+                || (_selection.CurrentTwitchCampaign == null && _selection.CurrentKickCampaign == null))
+                return;
+
+            _ = StartMiningStreams(true);
+        }
+        /// <summary>
+        /// Re-evaluates mining when the Kick audio-only toggle changes.
+        /// </summary>
+        private void OnKickAudioOnlyChanged(bool enabled)
+        {
+            if (Account.Overrides.KickAudioOnly.HasValue)
+                return;
+
+            AppLogger.Info("Miner", $"Kick audio-only {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
+
+            if (_isPaused || KickWebView == null || _selection.CurrentKickCampaign == null)
                 return;
 
             _ = StartMiningStreams(true);
@@ -954,8 +1027,8 @@ namespace Core.Managers
             _twitchLiveChannelApi = new TwitchLiveChannelApi(_twitchHelixService, () => TwitchWebView, _twitchGeneralDropCache);
             _kickStreamerSelector = new KickStreamerSelector(_kickLiveChannelApi, _lastMinedStreamers);
             _twitchStreamerSelector = new TwitchStreamerSelector(_twitchLiveChannelApi, _lastMinedStreamers);
-            _twitchPageReader = new TwitchStreamPageReader(TwitchWebView, _webViewUiRunner);
-            _kickPageReader = new KickStreamPageReader(KickWebView, _webViewUiRunner);
+            _twitchPageReader = new TwitchStreamPageReader(TwitchWebView, _webViewUiRunner, () => EffectiveTwitchLoopMode);
+            _kickPageReader = new KickStreamPageReader(KickWebView, _webViewUiRunner, () => EffectiveKickLoopMode);
         }
         /// <summary>
         /// Updates the list of active campaigns based on the specified collection.
@@ -1089,6 +1162,9 @@ namespace Core.Managers
             UISettingsManager.Instance.GameWhitelistChanged -= OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged -= OnPrioritizeBadgesChanged;
+            UISettingsManager.Instance.TwitchAudioOnlyChanged -= OnTwitchAudioOnlyChanged;
+            UISettingsManager.Instance.KickAudioOnlyChanged -= OnKickAudioOnlyChanged;
+            UISettingsManager.Instance.HeadOnlyMiningChanged -= OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated -= OnTwitchHelixAuthenticated;
             _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;
 
@@ -1597,6 +1673,16 @@ namespace Core.Managers
                 SetLastKnownKickOnline = value => _lastKnownKickOnlineState = value,
                 RequestReevaluationAsync = () => StartMiningStreams(true),
                 IsEvaluationInProgress = () => _startMiningLock.CurrentCount == 0,
+                EnsureKickAudioOnlyAsync = () => _selection.CurrentKickCampaign != null
+                    && !string.IsNullOrWhiteSpace(_currentKickLogin)
+                    && _kickPageReader != null
+                    ? _kickPageReader.EnsureAudioOnlyAsync(_currentKickLogin)
+                    : Task.CompletedTask,
+                EnsureTwitchAudioOnlyAsync = () => _selection.CurrentTwitchCampaign != null
+                    && !string.IsNullOrWhiteSpace(_currentTwitchLogin)
+                    && _twitchPageReader != null
+                    ? _twitchPageReader.EnsureAudioOnlyAsync(_currentTwitchLogin)
+                    : Task.CompletedTask,
                 LogKickPlaybackDiagnosticsAsync = () => _selection.CurrentKickCampaign != null && _kickPageReader != null
                     ? _kickPageReader.LogPlaybackDiagnosticsAsync()
                     : Task.CompletedTask

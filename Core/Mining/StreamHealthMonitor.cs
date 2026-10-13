@@ -49,6 +49,12 @@ namespace Core.Mining
             /// </summary>
             public Func<bool>? IsEvaluationInProgress { get; init; }
 
+            /// <summary>Optional: restarts the Twitch stream loop after a page reload or stall.</summary>
+            public Func<Task>? EnsureTwitchAudioOnlyAsync { get; init; }
+
+            /// <summary>Optional: restarts the Kick stream loop after a page reload or stall.</summary>
+            public Func<Task>? EnsureKickAudioOnlyAsync { get; init; }
+
             /// <summary>Optional: logs the real Kick &lt;video&gt; element playback state (paused, currentTime, buffered, errors) each tick.</summary>
             public Func<Task>? LogKickPlaybackDiagnosticsAsync { get; init; }
         }
@@ -87,6 +93,30 @@ namespace Core.Mining
                         catch (Exception ex)
                         {
                             AppLogger.Warn("KickPlayback", $"LogKickPlaybackDiagnosticsAsync threw: {ex.Message}");
+                        }
+                    }
+
+                    if (host.EnsureTwitchAudioOnlyAsync != null)
+                    {
+                        try
+                        {
+                            await host.EnsureTwitchAudioOnlyAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            AppLogger.Warn("HealthCheck", $"EnsureTwitchAudioOnlyAsync threw: {ex.Message}");
+                        }
+                    }
+
+                    if (host.EnsureKickAudioOnlyAsync != null)
+                    {
+                        try
+                        {
+                            await host.EnsureKickAudioOnlyAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            AppLogger.Warn("HealthCheck", $"EnsureKickAudioOnlyAsync threw: {ex.Message}");
                         }
                     }
 

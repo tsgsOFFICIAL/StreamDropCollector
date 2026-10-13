@@ -25,6 +25,7 @@ namespace UI.Views
         {
             _prompt = prompt ?? throw new ArgumentNullException(nameof(prompt));
             InitializeComponent();
+            Web.CreationProperties = UI.Diagnostics.NetworkMeters.CreateProperties(null);
             Loaded += OnLoaded;
             Closed += (_, _) => _cts.Cancel();
         }

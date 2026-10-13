@@ -64,6 +64,19 @@ namespace Core.Models
         /// </summary>
         public MiningPriorityMode MiningPriorityMode { get; set; } = MiningPriorityMode.AvailabilityThenProgress;
         /// <summary>
+        /// Gets or sets a value indicating whether Twitch mining uses the audio-only stream instead of 160p (experimental).
+        /// </summary>
+        public bool TwitchAudioOnly { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether Kick mining uses the lowest/audio-only stream instead of 160p video (experimental).
+        /// </summary>
+        public bool KickAudioOnly { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether mining only requests stream segments with HEAD instead of downloading
+        /// them (near-zero bandwidth, experimental). Takes precedence over the audio-only settings.
+        /// </summary>
+        public bool HeadOnlyMining { get; set; }
+        /// <summary>
         /// Gets or sets a value indicating whether campaigns with an unclaimed badge reward are mined before other campaigns.
         /// </summary>
         public bool PrioritizeBadges { get; set; }

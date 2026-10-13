@@ -7,6 +7,7 @@ using Core.Logging;
 using Core.Interfaces;
 using Core.Models;
 using System.Windows;
+using UI.Diagnostics;
 
 namespace UI.Views
 {
@@ -80,6 +81,12 @@ namespace UI.Views
         }
 
         /// <summary>
+        /// Gets the byte-counting proxy this host's traffic goes through, or <see langword="null"/> when it is not
+        /// metered. Shared by every WebView on the same profile.
+        /// </summary>
+        public NetworkMeter? NetworkMeter { get; }
+
+        /// <summary>
         /// Initializes a new instance of the HiddenWebViewHost class with a fully hidden and non-interactive window.
         /// </summary>
         /// <remarks>This constructor configures the window to be completely invisible and non-activating,
@@ -98,8 +105,10 @@ namespace UI.Views
             InitializeComponent();
 
             AccountId = account?.Id ?? string.Empty;
-            if (account?.UserDataFolder is { } userDataFolder)
-                WebViewElement.CreationProperties = new CoreWebView2CreationProperties { UserDataFolder = userDataFolder };
+
+            // WebView2 instances sharing a profile folder need identical browser arguments.
+            WebViewElement.CreationProperties = NetworkMeters.CreateProperties(account?.UserDataFolder);
+            NetworkMeter = NetworkMeters.ForProfile(account?.UserDataFolder);
 
             if (!App.IsDebugMode)
             {
@@ -1417,7 +1426,6 @@ namespace UI.Views
             }
         }
         private int _verboseNetworkLoggingAttached;
-
         /// <summary>
         /// Enables CDP-level network request/response/failure logging and page console/exception logging.
         /// Safe to call multiple times - only attaches listeners once per host instance.
