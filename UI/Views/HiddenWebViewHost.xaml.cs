@@ -774,7 +774,8 @@ namespace UI.Views
                             kindElement.GetString() == "DropCampaignDetailsClick")
                         {
                             int candidates = doc.RootElement.TryGetProperty("candidates", out JsonElement c) ? c.GetInt32() : -1;
-                            AppLogger.Debug("WebViewCapture", $"[GQL Capture] Click script for '{triggerText}' found/clicked {candidates} candidate button(s).");
+                            int waitedMs = doc.RootElement.TryGetProperty("waitedMs", out JsonElement w) ? w.GetInt32() : -1;
+                            AppLogger.Debug("WebViewCapture", $"[GQL Capture] Click script for '{triggerText}' found/clicked {candidates} candidate button(s) after waiting {waitedMs}ms for them to render.");
 
                             if (candidates == 0)
                             {

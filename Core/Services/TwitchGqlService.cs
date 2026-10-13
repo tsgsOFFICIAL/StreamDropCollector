@@ -859,20 +859,32 @@ namespace Core.Services
             await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
 
             string clickScript = @"
-                (() => {
-                    // Network-idle is awaited on the C# side (WaitForNetworkIdleAsync) before this script
-                    // runs, so the campaign accordion list should already be populated by now.
+                (async () => {
+                    // Network-idle (WaitForNetworkIdleAsync) can fire before the client-side-rendered
+                    // campaign accordion list has painted, so poll for the buttons instead of assuming they exist.
                     const selectors = ['.accordion-header button', '[role=""heading""][aria-level=""3""] button'];
-                    const buttons = new Set();
-                    for (const sel of selectors) {
-                        document.querySelectorAll(sel).forEach(b => buttons.add(b));
+                    const findButtons = () => {
+                        const found = new Set();
+                        for (const sel of selectors) {
+                            document.querySelectorAll(sel).forEach(b => found.add(b));
+                        }
+                        return found;
+                    };
+
+                    const startedAt = performance.now();
+                    let buttons = findButtons();
+                    while (buttons.size === 0 && performance.now() - startedAt < 15000) {
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                        buttons = findButtons();
                     }
+                    const waitedMs = Math.round(performance.now() - startedAt);
                     buttons.forEach(b => b.click());
 
                     try {
                         window.chrome?.webview?.postMessage(JSON.stringify({
                             __sdcDiag: 'DropCampaignDetailsClick',
                             candidates: buttons.size,
+                            waitedMs: waitedMs,
                             url: location.href,
                             title: document.title,
                             readyState: document.readyState,
@@ -890,7 +902,7 @@ namespace Core.Services
             string payloadJson;
             try
             {
-                payloadJson = await _host.CaptureGqlRequestBodyContainingAsyncWithRetry("DropCampaignDetails", 8000, 10, clickScript, ct);
+                payloadJson = await _host.CaptureGqlRequestBodyContainingAsyncWithRetry("DropCampaignDetails", 25000, 3, clickScript, ct);
             }
             catch (Exception ex) when (allowCached && TryGetCachedHash(operationName, requireFresh: false, out string? fallbackHash))
             {
