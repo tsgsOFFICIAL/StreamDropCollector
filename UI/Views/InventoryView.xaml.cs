@@ -21,6 +21,7 @@ namespace UI.Views
 
         private readonly ListCollectionView _enabledAccounts;
         private ListCollectionView? _campaignView;
+        private ListCollectionView? _rewardCampaignView;
 
         private InventoryView()
         {
@@ -53,6 +54,11 @@ namespace UI.Views
                 ? new ListCollectionView(engine.ActiveCampaigns) { Filter = IsVisibleCampaign }
                 : null;
             CampaignList.ItemsSource = _campaignView;
+
+            _rewardCampaignView = session?.Engine is { } rewardEngine
+                ? new ListCollectionView(rewardEngine.RewardCampaigns) { Filter = IsVisibleCampaign }
+                : null;
+            RewardCampaignList.ItemsSource = _rewardCampaignView;
         }
 
         private static bool IsVisibleCampaign(object item) =>
@@ -63,6 +69,7 @@ namespace UI.Views
             UISettingsManager.Instance.HideCompletedCampaigns = HideCompletedBox.IsChecked == true;
             UISettingsManager.Instance.SaveSettings();
             _campaignView?.Refresh();
+            _rewardCampaignView?.Refresh();
         }
 
         private void OnAccountPickerSelectionChanged(object sender, SelectionChangedEventArgs e)
