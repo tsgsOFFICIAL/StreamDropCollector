@@ -872,7 +872,15 @@ namespace Core.Services
                     try {
                         window.chrome?.webview?.postMessage(JSON.stringify({
                             __sdcDiag: 'DropCampaignDetailsClick',
-                            candidates: buttons.size
+                            candidates: buttons.size,
+                            url: location.href,
+                            title: document.title,
+                            readyState: document.readyState,
+                            matchCounts: selectors.map(sel => document.querySelectorAll(sel).length),
+                            totalButtons: document.querySelectorAll('button').length,
+                            totalHeadings: document.querySelectorAll('[role=""heading""], h1, h2, h3, h4').length,
+                            bodyText: (document.body?.innerText || '').replace(/\s+/g, ' ').slice(0, 500),
+                            headingHtml: Array.from(document.querySelectorAll('[role=""heading""], h3')).slice(0, 3).map(h => h.outerHTML.slice(0, 400))
                         }));
                     } catch (e) {}
                 })();

@@ -707,6 +707,13 @@ namespace UI.Views
                         if (requestElement.TryGetProperty("postData", out JsonElement postDataElement))
                         {
                             string? inlinePostData = postDataElement.GetString();
+                            if (!string.IsNullOrWhiteSpace(inlinePostData))
+                            {
+                                string ops = string.Join(",", System.Text.RegularExpressions.Regex
+                                    .Matches(inlinePostData, "\"operationName\"\\s*:\\s*\"([^\"]+)\"")
+                                    .Select(m => m.Groups[1].Value));
+                                AppLogger.Debug("WebViewCapture", $"[GQL Capture] Saw GQL POST while waiting for '{triggerText}': ops=[{ops}]");
+                            }
                             if (!string.IsNullOrWhiteSpace(inlinePostData) && IsMatchingOperationPayload(inlinePostData))
                             {
                                 Cleanup();
@@ -768,6 +775,12 @@ namespace UI.Views
                         {
                             int candidates = doc.RootElement.TryGetProperty("candidates", out JsonElement c) ? c.GetInt32() : -1;
                             AppLogger.Debug("WebViewCapture", $"[GQL Capture] Click script for '{triggerText}' found/clicked {candidates} candidate button(s).");
+
+                            if (candidates == 0)
+                            {
+                                AppLogger.Debug("WebViewCapture", $"[GQL Capture] Page state when 0 candidates found: {doc.RootElement.GetRawText()}");
+                                _ = SaveDiagnosticScreenshotAsync("gql-capture-0-candidates");
+                            }
                         }
                     }
                     catch
@@ -976,6 +989,30 @@ namespace UI.Views
             }
         }
         /// <summary>
+        /// Saves a PNG of the current WebView content next to the log files. Only runs when verbose debug logging
+        /// is enabled; best-effort and never throws.
+        /// </summary>
+        private async Task SaveDiagnosticScreenshotAsync(string tag)
+        {
+            try
+            {
+                if (!Core.Managers.UISettingsManager.Instance.VerboseDebugLogging)
+                    return;
+
+                string path = System.IO.Path.Combine(AppLogger.LogDirectoryPath, $"{tag}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                await await WebView.Dispatcher.InvokeAsync(async () =>
+                {
+                    using System.IO.FileStream fs = System.IO.File.Create(path);
+                    await WebView.CoreWebView2.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, fs);
+                });
+                AppLogger.Debug("WebViewCapture", $"[GQL Capture] Saved diagnostic screenshot: {path}");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("WebViewCapture", $"[GQL Capture] Diagnostic screenshot failed: {ex.Message}");
+            }
+        }
+        /// <summary>
         /// Forces a refresh of the current web content by reloading the source URL asynchronously.
         /// </summary>
         /// <remarks>If the source URL is not set, the method navigates to "about:blank". This method does
@@ -983,7 +1020,9 @@ namespace UI.Views
         /// <returns>A task that represents the asynchronous refresh operation.</returns>
         public async Task ForceRefreshAsync()
         {
-            await NavigateAsync(WebView.Source.ToString() ?? "about:blank");
+            // WebView.Source is a WPF property; callers may resume off the UI thread (e.g. after ConfigureAwait(false)).
+            string url = await WebView.Dispatcher.InvokeAsync(() => WebView.Source?.ToString() ?? "about:blank");
+            await NavigateAsync(url);
         }
         /// <summary>
         /// Navigates the web view to the specified URL, forcing a fresh reload each time.
