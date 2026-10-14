@@ -14,6 +14,10 @@
 		<Copyright>tsgsOFFICIAL</Copyright>
 	</PropertyGroup>
 
+	<PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+	  <DebugType>none</DebugType>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<None Remove="Assets\discord.png" />
 		<None Remove="Assets\github.png" />
