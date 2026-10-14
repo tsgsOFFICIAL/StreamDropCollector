@@ -28,11 +28,14 @@ namespace Core.Mining
             JsonArray earnedDropRewardEdges,
             bool hasInProgressRecord)
         {
+            // Only entries earned in this campaign count (a benefit id can be shared across campaigns).
             List<JsonObject> claimed = [.. earnedDropRewardEdges.OfType<JsonObject>()
                 .Select(edge => edge["node"]?.AsObject())
                 .OfType<JsonObject>()
                 .Where(node => node["item"]?["id"]?.GetValue<string>() == reward.DropInstanceId &&
-                               node["status"]?.GetValue<string>() == "CLAIMED")];
+                               node["status"]?.GetValue<string>() == "CLAIMED")
+                .Where(node => node["campaign"]?["id"]?.GetValue<string>() is not { } earnedCampaignId ||
+                               earnedCampaignId == campaignId)];
 
             if (claimed.Count == 0)
                 return false;
@@ -46,7 +49,7 @@ namespace Core.Mining
                 return false;
 
             // No live record: attribute the earned entries of this campaign to the cheapest drops first.
-            int earnedForCampaign = claimed.Count(node => node["campaign"]?["id"]?.GetValue<string>() == campaignId);
+            int earnedForCampaign = claimed.Count;
             int rank = sharing
                 .OrderBy(r => r.RequiredMinutes)
                 .ThenBy(r => r.Id, StringComparer.Ordinal)
