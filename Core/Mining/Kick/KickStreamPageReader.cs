@@ -115,6 +115,9 @@ public sealed class KickStreamPageReader
             await StartAudioOnlyAsync(null, ct);
             await Task.Delay(3000, ct);
         }
+
+        // Pins page visibility and resumes a paused player right away instead of waiting for the first health tick.
+        await LogPlaybackDiagnosticsAsync();
     }
 
     /// <summary>
@@ -393,16 +396,37 @@ public sealed class KickStreamPageReader
         if (_webViewHost == null)
             return;
 
+        // The hidden host window is parked off-screen, so Chromium can report the page as hidden/occluded; Kick's
+        // player then pauses and stops sending watch heartbeats while our local timer keeps counting. Report the
+        // real visibility first, then pin the page to "visible" and resume playback if it was paused.
         const string js = """
             (() => {
+                const realHidden = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden').get.call(document);
+                const realVisibility = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState').get.call(document);
+
+                if (!window.__sdcVisibilityPinned) {
+                    window.__sdcVisibilityPinned = true;
+                    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+                    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+                    document.addEventListener('visibilitychange', e => e.stopImmediatePropagation(), true);
+                }
+
                 const v = document.querySelector('video');
                 if (!v) {
                     return JSON.stringify({
                         videoFound: false,
-                        visibilityState: document.visibilityState,
+                        visibilityState: realVisibility,
                         hasFocus: document.hasFocus(),
-                        hidden: document.hidden
+                        hidden: realHidden
                     });
+                }
+
+                let resumed = false;
+                // The audio-only loop pauses the video on purpose; leave it alone then.
+                if (v.paused && !v.ended && !window.__sdcAudio) {
+                    v.muted = true;
+                    v.play().catch(() => {});
+                    resumed = true;
                 }
 
                 const buffered = [];
@@ -412,6 +436,7 @@ public sealed class KickStreamPageReader
                 return JSON.stringify({
                     videoFound: true,
                     paused: v.paused,
+                    resumed: resumed,
                     ended: v.ended,
                     currentTime: v.currentTime,
                     duration: v.duration,
@@ -428,9 +453,9 @@ public sealed class KickStreamPageReader
                         lastError: window.__sdcAudio.lastError
                     } : null,
                     buffered: buffered,
-                    visibilityState: document.visibilityState,
+                    visibilityState: realVisibility,
                     hasFocus: document.hasFocus(),
-                    hidden: document.hidden
+                    hidden: realHidden
                 });
             })();
             """;
@@ -482,16 +507,28 @@ public sealed class KickStreamPageReader
             _lastCurrentTime = currentTime;
             _lastCheckUtc = nowUtc;
 
-            AppLogger.Debug(
-                "KickPlayback",
-                $"video state={advanceStatus} paused={GetBool(root, "paused")} ended={GetBool(root, "ended")} " +
+            string message =
+                $"video state={advanceStatus} paused={GetBool(root, "paused")} resumed={GetBool(root, "resumed")} ended={GetBool(root, "ended")} " +
                 $"currentTime={currentTime:F1} duration={GetDouble(root, "duration"):F1} " +
                 $"readyState={GetInt(root, "readyState")} networkState={GetInt(root, "networkState")} " +
                 $"muted={GetBool(root, "muted")} volume={GetDouble(root, "volume"):F2} " +
                 $"error={(root.TryGetProperty("error", out JsonElement errEl) && errEl.ValueKind != JsonValueKind.Null ? errEl.GetRawText() : "(none)")} " +
                 $"buffered={(root.TryGetProperty("buffered", out JsonElement bufEl) ? bufEl.GetRawText() : "[]")} " +
                 $"visibilityState={GetString(root, "visibilityState")} hasFocus={GetBool(root, "hasFocus")} hidden={GetBool(root, "hidden")} " +
-                $"audio={(audioLoop ? audioEl.GetRawText() : "(off)")}");
+                $"audio={(audioLoop ? audioEl.GetRawText() : "(off)")}";
+
+            // Abnormal playback is logged at Warn so it reaches shared logs without verbose debug logging enabled.
+            // In audio-loop mode the video is paused on purpose, so only the real page visibility is suspicious.
+            bool abnormal = audioLoop
+                ? GetBool(root, "hidden")
+                : advanceStatus.StartsWith("STALLED", StringComparison.Ordinal)
+                    || GetBool(root, "paused")
+                    || GetBool(root, "resumed")
+                    || GetBool(root, "hidden");
+            if (abnormal)
+                AppLogger.Warn("KickPlayback", message);
+            else
+                AppLogger.Debug("KickPlayback", message);
         }
         catch (Exception ex)
         {
