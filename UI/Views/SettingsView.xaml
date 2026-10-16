@@ -101,6 +101,18 @@
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Prioritize badge drops over other campaigns"
                                   Margin="0,0,0,12"/>
+                        <CheckBox IsChecked="{Binding TwitchAudioOnly, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Twitch audio-only mining (experimental)"
+                                  Margin="0,0,0,12"/>
+                        <CheckBox IsChecked="{Binding KickAudioOnly, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Kick audio-only mining (experimental)"
+                                  Margin="0,0,0,12"/>
+                        <CheckBox IsChecked="{Binding HeadOnlyMining, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Near-zero bandwidth mining: HEAD requests only (experimental, overrides audio-only)"
+                                  Margin="0,0,0,12"/>
                         <controls:SettingsLabeledRow Label="Mining priority">
                             <ComboBox Width="260"
                                       Style="{StaticResource NeonFlatComboBoxStyle}"

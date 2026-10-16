@@ -9,6 +9,7 @@ using Core.Logging;
 using Core.Managers;
 using Core.Models;
 using Core.Services;
+using UI.Diagnostics;
 using UI.Models;
 using UI.Views;
 
@@ -72,6 +73,166 @@ namespace UI.Accounts
         }
 
         private HiddenWebViewHost? _host;
+        private System.Windows.Threading.DispatcherTimer? _netTimer;
+        private readonly Queue<(DateTime At, long Bytes)> _netSamples = new();
+        private DateTime _lastNetLogUtc;
+        private long _lastNetLogBytes;
+        private long _lastNetTotal;
+        private Dictionary<string, long> _lastHostSnapshot = new();
+
+        private string _networkUsageText = string.Empty;
+
+        /// <summary>
+        /// Gets the live and since-launch network rates of this account's browser (empty when it is not metered).
+        /// </summary>
+        public string NetworkUsageText
+        {
+            get => _networkUsageText;
+            private set
+            {
+                if (_networkUsageText == value)
+                    return;
+
+                _networkUsageText = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasNetworkUsage));
+            }
+        }
+
+        /// <summary>Gets a value indicating whether network usage is being measured for this account.</summary>
+        public bool HasNetworkUsage => _networkUsageText.Length > 0;
+
+        /// <summary>
+        /// Resets the network totals and the average.
+        /// </summary>
+        /// <remarks>Accounts on the shared legacy profile share one meter, so resetting one resets the other too.</remarks>
+        public void ResetNetworkUsage()
+        {
+            NetworkMeter? meter = _host?.NetworkMeter;
+            if (meter == null)
+                return;
+
+            meter.Reset();
+            _netSamples.Clear();
+            _lastNetLogUtc = DateTime.UtcNow;
+            _lastNetLogBytes = 0;
+            _lastNetTotal = 0;
+            AppLogger.Info("NetUsage", $"{Model.DisplayName} ({PlatformName}): counters reset.");
+            UpdateNetworkUsage();
+        }
+
+        private void StartNetworkUsageTimer()
+        {
+            StopNetworkUsageTimer();
+            if (_host?.NetworkMeter == null)
+                return;
+
+            _netSamples.Clear();
+            _lastNetLogUtc = DateTime.UtcNow;
+            _lastNetLogBytes = 0;
+
+            _netTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _netTimer.Tick += (_, _) => UpdateNetworkUsage();
+            _netTimer.Start();
+        }
+
+        /// <summary>
+        /// Logs the stream loop's own byte counter, for comparison with the proxy total.
+        /// </summary>
+        private async Task LogAudioLoopCounterAsync()
+        {
+            HiddenWebViewHost? host = _host;
+            if (host == null)
+                return;
+
+            try
+            {
+                string raw = await host.ExecuteScriptAsync(
+                    "JSON.stringify(window.__sdcAudio ? { segments: window.__sdcAudio.segments, kilobytes: Math.round(window.__sdcAudio.bytes / 1024), bigSegments: window.__sdcAudio.bigSegments, maxSegmentKb: window.__sdcAudio.maxSegmentKb, adPolls: window.__sdcAudio.adPolls, mode: window.__sdcAudio.mode, variant: window.__sdcAudio.variant || null, lastError: window.__sdcAudio.lastError } : null)");
+                AppLogger.Info("NetUsage", $"{Model.DisplayName} stream loop counter: {raw}");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("NetUsage", $"Could not read the audio loop counter: {ex.Message}");
+            }
+        }
+
+        private void StopNetworkUsageTimer()
+        {
+            _netTimer?.Stop();
+            _netTimer = null;
+            NetworkUsageText = string.Empty;
+        }
+
+        private void UpdateNetworkUsage()
+        {
+            NetworkMeter? meter = _host?.NetworkMeter;
+            if (meter == null)
+            {
+                NetworkUsageText = string.Empty;
+                return;
+            }
+
+            DateTime now = DateTime.UtcNow;
+            long total = meter.BytesReceived;
+
+            // The total only drops when the (possibly shared) meter was reset from elsewhere.
+            if (total < _lastNetTotal)
+            {
+                _lastHostSnapshot = new Dictionary<string, long>();
+                _netSamples.Clear();
+                _lastNetLogUtc = now;
+                _lastNetLogBytes = 0;
+            }
+
+            _lastNetTotal = total;
+
+            // Live rate: average over the last ~10 seconds.
+            _netSamples.Enqueue((now, total));
+            while (_netSamples.Count > 1 && (now - _netSamples.Peek().At).TotalSeconds > 10)
+                _netSamples.Dequeue();
+
+            (DateTime oldestAt, long oldestBytes) = _netSamples.Peek();
+            double liveSeconds = (now - oldestAt).TotalSeconds;
+            double liveMbps = liveSeconds > 0.5 ? (total - oldestBytes) * 8 / liveSeconds / 1_000_000 : 0;
+
+            double sinceLaunchSeconds = Math.Max(1, (now - meter.StartedAtUtc).TotalSeconds);
+            double averageMbps = total * 8 / sinceLaunchSeconds / 1_000_000;
+
+            string shared = Model.UsesLegacyProfile ? " (shared profile)" : string.Empty;
+            NetworkUsageText = $"\u2193 {liveMbps:F2} Mbps live \u2022 {averageMbps:F2} Mbps avg \u2022 {total / (1024.0 * 1024.0):F1} MB{shared}";
+
+            // Write the totals to the log once a minute.
+            if ((now - _lastNetLogUtc).TotalSeconds >= 60)
+            {
+                double windowSeconds = (now - _lastNetLogUtc).TotalSeconds;
+                double windowMbps = (total - _lastNetLogBytes) * 8 / windowSeconds / 1_000_000;
+                string mode = Engine.EffectiveHeadOnly
+                    ? "head-only"
+                    : (IsTwitch ? Engine.EffectiveTwitchAudioOnly : Engine.EffectiveKickAudioOnly) ? "audio-only" : "video";
+
+                // Bytes received in the last minute, by remote host.
+                Dictionary<string, long> hostSnapshot = meter.SnapshotBytesReceivedByHost();
+                string topHosts = string.Join(
+                    ", ",
+                    hostSnapshot
+                        .Select(h => (Host: h.Key, Delta: h.Value - (_lastHostSnapshot.TryGetValue(h.Key, out long before) ? before : 0)))
+                        .Where(h => h.Delta > 0)
+                        .OrderByDescending(h => h.Delta)
+                        .Take(6)
+                        .Select(h => $"{h.Host}={h.Delta / 1024.0:F0}KB"));
+                _lastHostSnapshot = hostSnapshot;
+
+                AppLogger.Info(
+                    "NetUsage",
+                    $"{Model.DisplayName} ({PlatformName}): last {windowSeconds:F0}s={windowMbps:F3} Mbps ({(total - _lastNetLogBytes) / 1024.0:F0} KB down), " +
+                    $"since launch={averageMbps:F3} Mbps, total={total / (1024.0 * 1024.0):F2} MB down / {meter.BytesSent / (1024.0 * 1024.0):F2} MB up, mode={mode}");
+                AppLogger.Info("NetUsage", $"{Model.DisplayName} top hosts last minute: {(topHosts.Length > 0 ? topHosts : "(none)")}");
+                _ = LogAudioLoopCounterAsync();
+                _lastNetLogUtc = now;
+                _lastNetLogBytes = total;
+            }
+        }
 
         /// <summary>Gets the hidden browser host bound to this account's profile, or <see langword="null"/> while disabled.</summary>
         public HiddenWebViewHost? Host => _host;
@@ -79,6 +240,7 @@ namespace UI.Accounts
         private void CreateHost()
         {
             _host = new HiddenWebViewHost(Model);
+            StartNetworkUsageTimer();
 
             if (IsTwitch)
             {
@@ -97,6 +259,7 @@ namespace UI.Accounts
         private void DestroyHost()
         {
             HiddenWebViewHost? host = _host;
+            StopNetworkUsageTimer();
             _host = null;
             _gqlService = null;
             Engine.InitializeWebViews(null, null);

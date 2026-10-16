@@ -22,8 +22,7 @@ namespace UI.Views
         public KickLoginWindow(AccountModel? account = null)
         {
             InitializeComponent();
-            if (account?.UserDataFolder is { } userDataFolder)
-                Web.CreationProperties = new CoreWebView2CreationProperties { UserDataFolder = userDataFolder };
+            Web.CreationProperties = UI.Diagnostics.NetworkMeters.CreateProperties(account?.UserDataFolder);
             Loaded += OnLoaded;
             Closed += (_, _) => _cts.Cancel();
         }

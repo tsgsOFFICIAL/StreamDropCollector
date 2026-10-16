@@ -22,6 +22,12 @@ namespace UI.Controls
                 await session.LoginAsync();
         }
 
+        private void OnResetNetworkClick(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is AccountSession session)
+                session.ResetNetworkUsage();
+        }
+
         private void OnSettingsClick(object sender, RoutedEventArgs e)
         {
             if (DataContext is not AccountSession session)

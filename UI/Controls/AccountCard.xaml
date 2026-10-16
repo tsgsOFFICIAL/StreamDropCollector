@@ -36,6 +36,15 @@
                         <Run Text=" &#x2022; "/>
                         <Run Text="{Binding StatusText, Mode=OneWay}"/>
                     </TextBlock>
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               ToolTip="Live rate (last ~10 s), average and total downloaded since the last reset"
+                               Text="{Binding NetworkUsageText, Mode=OneWay}"/>
+                    <Button Content="Reset" Style="{StaticResource SecondaryButtonStyle}"
+                            Margin="8,0,0,0" Height="22" Padding="8,0" FontSize="11" VerticalAlignment="Center"
+                            ToolTip="Reset the totals and the average"
+                            Visibility="{Binding HasNetworkUsage, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Click="OnResetNetworkClick"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
