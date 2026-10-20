@@ -53,16 +53,6 @@ namespace Core.Managers
         public event Action<bool>? PrioritizeBadgesChanged;
 
         /// <summary>
-        /// Occurs when <see cref="TwitchAudioOnly"/> changes after settings have finished loading.
-        /// </summary>
-        public event Action<bool>? TwitchAudioOnlyChanged;
-
-        /// <summary>
-        /// Occurs when <see cref="KickAudioOnly"/> changes after settings have finished loading.
-        /// </summary>
-        public event Action<bool>? KickAudioOnlyChanged;
-
-        /// <summary>
         /// Occurs when <see cref="HeadOnlyMining"/> changes after settings have finished loading.
         /// </summary>
         public event Action<bool>? HeadOnlyMiningChanged;
@@ -98,8 +88,6 @@ namespace Core.Managers
         private bool _knownGamesLoaded;
         private bool _kickLevelFarming;
         private bool _prioritizeBadges;
-        private bool _twitchAudioOnly;
-        private bool _kickAudioOnly;
         private bool _headOnlyMining;
         private bool _hideCompletedCampaigns = true;
         private bool _isLoadingSettings;
@@ -236,21 +224,8 @@ namespace Core.Managers
             }
         }
         /// <summary>
-        /// Gets or sets a value indicating whether Twitch mining uses the audio-only stream instead of 160p (experimental).
-        /// </summary>
-        /// <remarks>Changing it re-evaluates mining.</remarks>
-        public bool TwitchAudioOnly
-        {
-            get => _twitchAudioOnly;
-            set
-            {
-                if (SetField(ref _twitchAudioOnly, value) && !_isLoadingSettings)
-                    TwitchAudioOnlyChanged?.Invoke(value);
-            }
-        }
-        /// <summary>
-        /// Gets or sets a value indicating whether mining only requests stream segments with HEAD instead of downloading
-        /// them (near-zero bandwidth, experimental). Takes precedence over the audio-only settings.
+        /// Gets or sets a value indicating whether mining only requests stream segments with HEAD instead of playing the
+        /// video (near-zero bandwidth, experimental).
         /// </summary>
         /// <remarks>Changing it re-evaluates mining.</remarks>
         public bool HeadOnlyMining
@@ -260,19 +235,6 @@ namespace Core.Managers
             {
                 if (SetField(ref _headOnlyMining, value) && !_isLoadingSettings)
                     HeadOnlyMiningChanged?.Invoke(value);
-            }
-        }
-        /// <summary>
-        /// Gets or sets a value indicating whether Kick mining uses the audio-only (or lowest) stream instead of 160p video (experimental).
-        /// </summary>
-        /// <remarks>Changing it re-evaluates mining.</remarks>
-        public bool KickAudioOnly
-        {
-            get => _kickAudioOnly;
-            set
-            {
-                if (SetField(ref _kickAudioOnly, value) && !_isLoadingSettings)
-                    KickAudioOnlyChanged?.Invoke(value);
             }
         }
         /// <summary>
@@ -570,8 +532,6 @@ namespace Core.Managers
                     MiningPriorityMode = settings.MiningPriorityMode;
                     KickLevelFarming = settings.KickLevelFarming;
                     PrioritizeBadges = settings.PrioritizeBadges;
-                    TwitchAudioOnly = settings.TwitchAudioOnly;
-                    KickAudioOnly = settings.KickAudioOnly;
                     HeadOnlyMining = settings.HeadOnlyMining;
                     HideCompletedCampaigns = settings.HideCompletedCampaigns;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
@@ -622,8 +582,6 @@ namespace Core.Managers
                     MiningPriorityMode = MiningPriorityMode,
                     KickLevelFarming = KickLevelFarming,
                     PrioritizeBadges = PrioritizeBadges,
-                    TwitchAudioOnly = TwitchAudioOnly,
-                    KickAudioOnly = KickAudioOnly,
                     HeadOnlyMining = HeadOnlyMining,
                     HideCompletedCampaigns = HideCompletedCampaigns,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,

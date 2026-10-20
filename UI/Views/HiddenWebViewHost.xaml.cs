@@ -1022,6 +1022,14 @@ namespace UI.Views
                 AppLogger.Warn("WebViewCapture", $"[GQL Capture] Diagnostic screenshot failed: {ex.Message}");
             }
         }
+        /// <inheritdoc />
+        public Task AddScriptOnDocumentCreatedAsync(string script) =>
+            RunOnUiAsync(async () =>
+            {
+                await EnsureInitializedCoreAsync();
+                await WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(script);
+            });
+
         /// <summary>
         /// Forces a refresh of the current web content by reloading the source URL asynchronously.
         /// </summary>
@@ -1548,6 +1556,64 @@ namespace UI.Views
                         AppLogger.Warn(logScope, $"NET loadingFailed parse failure: {ex.Message}");
                     }
                 };
+
+                // WebSockets never show up in requestWillBeSent; log their lifecycle and, for the viewer/presence socket only
+                // (chat sockets are too noisy), its frames (payloads truncated, token query values redacted) to see what the
+                // site sends while a stream is watched.
+                HashSet<string> viewerSockets = new();
+                static string RedactToken(string url)
+                {
+                    int q = url.IndexOf("token=", StringComparison.OrdinalIgnoreCase);
+                    return q < 0 ? url : url[..(q + 6)] + "<redacted>";
+                }
+
+                static string Truncate(string text) => text.Length <= 300 ? text : text[..300] + $"...(len={text.Length})";
+
+                void LogWebSocketEvent(string eventName, Func<JsonElement, string> describe)
+                {
+                    CoreWebView2DevToolsProtocolEventReceiver receiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver(eventName);
+                    receiver.DevToolsProtocolEventReceived += (_, e) =>
+                    {
+                        try
+                        {
+                            string text = describe(JsonDocument.Parse(e.ParameterObjectAsJson).RootElement);
+                            if (text.Length > 0)
+                                AppLogger.Debug(logScope, $"WS {eventName["Network.webSocket".Length..]} {text}");
+                        }
+                        catch (Exception ex)
+                        {
+                            AppLogger.Warn(logScope, $"{eventName} parse failure: {ex.Message}");
+                        }
+                    };
+                }
+
+                string FrameText(string direction, JsonElement root)
+                {
+                    string id = root.GetProperty("requestId").GetString() ?? "";
+                    bool viewer;
+                    lock (viewerSockets)
+                        viewer = viewerSockets.Contains(id);
+
+                    return viewer
+                        ? $"{direction} {id} " + Truncate(root.GetProperty("response").TryGetProperty("payloadData", out JsonElement p) ? p.GetString() ?? "" : "")
+                        : string.Empty;
+                }
+
+                LogWebSocketEvent("Network.webSocketCreated", root =>
+                {
+                    string id = root.GetProperty("requestId").GetString() ?? "";
+                    string url = root.GetProperty("url").GetString() ?? "";
+                    if (url.Contains("viewer", StringComparison.OrdinalIgnoreCase))
+                        lock (viewerSockets)
+                            viewerSockets.Add(id);
+
+                    return $"{id} url={RedactToken(url)}";
+                });
+                LogWebSocketEvent("Network.webSocketFrameSent", root => FrameText("SENT", root));
+                LogWebSocketEvent("Network.webSocketFrameReceived", root => FrameText("RECV", root));
+                LogWebSocketEvent("Network.webSocketFrameError", root =>
+                    $"{root.GetProperty("requestId").GetString()} error={root.GetProperty("errorMessage").GetString()}");
+                LogWebSocketEvent("Network.webSocketClosed", root => root.GetProperty("requestId").GetString() ?? "");
 
                 CoreWebView2DevToolsProtocolEventReceiver consoleReceiver = WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Runtime.consoleAPICalled");
                 consoleReceiver.DevToolsProtocolEventReceived += (_, e) =>

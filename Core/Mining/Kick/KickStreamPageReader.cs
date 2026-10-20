@@ -16,6 +16,7 @@ public sealed class KickStreamPageReader
 
     private double? _lastCurrentTime;
     private DateTime _lastCheckUtc;
+    private bool _viewerSocketHookInstalled;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="KickStreamPageReader"/> class.
@@ -104,6 +105,22 @@ public sealed class KickStreamPageReader
             AppLogger.Warn("KickNet", $"EnableVerboseNetworkAndConsoleLoggingAsync failed. {ex.Message}");
         }
 
+        // HEAD-only mining pauses the video, and Kick then stops repeating its watch events. The hook must exist before
+        // the page opens its viewer socket, so it is registered here and takes effect on the refresh just below.
+        if (_loopMode() == AudioLoopMode.HeadOnly && !_viewerSocketHookInstalled)
+        {
+            try
+            {
+                await _webViewHost.AddScriptOnDocumentCreatedAsync(ViewerSocketHookScript);
+                _viewerSocketHookInstalled = true;
+                AppLogger.Debug("KickSelection", "[Kick] Viewer socket hook registered for HEAD-only mining.");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("KickSelection", $"Failed to register the Kick viewer socket hook. {ex.Message}");
+            }
+        }
+
         await DismissMatureGateAsync();
         await SetLowestQualityAsync();
         await _uiRunner.RunAsync(() => _webViewHost.ForceRefreshAsync());
@@ -135,8 +152,7 @@ public sealed class KickStreamPageReader
         try
         {
             string body = AudioOnlyScript
-                .Replace("__LOGIN__", JsonSerializer.Serialize(login ?? string.Empty))
-                .Replace("__HEAD_ONLY__", _loopMode() == AudioLoopMode.HeadOnly ? "true" : "false");
+                .Replace("__LOGIN__", JsonSerializer.Serialize(login ?? string.Empty));
 
             string? result = await _uiRunner.RunAsync(() => _webViewHost.ExecuteAsyncScriptAsync(body, 25000, ct));
             AppLogger.Debug("KickSelection", $"[Kick] Audio-only start: {result ?? "(no result / timeout)"}");
@@ -183,6 +199,7 @@ public sealed class KickStreamPageReader
                 if (a) {
                     a.stopped = true;
                     clearTimeout(a.timer);
+                    (a.wsTimers || []).forEach(t => clearTimeout(t));
                     window.__sdcAudio = null;
                 }
             })();
@@ -229,6 +246,50 @@ public sealed class KickStreamPageReader
             AppLogger.Warn("KickSelection", $"Kick audio-only watchdog failed. {ex.Message}");
         }
     }
+
+    // Wraps WebSocket so the page's viewer socket (wss://websockets.kick.com/viewer/v1/connect) and the watch frames it
+    // sends (channel_handshake, tracking.user.watch.livestream) are captured for the HEAD-only loop to repeat.
+    private const string ViewerSocketHookScript = """
+        (() => {
+            if (window.__sdcViewerHook)
+                return;
+            window.__sdcViewerHook = true;
+
+            const Orig = window.WebSocket;
+            const info = { ws: null, handshake: null, userEvent: null, userEventAt: null, sockets: 0 };
+            window.__sdcViewer = info;
+
+            const Wrapped = function (url, protocols) {
+                const ws = protocols === undefined ? new Orig(url) : new Orig(url, protocols);
+                try {
+                    if (/\/viewer\/v1\/connect/.test(String(url))) {
+                        info.ws = ws;
+                        info.sockets++;
+                        const send = ws.send;
+                        ws.send = function (data) {
+                            try {
+                                if (typeof data === 'string') {
+                                    const frame = JSON.parse(data);
+                                    if (frame.type === 'channel_handshake')
+                                        info.handshake = data;
+                                    else if (frame.type === 'user_event' && frame.data && frame.data.message
+                                        && frame.data.message.name === 'tracking.user.watch.livestream') {
+                                        info.userEvent = data;
+                                        info.userEventAt = Date.now();
+                                    }
+                                }
+                            } catch (e) { }
+                            return send.apply(this, arguments);
+                        };
+                    }
+                } catch (e) { }
+                return ws;
+            };
+            Wrapped.prototype = Orig.prototype;
+            ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(k => { Wrapped[k] = Orig[k]; });
+            window.WebSocket = Wrapped;
+        })();
+        """;
 
     // The channel API returns the IVS master playlist as playback_url. The loop uses its audio-only variant, or the
     // lowest-bandwidth one when there is none.
@@ -296,9 +357,39 @@ public sealed class KickStreamPageReader
         window.__sdcAudio = state;
 
         // HEAD-only mode: HEAD requests for new segments and a slower playlist poll.
-        const headOnly = __HEAD_ONLY__;
-        const pollMs = headOnly ? 10000 : 2000;
-        state.mode = headOnly ? 'head' : 'audio';
+        const pollMs = 10000;
+        state.mode = 'head';
+
+        // The paused video no longer makes Kick's player repeat its watch frames, so repeat the captured ones on the
+        // page's own viewer socket: the handshake every 15 s and the watch event every 120 s, as the playing player does.
+        state.ws = { handshakes: 0, events: 0, skipped: 0, lastSkip: null };
+        state.wsTimers = [];
+        {
+            const sendFrame = (kind) => {
+                if (state.stopped)
+                    return;
+                const viewer = window.__sdcViewer;
+                const frame = viewer && (kind === 'event' ? viewer.userEvent : viewer.handshake);
+                if (!frame || !viewer.ws || viewer.ws.readyState !== 1) {
+                    state.ws.skipped++;
+                    state.ws.lastSkip = !viewer ? 'no hook' : !frame ? 'no ' + kind + ' frame captured' : 'socket not open';
+                    return;
+                }
+                viewer.ws.send(frame);
+                if (kind === 'event')
+                    state.ws.events++;
+                else
+                    state.ws.handshakes++;
+            };
+            state.wsTimers.push(setInterval(() => sendFrame('handshake'), 15000));
+
+            const captured = window.__sdcViewer;
+            const sinceEvent = captured && captured.userEventAt ? Date.now() - captured.userEventAt : 0;
+            state.wsTimers.push(setTimeout(() => {
+                sendFrame('event');
+                state.wsTimers.push(setInterval(() => sendFrame('event'), 120000));
+            }, Math.max(5000, 120000 - sinceEvent)));
+        }
 
         const seen = new Set();
         let playlistUrl = null;
@@ -328,24 +419,9 @@ public sealed class KickStreamPageReader
                 first = false;
 
                 for (const url of toFetch) {
-                    if (headOnly) {
-                        const probe = await fetch(url, { method: 'HEAD' });
-                        if (!probe.ok)
-                            throw new Error('segment HEAD returned ' + probe.status);
-                        state.segments++;
-                        state.lastSegmentAt = Date.now();
-                        continue;
-                    }
-                    const segment = await fetch(url);
-                    if (!segment.ok)
-                        throw new Error('segment returned ' + segment.status);
-                    const size = (await segment.arrayBuffer()).byteLength;
-                    state.bytes += size;
-                    // Audio segments are ~50 KB; larger ones are counted separately.
-                    if (size > 300 * 1024) {
-                        state.bigSegments++;
-                        state.maxSegmentKb = Math.max(state.maxSegmentKb, Math.round(size / 1024));
-                    }
+                    const probe = await fetch(url, { method: 'HEAD' });
+                    if (!probe.ok)
+                        throw new Error('segment HEAD returned ' + probe.status);
                     state.segments++;
                     state.lastSegmentAt = Date.now();
                 }
@@ -370,6 +446,7 @@ public sealed class KickStreamPageReader
         if (state.lastError && state.segments === 0) {
             state.stopped = true;
             clearTimeout(state.timer);
+            state.wsTimers.forEach(t => clearTimeout(t));
             window.__sdcAudio = null;
             return fail(state.lastError);
         }
@@ -450,7 +527,9 @@ public sealed class KickStreamPageReader
                         kilobytes: Math.round(window.__sdcAudio.bytes / 1024),
                         secondsSinceLastSegment: window.__sdcAudio.lastSegmentAt ? Math.round((Date.now() - window.__sdcAudio.lastSegmentAt) / 1000) : null,
                         variant: window.__sdcAudio.variant,
-                        lastError: window.__sdcAudio.lastError
+                        lastError: window.__sdcAudio.lastError,
+                        viewerFrames: window.__sdcAudio.ws || null,
+                        viewerSocketOpen: !!(window.__sdcViewer && window.__sdcViewer.ws && window.__sdcViewer.ws.readyState === 1)
                     } : null,
                     buffered: buffered,
                     visibilityState: realVisibility,

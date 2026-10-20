@@ -102,6 +102,65 @@ namespace UI.Accounts
         /// <summary>Gets a value indicating whether network usage is being measured for this account.</summary>
         public bool HasNetworkUsage => _networkUsageText.Length > 0;
 
+        private string _networkLiveText = string.Empty;
+        private string _networkAverageText = string.Empty;
+        private string _networkTotalText = string.Empty;
+
+        /// <summary>Gets the live download rate (last ~10 s), e.g. "660 Kbps".</summary>
+        public string NetworkLiveText
+        {
+            get => _networkLiveText;
+            private set
+            {
+                if (_networkLiveText == value)
+                    return;
+
+                _networkLiveText = value;
+                OnPropertyChanged();
+            }
+        }
+
+        /// <summary>Gets the average download rate since the last reset.</summary>
+        public string NetworkAverageText
+        {
+            get => _networkAverageText;
+            private set
+            {
+                if (_networkAverageText == value)
+                    return;
+
+                _networkAverageText = value;
+                OnPropertyChanged();
+            }
+        }
+
+        /// <summary>Gets the total downloaded since the last reset.</summary>
+        public string NetworkTotalText
+        {
+            get => _networkTotalText;
+            private set
+            {
+                if (_networkTotalText == value)
+                    return;
+
+                _networkTotalText = value;
+                OnPropertyChanged();
+            }
+        }
+
+        /// <summary>Gets a value indicating whether this account's meter is shared with another account (legacy profile).</summary>
+        public bool IsNetworkSharedProfile => Model.UsesLegacyProfile;
+
+        private static string FormatRate(double mbps) =>
+            mbps >= 1 ? $"{mbps:F2} Mbps" : $"{mbps * 1000:F0} Kbps";
+
+        private static string FormatBytes(long bytes) => bytes switch
+        {
+            >= 1L << 30 => $"{bytes / (double)(1L << 30):F2} GB",
+            >= 1L << 20 => $"{bytes / (double)(1L << 20):F1} MB",
+            _ => $"{bytes / 1024.0:F0} KB"
+        };
+
         /// <summary>
         /// Resets the network totals and the average.
         /// </summary>
@@ -148,7 +207,7 @@ namespace UI.Accounts
             try
             {
                 string raw = await host.ExecuteScriptAsync(
-                    "JSON.stringify(window.__sdcAudio ? { segments: window.__sdcAudio.segments, kilobytes: Math.round(window.__sdcAudio.bytes / 1024), bigSegments: window.__sdcAudio.bigSegments, maxSegmentKb: window.__sdcAudio.maxSegmentKb, adPolls: window.__sdcAudio.adPolls, mode: window.__sdcAudio.mode, variant: window.__sdcAudio.variant || null, lastError: window.__sdcAudio.lastError } : null)");
+                    "JSON.stringify(window.__sdcAudio ? { segments: window.__sdcAudio.segments, kilobytes: Math.round(window.__sdcAudio.bytes / 1024), bigSegments: window.__sdcAudio.bigSegments, maxSegmentKb: window.__sdcAudio.maxSegmentKb, adPolls: window.__sdcAudio.adPolls, mode: window.__sdcAudio.mode, variant: window.__sdcAudio.variant || null, lastError: window.__sdcAudio.lastError, viewerFrames: window.__sdcAudio.ws || null } : null)");
                 AppLogger.Info("NetUsage", $"{Model.DisplayName} stream loop counter: {raw}");
             }
             catch (Exception ex)
@@ -199,6 +258,10 @@ namespace UI.Accounts
             double sinceLaunchSeconds = Math.Max(1, (now - meter.StartedAtUtc).TotalSeconds);
             double averageMbps = total * 8 / sinceLaunchSeconds / 1_000_000;
 
+            NetworkLiveText = FormatRate(liveMbps);
+            NetworkAverageText = FormatRate(averageMbps);
+            NetworkTotalText = FormatBytes(total);
+
             string shared = Model.UsesLegacyProfile ? " (shared profile)" : string.Empty;
             NetworkUsageText = $"\u2193 {liveMbps:F2} Mbps live \u2022 {averageMbps:F2} Mbps avg \u2022 {total / (1024.0 * 1024.0):F1} MB{shared}";
 
@@ -207,9 +270,7 @@ namespace UI.Accounts
             {
                 double windowSeconds = (now - _lastNetLogUtc).TotalSeconds;
                 double windowMbps = (total - _lastNetLogBytes) * 8 / windowSeconds / 1_000_000;
-                string mode = Engine.EffectiveHeadOnly
-                    ? "head-only"
-                    : (IsTwitch ? Engine.EffectiveTwitchAudioOnly : Engine.EffectiveKickAudioOnly) ? "audio-only" : "video";
+                string mode = Engine.EffectiveHeadOnly ? "head-only" : "video";
 
                 // Bytes received in the last minute, by remote host.
                 Dictionary<string, long> hostSnapshot = meter.SnapshotBytesReceivedByHost();

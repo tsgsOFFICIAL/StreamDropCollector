@@ -132,8 +132,7 @@ public sealed class TwitchStreamPageReader
             string body = AudioOnlyScript
                 .Replace("__CLIENT_ID__", JsonSerializer.Serialize(TwitchWebClientId))
                 .Replace("__OAUTH__", JsonSerializer.Serialize($"OAuth {authToken}"))
-                .Replace("__LOGIN__", JsonSerializer.Serialize(login ?? string.Empty))
-                .Replace("__HEAD_ONLY__", _loopMode() == AudioLoopMode.HeadOnly ? "true" : "false");
+                .Replace("__LOGIN__", JsonSerializer.Serialize(login ?? string.Empty));
 
             string? result = await _uiRunner.RunAsync(() => _webViewHost.ExecuteAsyncScriptAsync(body, 25000, ct));
             AppLogger.Debug("TwitchSelection", $"[Twitch] Audio-only start: {result ?? "(no result / timeout)"}");
@@ -309,9 +308,8 @@ public sealed class TwitchStreamPageReader
         window.__sdcAudio = state;
 
         // HEAD-only mode: HEAD requests for new segments and a slower playlist poll.
-        const headOnly = __HEAD_ONLY__;
-        const pollMs = headOnly ? 10000 : 2000;
-        state.mode = headOnly ? 'head' : 'audio';
+        const pollMs = 10000;
+        state.mode = 'head';
 
         const seen = new Set();
         let playlistUrl = null;
@@ -340,24 +338,9 @@ public sealed class TwitchStreamPageReader
                 first = false;
 
                 for (const url of toFetch) {
-                    if (headOnly) {
-                        const probe = await fetch(url, { method: 'HEAD' });
-                        if (!probe.ok)
-                            throw new Error('segment HEAD returned ' + probe.status);
-                        state.segments++;
-                        state.lastSegmentAt = Date.now();
-                        continue;
-                    }
-                    const segment = await fetch(url);
-                    if (!segment.ok)
-                        throw new Error('segment returned ' + segment.status);
-                    const size = (await segment.arrayBuffer()).byteLength;
-                    state.bytes += size;
-                    // Audio segments are ~50 KB; larger ones are counted separately.
-                    if (size > 300 * 1024) {
-                        state.bigSegments++;
-                        state.maxSegmentKb = Math.max(state.maxSegmentKb, Math.round(size / 1024));
-                    }
+                    const probe = await fetch(url, { method: 'HEAD' });
+                    if (!probe.ok)
+                        throw new Error('segment HEAD returned ' + probe.status);
                     state.segments++;
                     state.lastSegmentAt = Date.now();
                 }

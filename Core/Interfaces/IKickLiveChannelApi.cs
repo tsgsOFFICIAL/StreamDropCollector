@@ -31,7 +31,14 @@ namespace Core.Interfaces
         /// </summary>
         /// <param name="campaigns">Campaigns to inspect; only general-drop Kick entries are discovered.</param>
         /// <param name="ct">Cancellation token.</param>
-        Task PreloadGeneralDropDirectoriesAsync(IReadOnlyList<DropsCampaign> campaigns, CancellationToken ct = default);
+        /// <param name="shouldAbort">
+        /// Polled before each directory navigation; when it returns <see langword="true"/> the preload stops so it
+        /// cannot pull the shared WebView off a stream that is being (or about to be) mined.
+        /// </param>
+        Task PreloadGeneralDropDirectoriesAsync(
+            IReadOnlyList<DropsCampaign> campaigns,
+            CancellationToken ct = default,
+            Func<bool>? shouldAbort = null);
 
         /// <summary>
         /// Picks the best live channel login for a campaign, preferring <paramref name="preferredLogin"/> when eligible.

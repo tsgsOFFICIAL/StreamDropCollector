@@ -48,27 +48,17 @@ namespace Core.Managers
         public bool EffectivePrioritizeBadges => Account.Overrides.PrioritizeBadges ?? UISettingsManager.Instance.PrioritizeBadges;
 
         /// <summary>
-        /// Gets whether Twitch audio-only mining is on for this account (account override, else global setting).
-        /// </summary>
-        public bool EffectiveTwitchAudioOnly => Account.Overrides.TwitchAudioOnly ?? UISettingsManager.Instance.TwitchAudioOnly;
-
-        /// <summary>
-        /// Gets whether Kick audio-only mining is on for this account (account override, else global setting).
-        /// </summary>
-        public bool EffectiveKickAudioOnly => Account.Overrides.KickAudioOnly ?? UISettingsManager.Instance.KickAudioOnly;
-
-        /// <summary>
         /// Gets whether near-zero bandwidth (HEAD-only) mining is on for this account (account override, else global setting).
         /// </summary>
         public bool EffectiveHeadOnly => Account.Overrides.HeadOnlyMining ?? UISettingsManager.Instance.HeadOnlyMining;
 
         /// <summary>Gets the Twitch stream loop mode for this account.</summary>
         public AudioLoopMode EffectiveTwitchLoopMode =>
-            EffectiveHeadOnly ? AudioLoopMode.HeadOnly : EffectiveTwitchAudioOnly ? AudioLoopMode.Audio : AudioLoopMode.Off;
+            EffectiveHeadOnly ? AudioLoopMode.HeadOnly : AudioLoopMode.Off;
 
         /// <summary>Gets the Kick stream loop mode for this account.</summary>
         public AudioLoopMode EffectiveKickLoopMode =>
-            EffectiveHeadOnly ? AudioLoopMode.HeadOnly : EffectiveKickAudioOnly ? AudioLoopMode.Audio : AudioLoopMode.Off;
+            EffectiveHeadOnly ? AudioLoopMode.HeadOnly : AudioLoopMode.Off;
 
         /// <summary>
         /// Gets the mining priority for this account (account override, else global setting).
@@ -386,8 +376,6 @@ namespace Core.Managers
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged += OnPrioritizeBadgesChanged;
-            UISettingsManager.Instance.TwitchAudioOnlyChanged += OnTwitchAudioOnlyChanged;
-            UISettingsManager.Instance.KickAudioOnlyChanged += OnKickAudioOnlyChanged;
             UISettingsManager.Instance.HeadOnlyMiningChanged += OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated += OnTwitchHelixAuthenticated;
 
@@ -455,21 +443,6 @@ namespace Core.Managers
             _ = StartMiningStreams(true);
         }
         /// <summary>
-        /// Re-evaluates mining when the Twitch audio-only toggle changes.
-        /// </summary>
-        private void OnTwitchAudioOnlyChanged(bool enabled)
-        {
-            if (Account.Overrides.TwitchAudioOnly.HasValue)
-                return;
-
-            AppLogger.Info("Miner", $"Twitch audio-only {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
-
-            if (_isPaused || TwitchWebView == null || _selection.CurrentTwitchCampaign == null)
-                return;
-
-            _ = StartMiningStreams(true);
-        }
-        /// <summary>
         /// Re-evaluates mining when the near-zero bandwidth (HEAD-only) toggle changes.
         /// </summary>
         private void OnHeadOnlyMiningChanged(bool enabled)
@@ -481,21 +454,6 @@ namespace Core.Managers
 
             if (_isPaused || (TwitchWebView == null && KickWebView == null)
                 || (_selection.CurrentTwitchCampaign == null && _selection.CurrentKickCampaign == null))
-                return;
-
-            _ = StartMiningStreams(true);
-        }
-        /// <summary>
-        /// Re-evaluates mining when the Kick audio-only toggle changes.
-        /// </summary>
-        private void OnKickAudioOnlyChanged(bool enabled)
-        {
-            if (Account.Overrides.KickAudioOnly.HasValue)
-                return;
-
-            AppLogger.Info("Miner", $"Kick audio-only {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
-
-            if (_isPaused || KickWebView == null || _selection.CurrentKickCampaign == null)
                 return;
 
             _ = StartMiningStreams(true);
@@ -1094,7 +1052,11 @@ namespace Core.Managers
                     List<DropsCampaign> snapshot = await Application.Current.Dispatcher.InvokeAsync(() =>
                         ActiveCampaigns.Where(c => c.Platform == Platform.Twitch).ToList());
 
-                    await _twitchLiveChannelApi.PreloadGeneralDropDirectoriesAsync(snapshot);
+                    // Background preloads share the mining WebView: stand down while a mining pass is running or a
+                    // stream is selected, otherwise they navigate it to a category page and the drop stops crediting.
+                    await _twitchLiveChannelApi.PreloadGeneralDropDirectoriesAsync(
+                        snapshot,
+                        shouldAbort: () => _startMiningLock.CurrentCount == 0 || _currentTwitchLogin != null);
 
                     // Chips for general drops are built from the discovered logins; tell the UI now rather than
                     // after the live-status scan, which would otherwise leave the section hidden.
@@ -1130,7 +1092,9 @@ namespace Core.Managers
                     List<DropsCampaign> snapshot = await Application.Current.Dispatcher.InvokeAsync(() =>
                         ActiveCampaigns.Where(c => c.Platform == Platform.Kick).ToList());
 
-                    await _kickLiveChannelApi.PreloadGeneralDropDirectoriesAsync(snapshot);
+                    await _kickLiveChannelApi.PreloadGeneralDropDirectoriesAsync(
+                        snapshot,
+                        shouldAbort: () => _startMiningLock.CurrentCount == 0 || _currentKickLogin != null);
 
                     // Chips for general drops are built from the discovered logins; tell the UI now rather than
                     // after the (slow) live-status scan, which would otherwise leave the section hidden.
@@ -1162,8 +1126,6 @@ namespace Core.Managers
             UISettingsManager.Instance.GameWhitelistChanged -= OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged -= OnPrioritizeBadgesChanged;
-            UISettingsManager.Instance.TwitchAudioOnlyChanged -= OnTwitchAudioOnlyChanged;
-            UISettingsManager.Instance.KickAudioOnlyChanged -= OnKickAudioOnlyChanged;
             UISettingsManager.Instance.HeadOnlyMiningChanged -= OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated -= OnTwitchHelixAuthenticated;
             _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;

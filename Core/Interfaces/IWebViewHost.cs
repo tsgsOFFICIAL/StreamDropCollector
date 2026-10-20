@@ -136,6 +136,11 @@ namespace Core.Interfaces
         /// </summary>
         Task NavigateToBlankAsync();
         /// <summary>
+        /// Registers a script that runs in every document the webview loads from now on, before the page's own scripts.
+        /// Takes effect on the next navigation or reload.
+        /// </summary>
+        Task AddScriptOnDocumentCreatedAsync(string script);
+        /// <summary>
         /// Executes JS in the webview and returns the resulting JSON/string.
         /// </summary>
         Task<string> ExecuteScriptAsync(string script);

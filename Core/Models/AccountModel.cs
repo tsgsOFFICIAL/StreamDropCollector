@@ -20,14 +20,8 @@ namespace Core.Models
         /// <summary>Overrides badge prioritization; <see langword="null"/> uses the global setting.</summary>
         public bool? PrioritizeBadges { get; set; }
 
-        /// <summary>Overrides Twitch audio-only mining; <see langword="null"/> uses the global setting.</summary>
-        public bool? TwitchAudioOnly { get; set; }
-
         /// <summary>Overrides near-zero bandwidth (HEAD-only) mining; <see langword="null"/> uses the global setting.</summary>
         public bool? HeadOnlyMining { get; set; }
-
-        /// <summary>Overrides Kick audio-only mining; <see langword="null"/> uses the global setting.</summary>
-        public bool? KickAudioOnly { get; set; }
 
         /// <summary>
         /// Overrides the game filter: game slugs to allow (or exclude, see <see cref="GameFilterBlacklistMode"/>).
@@ -41,7 +35,7 @@ namespace Core.Models
         /// <summary>Gets a value indicating whether any setting is overridden.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
         public bool HasAny => AutoClaimRewards.HasValue || KickLevelFarming.HasValue
-            || MiningPriorityMode.HasValue || PrioritizeBadges.HasValue || TwitchAudioOnly.HasValue || KickAudioOnly.HasValue || HeadOnlyMining.HasValue || GameWhitelistSlugs != null;
+            || MiningPriorityMode.HasValue || PrioritizeBadges.HasValue || HeadOnlyMining.HasValue || GameWhitelistSlugs != null;
     }
 
     /// <summary>

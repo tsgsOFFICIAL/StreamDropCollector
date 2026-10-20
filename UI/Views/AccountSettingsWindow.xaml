@@ -76,34 +76,12 @@
                     </StackPanel>
                 </Border>
 
-                <Border x:Name="AudioOnlyCard" Style="{StaticResource CardBorder}" Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="Twitch audio-only (experimental)" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="UseGlobalAudioOnly" Content="Use global setting"
-                                  Style="{StaticResource ModernCheckBoxStyle}" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="AudioOnlyBox" Content="Mine with the audio-only stream"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  IsEnabled="{Binding IsChecked, ElementName=UseGlobalAudioOnly, Converter={StaticResource InverseBooleanConverter}}"/>
-                    </StackPanel>
-                </Border>
-
-                <Border x:Name="KickAudioOnlyCard" Style="{StaticResource CardBorder}" Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="Kick audio-only (experimental)" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="UseGlobalKickAudioOnly" Content="Use global setting"
-                                  Style="{StaticResource ModernCheckBoxStyle}" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="KickAudioOnlyBox" Content="Mine with the audio-only stream"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  IsEnabled="{Binding IsChecked, ElementName=UseGlobalKickAudioOnly, Converter={StaticResource InverseBooleanConverter}}"/>
-                    </StackPanel>
-                </Border>
-
                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="Near-zero bandwidth (experimental)" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
                         <CheckBox x:Name="UseGlobalHeadOnly" Content="Use global setting"
                                   Style="{StaticResource ModernCheckBoxStyle}" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="HeadOnlyBox" Content="HEAD requests only (overrides audio-only)"
+                        <CheckBox x:Name="HeadOnlyBox" Content="HEAD requests only (no video)"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   IsEnabled="{Binding IsChecked, ElementName=UseGlobalHeadOnly, Converter={StaticResource InverseBooleanConverter}}"/>
                     </StackPanel>

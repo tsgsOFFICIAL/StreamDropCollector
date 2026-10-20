@@ -83,7 +83,10 @@ namespace Core.Services.Mining.Kick
         /// </summary>
         /// <param name="campaigns">Campaigns to inspect; only general-drop Kick entries are discovered.</param>
         /// <param name="ct">Cancellation token.</param>
-        public async Task PreloadGeneralDropDirectoriesAsync(IReadOnlyList<DropsCampaign> campaigns, CancellationToken ct = default)
+        public async Task PreloadGeneralDropDirectoriesAsync(
+            IReadOnlyList<DropsCampaign> campaigns,
+            CancellationToken ct = default,
+            Func<bool>? shouldAbort = null)
         {
             List<DropsCampaign> generalDrops = campaigns
                 .Where(c => c.Platform == Platform.Kick && c.IsGeneralDrop)
@@ -105,6 +108,12 @@ namespace Core.Services.Mining.Kick
 
                     if (_generalDropCache.TryGetFresh(campaign.Id, out _))
                         continue;
+
+                    if (shouldAbort?.Invoke() == true)
+                    {
+                        AppLogger.Debug("KickGeneralDrop", "Preload ABORTED - mining is active/starting; WebView must stay on the stream.");
+                        return;
+                    }
 
                     await GetEligibleLoginsAsync(campaign, allowDirectoryDiscovery: true, ct).ConfigureAwait(false);
                 }

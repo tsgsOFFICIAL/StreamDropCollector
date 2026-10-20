@@ -36,14 +36,6 @@ namespace UI.Views
             UseGlobalPriority.IsChecked = overrides.MiningPriorityMode is null;
             PriorityBox.SelectedValue = overrides.MiningPriorityMode ?? Core.Managers.UISettingsManager.Instance.MiningPriorityMode;
 
-            AudioOnlyCard.Visibility = session.Model.Platform == Platform.Twitch ? Visibility.Visible : Visibility.Collapsed;
-            UseGlobalAudioOnly.IsChecked = overrides.TwitchAudioOnly is null;
-            AudioOnlyBox.IsChecked = overrides.TwitchAudioOnly ?? Core.Managers.UISettingsManager.Instance.TwitchAudioOnly;
-
-            KickAudioOnlyCard.Visibility = session.Model.Platform == Platform.Kick ? Visibility.Visible : Visibility.Collapsed;
-            UseGlobalKickAudioOnly.IsChecked = overrides.KickAudioOnly is null;
-            KickAudioOnlyBox.IsChecked = overrides.KickAudioOnly ?? Core.Managers.UISettingsManager.Instance.KickAudioOnly;
-
             UseGlobalHeadOnly.IsChecked = overrides.HeadOnlyMining is null;
             HeadOnlyBox.IsChecked = overrides.HeadOnlyMining ?? Core.Managers.UISettingsManager.Instance.HeadOnlyMining;
 
@@ -93,12 +85,6 @@ namespace UI.Views
                 ? null
                 : mode;
 
-            overrides.TwitchAudioOnly = _session.Model.Platform != Platform.Twitch || UseGlobalAudioOnly.IsChecked == true
-                ? null
-                : AudioOnlyBox.IsChecked == true;
-            overrides.KickAudioOnly = _session.Model.Platform != Platform.Kick || UseGlobalKickAudioOnly.IsChecked == true
-                ? null
-                : KickAudioOnlyBox.IsChecked == true;
             overrides.HeadOnlyMining = UseGlobalHeadOnly.IsChecked == true ? null : HeadOnlyBox.IsChecked == true;
             overrides.PrioritizeBadges = UseGlobalBadges.IsChecked == true ? null : PrioritizeBadgesBox.IsChecked == true;
 
