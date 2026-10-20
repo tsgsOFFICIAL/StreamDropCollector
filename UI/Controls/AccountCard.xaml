@@ -18,6 +18,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
+                <StackPanel VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center"
                              Fill="{Binding Connection.ConnectionColor, FallbackValue=Red}"/>
@@ -36,15 +37,44 @@
                         <Run Text=" &#x2022; "/>
                         <Run Text="{Binding StatusText, Mode=OneWay}"/>
                     </TextBlock>
-                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               ToolTip="Live rate (last ~10 s), average and total downloaded since the last reset"
-                               Text="{Binding NetworkUsageText, Mode=OneWay}"/>
-                    <Button Content="Reset" Style="{StaticResource SecondaryButtonStyle}"
-                            Margin="8,0,0,0" Height="22" Padding="8,0" FontSize="11" VerticalAlignment="Center"
-                            ToolTip="Reset the totals and the average"
-                            Visibility="{Binding HasNetworkUsage, Converter={StaticResource BooleanToVisibilityConverter}}"
-                            Click="OnResetNetworkClick"/>
+                </StackPanel>
+
+                <Border Margin="20,8,0,0" HorizontalAlignment="Left"
+                        Padding="10,3" CornerRadius="10"
+                        Background="{DynamicResource InsetBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        ToolTip="Live rate (last ~10 s), average and total downloaded since the last reset"
+                        Visibility="{Binding HasNetworkUsage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#x2193;" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource AccentBrush}"/>
+                        <TextBlock Text="{Binding NetworkLiveText, Mode=OneWay}" Margin="5,0,0,0" FontSize="12"
+                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                        <Rectangle Width="1" Height="12" Margin="10,0" Fill="{DynamicResource BorderBrush}"/>
+                        <TextBlock Text="avg" FontSize="11" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextMutedBrush}"/>
+                        <TextBlock Text="{Binding NetworkAverageText, Mode=OneWay}" Margin="5,0,0,0" FontSize="12"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                        <Rectangle Width="1" Height="12" Margin="10,0" Fill="{DynamicResource BorderBrush}"/>
+                        <TextBlock Text="total" FontSize="11" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextMutedBrush}"/>
+                        <TextBlock Text="{Binding NetworkTotalText, Mode=OneWay}" Margin="5,0,0,0" FontSize="12"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                        <TextBlock Text="shared profile" Margin="10,0,0,0" FontSize="11" FontStyle="Italic"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}"
+                                   ToolTip="This account shares one browser profile (and one meter) with another account"
+                                   Visibility="{Binding IsNetworkSharedProfile, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                        <Button Content="&#x21BB;" Style="{StaticResource SecondaryButtonStyle}"
+                                Margin="10,0,-6,0" Width="22" Height="20" Padding="0" FontSize="12" VerticalAlignment="Center"
+                                ToolTip="Reset the totals and the average"
+                                Click="OnResetNetworkClick"/>
+                    </StackPanel>
+                </Border>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
