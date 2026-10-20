@@ -179,18 +179,19 @@ public sealed class KickStreamPageReader
         const string stateJs = """
             (() => {
                 const a = window.__sdcAudio;
-                const v = document.querySelector('video');
+                const videos = [...document.querySelectorAll('video')];
                 return JSON.stringify({
                     path: location.pathname,
                     alive: !!a && !a.stopped,
                     age: a && a.lastSegmentAt ? Math.round((Date.now() - a.lastSegmentAt) / 1000) : null,
-                    videoPlaying: !!v && !v.paused
+                    videoPlaying: videos.some(v => !v.paused)
                 });
             })();
             """;
 
+        // The page can hold several <video> elements (clips, previews, the live player); pause every one of them.
         const string pauseVideoJs = """
-            (() => { const v = document.querySelector('video'); if (v) v.pause(); })();
+            (() => { document.querySelectorAll('video').forEach(v => v.pause()); })();
             """;
 
         const string stopJs = """
@@ -451,12 +452,19 @@ public sealed class KickStreamPageReader
             return fail(state.lastError);
         }
 
-        const video = document.querySelector('video');
-        const videoWasPlaying = !!video && !video.paused;
-        if (video)
-            video.pause();
+        // Pause every <video> (not just the first: the live player can be a later element or mount after this runs), and
+        // pause any that starts playing while the loop is active. By now the page has sent its first watch frames.
+        const videos = [...document.querySelectorAll('video')];
+        const videoWasPlaying = videos.some(v => !v.paused);
+        videos.forEach(v => v.pause());
+        document.addEventListener('play', (e) => {
+            if (window.__sdcAudio === state && !state.stopped && e.target instanceof HTMLMediaElement) {
+                e.target.pause();
+                state.replayPauses = (state.replayPauses || 0) + 1;
+            }
+        }, true);
 
-        return JSON.stringify({ ok: true, slug, segments: state.segments, variant: state.variant, variants: state.variants, videoWasPlaying, hasVideo: !!video });
+        return JSON.stringify({ ok: true, slug, segments: state.segments, variant: state.variant, variants: state.variants, videoWasPlaying, hasVideo: videos.length > 0, videoCount: videos.length });
         """;
 
     /// <summary>
@@ -529,6 +537,8 @@ public sealed class KickStreamPageReader
                         variant: window.__sdcAudio.variant,
                         lastError: window.__sdcAudio.lastError,
                         viewerFrames: window.__sdcAudio.ws || null,
+                        replayPauses: window.__sdcAudio.replayPauses || 0,
+                        videos: [...document.querySelectorAll('video')].map(el => ({ paused: el.paused, duration: el.duration, t: Math.round(el.currentTime) })),
                         viewerSocketOpen: !!(window.__sdcViewer && window.__sdcViewer.ws && window.__sdcViewer.ws.readyState === 1)
                     } : null,
                     buffered: buffered,
