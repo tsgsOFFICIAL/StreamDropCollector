@@ -127,6 +127,19 @@ public sealed class KickStreamPageReader
         await Task.Delay(5000, ct);
         await DismissMatureGateAsync();
 
+        // Kick only sends its handshake and watch event while the player is playing, and the loop pauses the player, so
+        // the frames must be captured first. A page whose viewer socket reconnected after the pause never sends them.
+        if (_loopMode() == AudioLoopMode.HeadOnly && !await WaitForViewerFramesAsync(ct))
+        {
+            AppLogger.Warn("KickSelection", "[Kick] Viewer frames were not captured; reloading the page once.");
+            await _uiRunner.RunAsync(() => _webViewHost.ForceRefreshAsync());
+            await Task.Delay(5000, ct);
+            await DismissMatureGateAsync();
+
+            if (!await WaitForViewerFramesAsync(ct))
+                AppLogger.Warn("KickSelection", "[Kick] Viewer frames still not captured; server progress will not advance.");
+        }
+
         if (_loopMode() != AudioLoopMode.Off)
         {
             await StartAudioOnlyAsync(null, ct);
@@ -135,6 +148,43 @@ public sealed class KickStreamPageReader
 
         // Pins page visibility and resumes a paused player right away instead of waiting for the first health tick.
         await LogPlaybackDiagnosticsAsync();
+    }
+
+    /// <summary>
+    /// Waits until the viewer socket hook has captured both the handshake and the watch event, nudging a paused player
+    /// to play so Kick sends them.
+    /// </summary>
+    /// <returns><see langword="true"/> when both frames were captured before the timeout.</returns>
+    private async Task<bool> WaitForViewerFramesAsync(CancellationToken ct)
+    {
+        if (_webViewHost == null)
+            return false;
+
+        const string js = """
+            (() => {
+                document.querySelectorAll('video').forEach(v => { if (v.paused) v.play().catch(() => { }); });
+                const v = window.__sdcViewer;
+                return !!(v && v.handshake && v.userEvent);
+            })();
+            """;
+
+        for (int i = 0; i < 20; i++)
+        {
+            try
+            {
+                string raw = await _uiRunner.RunAsync(() => _webViewHost.ExecuteScriptAsync(js));
+                if (raw.Trim() == "true")
+                    return true;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Debug("KickSelection", $"[Kick] Viewer frame check failed. {ex.Message}");
+            }
+
+            await Task.Delay(1500, ct);
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -184,7 +234,9 @@ public sealed class KickStreamPageReader
                     path: location.pathname,
                     alive: !!a && !a.stopped,
                     age: a && a.lastSegmentAt ? Math.round((Date.now() - a.lastSegmentAt) / 1000) : null,
-                    videoPlaying: videos.some(v => !v.paused)
+                    videoPlaying: videos.some(v => !v.paused),
+                    wsSkipped: a && a.ws ? a.ws.skipped : 0,
+                    wsHandshakes: a && a.ws ? a.ws.handshakes : 0
                 });
             })();
             """;
@@ -221,6 +273,18 @@ public sealed class KickStreamPageReader
             if (!string.Equals(path.Trim('/'), login, StringComparison.OrdinalIgnoreCase))
             {
                 AppLogger.Debug("KickSelection", $"[Kick] Audio-only watchdog skipped: page is at '{path}', not on '{login}'.");
+                return;
+            }
+
+            int wsSkipped = state.RootElement.GetProperty("wsSkipped").GetInt32();
+            int wsHandshakes = state.RootElement.GetProperty("wsHandshakes").GetInt32();
+
+            // Without captured viewer frames Kick stops counting watch time, even though the segment loop looks healthy.
+            if (alive && _loopMode() == AudioLoopMode.HeadOnly && wsHandshakes == 0 && wsSkipped >= 4)
+            {
+                AppLogger.Warn("KickSelection", $"[Kick] Audio-only watchdog: no viewer frames captured (skipped={wsSkipped}); reloading the page.");
+                await _uiRunner.RunAsync(() => _webViewHost.ExecuteScriptAsync(stopJs));
+                await PrepareForMiningAsync(ct);
                 return;
             }
 
