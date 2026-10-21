@@ -28,6 +28,10 @@ namespace Core.Models
         /// </summary>
         public UpdateFrequency UpdateFrequency { get; set; }
         /// <summary>
+        /// Gets or sets a value indicating whether update checks also consider beta (nightly) builds.
+        /// </summary>
+        public bool IncludeBetaUpdates { get; set; }
+        /// <summary>
         /// Gets or sets a value indicating whether rewards are automatically claimed when they become available.
         /// </summary>
         public bool AutoClaimRewards { get; set; }
