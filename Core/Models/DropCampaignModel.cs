@@ -98,6 +98,8 @@ namespace Core.Models
     /// <param name="IsCurrentCampaign">true if this campaign is currently being mined; otherwise, false. Defaults to false.</param>
     /// <param name="NeedsAccountLink">true if the platform reported that this campaign needs a linked game account and the
     /// signed-in account has none, so mining it can never be claimed; otherwise, false. Defaults to false.</param>
+    /// <param name="IsRewardCampaign">true if this is a Twitch "open reward campaign" (a separate system from drops that is shown
+    /// in the inventory but never mined or claimed by the app); otherwise, false. Defaults to false.</param>
     public record DropsCampaign(
         string Id,
         string Name,
@@ -112,7 +114,8 @@ namespace Core.Models
         IReadOnlyList<string> ConnectUrls,
         bool IsGeneralDrop,
         bool IsCurrentCampaign = false,
-        bool NeedsAccountLink = false)
+        bool NeedsAccountLink = false,
+        bool IsRewardCampaign = false)
     {
         /// <summary>
         /// Gets a value indicating whether every reward in the campaign has been claimed.

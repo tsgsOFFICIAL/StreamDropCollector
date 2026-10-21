@@ -521,6 +521,7 @@ namespace Core.Services
 
             await AppendRemainingGameEventDropsAsync(responseArray, inventoryHash, ct);
 
+
             AppLogger.Debug("TwitchGql", "QueryFullDropsDashboard completed successfully.");
             return responseArray;
         }
@@ -745,6 +746,121 @@ namespace Core.Services
             JsonArray? responseArray = JsonNode.Parse(jsonText)?.AsArray();
             AppLogger.Debug("TwitchGql", "QueryInventoryProgress completed successfully.");
             return responseArray?[0]?.AsObject();
+        }
+
+        /// <summary>
+        /// Queries <c>ViewerRewardDropInventory</c>, which carries the viewer's progress (watched minutes, claimed state)
+        /// for reward campaigns. Never throws for Twitch-side failures; reward campaigns are optional extras and must not
+        /// fail the drops load.
+        /// </summary>
+        public async Task<JsonObject?> QueryRewardCampaignProgressAsync(CancellationToken ct = default)
+        {
+            const string operationName = "ViewerRewardDropInventory";
+
+            try
+            {
+                if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_integrityToken) || string.IsNullOrEmpty(_accessToken))
+                {
+                    AppLogger.Debug("TwitchGql", "QueryRewardCampaignProgress skipped - headers unavailable.");
+                    return null;
+                }
+
+                string hash = await GetPersistedQueryHashAsync(operationName, ct, "https://www.twitch.tv/drops/inventory");
+
+                JsonArray payload = new()
+                {
+                    new JsonObject
+                    {
+                        ["operationName"] = operationName,
+                        ["variables"] = new JsonObject(),
+                        ["extensions"] = new JsonObject
+                        {
+                            ["persistedQuery"] = new JsonObject { ["version"] = 1, ["sha256Hash"] = hash }
+                        }
+                    }
+                };
+
+                using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql") { Content = JsonContent.Create(payload) };
+                request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+                request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+                if (!string.IsNullOrEmpty(_deviceId))
+                    request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+                LogOutgoingRequest("QueryRewardCampaignProgress");
+                HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
+                string jsonText = await response.Content.ReadAsStringAsync(ct);
+                AppLogger.Debug("TwitchGql", $"[QueryRewardCampaignProgress] Response body: {jsonText}");
+
+                JsonObject? result = response.IsSuccessStatusCode ? JsonNode.Parse(jsonText)?[0]?.AsObject() : null;
+                if (result?["data"]?["currentUser"]?["inventory"] == null)
+                {
+                    AppLogger.Warn("TwitchGql", $"QueryRewardCampaignProgress returned no inventory. hash={hash}, {DescribeGqlFailure(response, jsonText)}");
+                    return null;
+                }
+
+                return result;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("TwitchGql", $"QueryRewardCampaignProgress failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Captures the page's own <c>DailyViewDropCollection</c> request and replays it as captured. The persisted query
+        /// is tied to the exact number of campaign ids the page sends, so the request is never rebuilt, only resent.
+        /// Never throws for Twitch-side failures.
+        /// </summary>
+        public async Task<JsonObject?> QueryRewardCampaignRulesAsync(CancellationToken ct = default)
+        {
+            const string operationName = "DailyViewDropCollection";
+
+            try
+            {
+                if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_integrityToken) || string.IsNullOrEmpty(_accessToken))
+                    return null;
+
+                await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
+                string captured = await _host.CaptureGqlRequestBodyContainingAsyncWithRetry(operationName, 6000, 2, ct: ct);
+
+                JsonNode? parsed = JsonNode.Parse(captured);
+                IEnumerable<JsonNode?> operations = parsed is JsonArray array ? array : [parsed];
+                JsonObject? operation = operations
+                    .OfType<JsonObject>()
+                    .FirstOrDefault(op => op["operationName"]?.GetValue<string>() == operationName);
+
+                if (operation == null)
+                    return null;
+
+                JsonArray payload = [JsonNode.Parse(operation.ToJsonString())];
+
+                using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql") { Content = JsonContent.Create(payload) };
+                request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+                request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+                if (!string.IsNullOrEmpty(_deviceId))
+                    request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+                LogOutgoingRequest("QueryRewardCampaignRules");
+                HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
+                string jsonText = await response.Content.ReadAsStringAsync(ct);
+                AppLogger.Debug("TwitchGql", $"[QueryRewardCampaignRules] Response body: {jsonText}");
+
+                JsonObject? data = response.IsSuccessStatusCode ? JsonNode.Parse(jsonText)?[0]?["data"]?.AsObject() : null;
+                if (data == null)
+                    AppLogger.Warn("TwitchGql", $"QueryRewardCampaignRules returned no data. {DescribeGqlFailure(response, jsonText)}");
+
+                return data;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("TwitchGql", $"QueryRewardCampaignRules failed: {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>

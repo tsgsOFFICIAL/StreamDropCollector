@@ -78,6 +78,7 @@
                                         <Condition Binding="{Binding IsCurrentCampaign}" Value="False"/>
                                         <Condition Binding="{Binding AllRewardsClaimed}" Value="False"/>
                                         <Condition Binding="{Binding NeedsAccountLink}" Value="False"/>
+                                        <Condition Binding="{Binding IsRewardCampaign}" Value="False"/>
                                     </MultiDataTrigger.Conditions>
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </MultiDataTrigger>

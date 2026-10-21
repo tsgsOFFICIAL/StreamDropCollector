@@ -39,6 +39,9 @@ namespace Core.Services
 
                 KnownGames = CollectKnownGames(activeCampaigns["data"]);
 
+                // "Open reward campaigns" are a separate Twitch system; they are shown but never mined or claimed.
+                List<DropsCampaign> rewardCampaigns = await GetRewardCampaignsAsync(activeCampaigns, ct);
+
                 campaigns?.RemoveAll(campaign =>
                 {
                     if (campaign is not JsonObject campaignObj)
@@ -72,7 +75,7 @@ namespace Core.Services
                 if (campaigns == null || campaigns.Count == 0)
                 {
                     AppLogger.Warn("TwitchDrops", "No Twitch campaigns remained after filtering.");
-                    return [];
+                    return rewardCampaigns.AsReadOnly();
                 }
 
                 List<(string dropID, string channelLogin)> requests = new List<(string dropID, string channelLogin)>();
@@ -93,7 +96,7 @@ namespace Core.Services
                 {
                     AppLogger.Debug("TwitchDrops", "No valid dropIDs to query.");
                     AppLogger.Warn("TwitchDrops", "No valid drop IDs available for details query.");
-                    return [];
+                    return rewardCampaigns.AsReadOnly();
                 }
 
                 // Fetch the full details in batches
@@ -223,8 +226,10 @@ namespace Core.Services
                     updatedResult.Add(updatedCampaign);
                 }
 
+                updatedResult.AddRange(rewardCampaigns);
+
                 // Return the new list
-                AppLogger.Debug("TwitchDrops", $"Active campaigns fetched successfully. count={updatedResult.Count}");
+                AppLogger.Debug("TwitchDrops", $"Active campaigns fetched successfully. count={updatedResult.Count} (rewardCampaigns={rewardCampaigns.Count})");
                 return updatedResult.AsReadOnly();
             }
             catch (Exception ex)
@@ -232,6 +237,164 @@ namespace Core.Services
                 AppLogger.Error("TwitchDrops", "Fetching active campaigns failed.", ex);
                 return [];
             }
+        }
+
+        // Repeat counts per reward group id, learned once per session; they do not change while a campaign runs.
+        private readonly Dictionary<string, int> _repeatTimesByGroupId = [];
+        private bool _repeatRulesAttempted;
+
+        /// <summary>
+        /// Builds the viewer's open reward campaigns from the dashboard's <c>rewardCampaignsAvailableToUser</c> and the
+        /// <c>ViewerRewardDropInventory</c> progress. Only watch-time reward groups are listed; groups that need a paid
+        /// subscription can't be earned by watching and are left out. Failures return an empty list.
+        /// </summary>
+        private async Task<List<DropsCampaign>> GetRewardCampaignsAsync(JsonObject dashboardResponse, CancellationToken ct)
+        {
+            try
+            {
+                JsonArray? available = dashboardResponse["data"]?["rewardCampaignsAvailableToUser"]?.AsArray();
+                if (available == null || available.Count == 0)
+                    return [];
+
+                JsonObject? progress = await gql.QueryRewardCampaignProgressAsync(ct);
+                JsonArray inProgress = progress?["data"]?["currentUser"]?["inventory"]?["viewerRewardDropCampaignsInProgress"]?.AsArray() ?? [];
+
+                await LearnRepeatRulesAsync(available, inProgress, ct);
+
+                List<DropsCampaign> result = [];
+                foreach (JsonObject campaign in available.OfType<JsonObject>())
+                {
+                    DropsCampaign? parsed = ParseRewardCampaign(
+                        campaign,
+                        inProgress.OfType<JsonObject>().FirstOrDefault(c => c["id"]?.GetValue<string>() == campaign["id"]?.GetValue<string>()),
+                        _repeatTimesByGroupId);
+
+                    if (parsed != null)
+                        result.Add(parsed);
+                }
+
+                AppLogger.Debug("TwitchDrops", $"Reward campaigns: available={available.Count}, listed={result.Count}, inProgress={inProgress.Count}");
+                return result;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("TwitchDrops", $"Reading reward campaigns failed; continuing without them. {ex.Message}");
+                return [];
+            }
+        }
+
+        /// <summary>
+        /// A campaign the viewer has not started carries no repeat rules (a "20 minutes on 3 days" reward would look like
+        /// a plain 20 minute one), so Twitch's own rules lookup is replayed once per session when a watch-time group lacks them.
+        /// </summary>
+        private async Task LearnRepeatRulesAsync(JsonArray available, JsonArray inProgress, CancellationToken ct)
+        {
+            if (_repeatRulesAttempted)
+                return;
+
+            HashSet<string?> startedCampaignIds = inProgress.OfType<JsonObject>().Select(c => c["id"]?.GetValue<string>()).ToHashSet();
+            bool needsRules = available.OfType<JsonObject>().Any(c =>
+                !startedCampaignIds.Contains(c["id"]?.GetValue<string>()) &&
+                (c["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>().Any(g =>
+                    (g["unlockRequirements"]?["minuteWatchedGoal"]?.GetValue<int>() ?? 0) > 0 &&
+                    (g["unlockRequirements"]?["subsGoal"]?.GetValue<int>() ?? 0) == 0));
+
+            if (!needsRules)
+                return;
+
+            _repeatRulesAttempted = true;
+            JsonObject? rules = await gql.QueryRewardCampaignRulesAsync(ct);
+            if (rules == null)
+                return;
+
+            foreach (JsonObject campaign in rules.Select(p => p.Value).OfType<JsonObject>())
+            {
+                foreach (JsonObject group in (campaign["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>())
+                {
+                    string? groupId = group["id"]?.GetValue<string>();
+                    int times = group["progressCriteria"]?["repeatableConfig"]?["repeatableTimes"]?.GetValue<int>() ?? 0;
+                    if (groupId != null && times > 1)
+                        _repeatTimesByGroupId[groupId] = times;
+                }
+            }
+
+            AppLogger.Debug("TwitchDrops", $"Learned repeat rules for {_repeatTimesByGroupId.Count} reward group(s).");
+        }
+
+        private static DropsCampaign? ParseRewardCampaign(JsonObject campaign, JsonObject? progress, IReadOnlyDictionary<string, int> learnedRepeatTimes)
+        {
+            string id = campaign["id"]?.GetValue<string>() ?? "";
+            string name = campaign["name"]?.GetValue<string>() ?? "Reward campaign";
+
+            if (!DateTimeOffset.TryParse(campaign["startsAt"]?.GetValue<string>(), out DateTimeOffset startsAt) ||
+                !DateTimeOffset.TryParse(campaign["endsAt"]?.GetValue<string>(), out DateTimeOffset endsAt))
+                return null;
+
+            // The progress response carries each group's viewer state and, once started, its repeat rules.
+            Dictionary<string, JsonObject> progressGroups = (progress?["rewardGroups"]?.AsArray() ?? [])
+                .OfType<JsonObject>()
+                .Where(g => g["id"] != null)
+                .ToDictionary(g => g["id"]!.GetValue<string>(), g => g);
+
+            List<DropsReward> rewards = [];
+            foreach (JsonObject group in (campaign["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>())
+            {
+                JsonObject? requirements = group["unlockRequirements"]?.AsObject();
+                int minutes = requirements?["minuteWatchedGoal"]?.GetValue<int>() ?? 0;
+                int subs = requirements?["subsGoal"]?.GetValue<int>() ?? 0;
+                int turboSubs = requirements?["turboSubsGoal"]?.GetValue<int>() ?? 0;
+                int events = requirements?["eventTriggerGoal"]?.GetValue<int>() ?? 0;
+
+                // Only plain watch-time groups can be earned by watching.
+                if (minutes <= 0 || subs > 0 || turboSubs > 0 || events > 0)
+                    continue;
+
+                string groupId = group["id"]?.GetValue<string>() ?? "";
+                progressGroups.TryGetValue(groupId, out JsonObject? progressGroup);
+                JsonObject? self = progressGroup?["self"]?.AsObject();
+                JsonObject? repeat = progressGroup?["progressCriteria"]?["repeatableConfig"]?.AsObject();
+
+                JsonObject? reward = group["rewards"]?.AsArray().OfType<JsonObject>().FirstOrDefault();
+                string rewardName = reward?["name"]?.GetValue<string>() ?? name;
+                int repeatTimes = repeat?["repeatableTimes"]?.GetValue<int>() ?? learnedRepeatTimes.GetValueOrDefault(groupId);
+                if (repeatTimes > 1)
+                    rewardName += $" (x{repeatTimes} days)";
+
+                bool claimed = self?["status"]?.GetValue<string>() == "CLAIMED";
+                int watched = self?["currentMinutesWatched"]?.GetValue<int>() ?? 0;
+
+                rewards.Add(new DropsReward(
+                    Id: groupId,
+                    Name: rewardName,
+                    ImageUrl: reward?["thumbnailImage"]?["image1xURL"]?.GetValue<string>() ?? reward?["bannerImage"]?["image1xURL"]?.GetValue<string>(),
+                    RequiredMinutes: minutes,
+                    ProgressMinutes: claimed ? minutes : Math.Min(watched, minutes),
+                    IsClaimed: claimed));
+            }
+
+            if (rewards.Count == 0)
+            {
+                AppLogger.Debug("TwitchDrops", $"Skipped reward campaign '{name}' ({id}): no watch-time rewards.");
+                return null;
+            }
+
+            JsonObject? game = campaign["game"]?.AsObject();
+            string brand = campaign["brand"]?.GetValue<string>() ?? "";
+
+            return new DropsCampaign(
+                Id: id,
+                Name: name,
+                Slug: game?["slug"]?.GetValue<string>() ?? "",
+                GameId: game?["id"]?.GetValue<string>(),
+                GameName: game?["displayName"]?.GetValue<string>() ?? (string.IsNullOrWhiteSpace(brand) ? "Twitch" : brand),
+                GameImageUrl: campaign["image"]?["image1xURL"]?.GetValue<string>(),
+                StartsAt: startsAt,
+                EndsAt: endsAt,
+                Rewards: rewards.AsReadOnly(),
+                Platform: Platform.Twitch,
+                ConnectUrls: [],
+                IsGeneralDrop: false,
+                IsRewardCampaign: true);
         }
 
         /// <summary>

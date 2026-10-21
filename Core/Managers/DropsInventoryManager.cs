@@ -142,6 +142,12 @@ namespace Core.Managers
         public ObservableCollection<DropsCampaign> ActiveCampaigns { get; } = new ObservableCollection<DropsCampaign>();
 
         /// <summary>
+        /// Gets the Twitch "open reward campaigns" shown in the inventory. Kept apart from <see cref="ActiveCampaigns"/>
+        /// so the miner and the claim logic never see them.
+        /// </summary>
+        public ObservableCollection<DropsCampaign> RewardCampaigns { get; } = new ObservableCollection<DropsCampaign>();
+
+        /// <summary>
         /// Gets the WebView host used for Twitch drops operations, or null if not yet initialized.
         /// </summary>
         public IWebViewHost? TwitchWebView { get; private set; }
@@ -1007,7 +1013,8 @@ namespace Core.Managers
         {
             _twitchGqlService = twitchGqlService;
             RefreshMiningServices();
-            List<DropsCampaign> allCampaigns = campaigns.ToList();
+            List<DropsCampaign> allCampaigns = campaigns.Where(c => !c.IsRewardCampaign).ToList();
+            List<DropsCampaign> rewardCampaigns = ActiveCampaignFilter.ApplyActiveWindow(campaigns.Where(c => c.IsRewardCampaign));
 
             lock (_campaignSnapshotSync)
             {
@@ -1024,6 +1031,10 @@ namespace Core.Managers
                 ActiveCampaigns.Clear();
                 foreach (DropsCampaign? c in activeCampaignsList)
                     ActiveCampaigns.Add(c);
+
+                RewardCampaigns.Clear();
+                foreach (DropsCampaign rewardCampaign in rewardCampaigns)
+                    RewardCampaigns.Add(rewardCampaign);
 
                 _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
             });
