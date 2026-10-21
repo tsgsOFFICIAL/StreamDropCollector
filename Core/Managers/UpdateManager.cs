@@ -30,6 +30,7 @@ namespace Core.Managers
 
         private const string RepositoryOwner = "tsgsOFFICIAL";
         private const string RepositoryName = "StreamDropCollector";
+        private const string NightlyTag = "nightly";
         private const string ExecutableName = "Stream Drop Collector.exe";
         private const string UninstallerName = "unins000.exe";
         private const string UninstallRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Stream Drop Collector_is1";
@@ -80,7 +81,22 @@ namespace Core.Managers
                 Log(installerInstall ? "Installed with Setup. The update will run the new installer." : "Portable install detected. The update will replace the files in place.");
 
                 Log("Contacting GitHub for the latest release...");
-                ReleaseAsset asset = await GetLatestReleaseAssetAsync(installerInstall, cancellationToken);
+                ReleaseAsset asset = await GetReleaseAssetAsync("latest", installerInstall, cancellationToken);
+
+                if (UISettingsManager.Instance.IncludeBetaUpdates)
+                {
+                    Log("Beta updates are enabled. Checking the nightly build...");
+                    string? betaVersion = await GetBetaVersionAsync(cancellationToken);
+                    FileVersionInfo local = FileVersionInfo.GetVersionInfo(Utility.GetExePath());
+
+                    if (IsBetaNewer(betaVersion, local.ProductVersion, local.FileVersion)
+                        && Version.TryParse(BaseVersion(betaVersion!), out Version? betaBase)
+                        && (!Version.TryParse(asset.Version, out Version? stableVersion) || betaBase >= stableVersion))
+                    {
+                        asset = await GetReleaseAssetAsync("tags/nightly", installerInstall, cancellationToken);
+                    }
+                }
+
                 Log($"Found {asset.Name} ({asset.Version}).");
 
                 downloadPath = Path.Combine(Path.GetTempPath(), asset.Name);
@@ -205,9 +221,60 @@ namespace Core.Managers
         /// </summary>
         private static bool IsSelfContained() => File.Exists(Path.Combine(InstallDirectory, "System.Private.CoreLib.dll"));
 
-        private async Task<ReleaseAsset> GetLatestReleaseAssetAsync(bool installerInstall, CancellationToken cancellationToken)
+        /// <summary>
+        /// Gets the version of the current nightly (beta) build, for example "1.3.0-nightly.abc1234".
+        /// </summary>
+        /// <returns>The version, or <see langword="null"/> when there is no nightly build or it could not be read.</returns>
+        public static async Task<string?> GetBetaVersionAsync(CancellationToken cancellationToken = default)
         {
-            string url = $"https://api.github.com/repos/{RepositoryOwner}/{RepositoryName}/releases/latest";
+            try
+            {
+                using HttpResponseMessage response = await Client.GetAsync($"https://api.github.com/repos/{RepositoryOwner}/{RepositoryName}/releases/tags/{NightlyTag}", cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                    return null;
+
+                using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+                return ParseNightlyVersion(document.RootElement.GetProperty("name").GetString());
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
+            {
+                AppLogger.Warn("UpdateManager", $"Could not check for beta updates: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Determines whether a nightly build is worth offering over the running build: it must be a different build and
+        /// not belong to an older release line.
+        /// </summary>
+        public static bool IsBetaNewer(string? betaVersion, string? localProductVersion, string? localFileVersion)
+        {
+            if (string.IsNullOrWhiteSpace(betaVersion) || string.Equals(betaVersion, localProductVersion, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return Version.TryParse(BaseVersion(betaVersion), out Version? betaBase)
+                && Version.TryParse(localFileVersion, out Version? local)
+                && betaBase >= local;
+        }
+
+        private static string BaseVersion(string version) => version.Split('-', 2)[0];
+
+        /// <summary>Pulls the version out of a nightly release title such as "Nightly Build (1.3.0-nightly.abc1234)".</summary>
+        private static string? ParseNightlyVersion(string? releaseName)
+        {
+            if (releaseName is null)
+                return null;
+
+            int start = releaseName.IndexOf('(');
+            int end = releaseName.LastIndexOf(')');
+            return start >= 0 && end > start ? releaseName[(start + 1)..end] : null;
+        }
+
+        private async Task<ReleaseAsset> GetReleaseAssetAsync(string release, bool installerInstall, CancellationToken cancellationToken)
+        {
+            string url = $"https://api.github.com/repos/{RepositoryOwner}/{RepositoryName}/releases/{release}";
 
             for (int attempt = 1; ; attempt++)
             {
@@ -220,7 +287,9 @@ namespace Core.Managers
                     using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
 
                     string tag = document.RootElement.GetProperty("tag_name").GetString() ?? "";
-                    string version = tag.TrimStart('v');
+                    string version = tag == NightlyTag
+                        ? ParseNightlyVersion(document.RootElement.GetProperty("name").GetString()) ?? tag
+                        : tag.TrimStart('v');
 
                     string suffix = installerInstall
                         ? "-Setup.exe"

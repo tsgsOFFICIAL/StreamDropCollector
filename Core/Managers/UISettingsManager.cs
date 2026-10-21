@@ -73,6 +73,7 @@ namespace Core.Managers
         private bool _notifyOnAutoClaimed = true;
         private bool _verboseDebugLogging;
         private bool _updateAvailable = false;
+        private bool _includeBetaUpdates = false;
         private bool _notifyOnNewUpdateAvailable = true;
         private DateTime? _lastUpdateCheck = null;
         private MiningPriorityMode _miningPriorityMode = MiningPriorityMode.AvailabilityThenProgress;
@@ -312,6 +313,24 @@ namespace Core.Managers
             set => SetField(ref _verboseDebugLogging, value);
         }
         /// <summary>
+        /// Gets or sets a value indicating whether update checks also offer beta (nightly) builds.
+        /// </summary>
+        public bool IncludeBetaUpdates
+        {
+            get => _includeBetaUpdates;
+            set
+            {
+                if (_includeBetaUpdates == value)
+                    return;
+
+                SetField(ref _includeBetaUpdates, value);
+
+                if (!_isLoadingSettings && UpdateFrequency != UpdateFrequency.Never)
+                    _ = CheckForUpdatesAsync(true, force: true);
+            }
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether a software update is available.
         /// </summary>
         public bool UpdateAvailable
@@ -405,14 +424,14 @@ namespace Core.Managers
             _ = CheckForUpdatesAsync(); // Fire and forget
         }
 
-        private async Task CheckForUpdatesAsync(bool skipLoad = false)
+        private async Task CheckForUpdatesAsync(bool skipLoad = false, bool force = false)
         {
             if (UpdateFrequency != UpdateFrequency.Never)
             {
                 if (!skipLoad)
                     LoadSettings(); // Ensure we have the latest settings, this includes last time we checked for an update
 
-                if (_lastUpdateCheck.HasValue)
+                if (_lastUpdateCheck.HasValue && !force)
                 {
                     TimeSpan timeSinceLastCheck = DateTime.Now - _lastUpdateCheck.Value;
 
@@ -500,6 +519,12 @@ namespace Core.Managers
                 else
                     UpdateAvailable = false;
 
+                if (IncludeBetaUpdates && !UpdateAvailable)
+                {
+                    string? betaVersion = await UpdateManager.GetBetaVersionAsync();
+                    UpdateAvailable = UpdateManager.IsBetaNewer(betaVersion, localVersionInfo.ProductVersion, localVersionInfo.FileVersion);
+                }
+
                 _lastUpdateCheck = DateTime.Now;
                 SaveSettings();
             }
@@ -528,6 +553,7 @@ namespace Core.Managers
                     RunInBackground = settings.RunInBackground;
                     Theme = settings.Theme ?? "System";
                     UpdateFrequency = settings.UpdateFrequency;
+                    IncludeBetaUpdates = settings.IncludeBetaUpdates;
                     AutoClaimRewards = settings.AutoClaimRewards;
                     MiningPriorityMode = settings.MiningPriorityMode;
                     KickLevelFarming = settings.KickLevelFarming;
@@ -578,6 +604,7 @@ namespace Core.Managers
                     RunInBackground = RunInBackground,
                     Theme = Theme,
                     UpdateFrequency = UpdateFrequency,
+                    IncludeBetaUpdates = IncludeBetaUpdates,
                     AutoClaimRewards = AutoClaimRewards,
                     MiningPriorityMode = MiningPriorityMode,
                     KickLevelFarming = KickLevelFarming,

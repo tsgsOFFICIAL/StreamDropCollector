@@ -69,6 +69,15 @@
                             </ComboBox>
                         </StackPanel>
 
+                        <CheckBox IsChecked="{Binding IncludeBetaUpdates, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Include beta updates"
+                                  Margin="0,0,0,4"/>
+                        <TextBlock Text="Get the newest changes before they're released. May be unstable."
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   FontSize="12"
+                                   Margin="0,0,0,12"/>
+
                         <TextBlock Text="A new update is available, update now to experience the newest features!"
                                    Foreground="{DynamicResource TextMutedBrush}"
                                    FontSize="12"
