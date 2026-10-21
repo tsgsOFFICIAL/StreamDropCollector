@@ -148,14 +148,18 @@ namespace Core.Managers
         public ObservableCollection<DropsCampaign> RewardCampaigns { get; } = new ObservableCollection<DropsCampaign>();
 
         /// <summary>
-        /// Gets the WebView host used for Twitch drops operations, or null if not yet initialized.
+        /// Gets the WebView host used for Twitch drops operations, or null if not yet initialized or the account is not logged in.
         /// </summary>
-        public IWebViewHost? TwitchWebView { get; private set; }
+        public IWebViewHost? TwitchWebView => _isAuthenticated ? _twitchHost : null;
 
         /// <summary>
-        /// Gets the WebView host used for Kick drops operations, or null if not yet initialized.
+        /// Gets the WebView host used for Kick drops operations, or null if not yet initialized or the account is not logged in.
         /// </summary>
-        public IWebViewHost? KickWebView { get; private set; }
+        public IWebViewHost? KickWebView => _isAuthenticated ? _kickHost : null;
+
+        private IWebViewHost? _twitchHost;
+        private IWebViewHost? _kickHost;
+        private volatile bool _isAuthenticated;
 
         /// <summary>
         /// Occurs when live Twitch campaign or drop progress percentages change.
@@ -666,11 +670,33 @@ namespace Core.Managers
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="twitch"/> or <paramref name="kick"/> is null.</exception>
         public void InitializeWebViews(IWebViewHost? twitch, IWebViewHost? kick)
         {
-            TwitchWebView = twitch;
-            KickWebView = kick;
+            _twitchHost = twitch;
+            _kickHost = kick;
             RefreshMiningServices();
             ScheduleKickStreamerMetadataRefresh();
             ScheduleTwitchStreamerMetadataRefresh();
+        }
+
+        /// <summary>
+        /// Sets whether the account is logged in. While it is not, the web views are withheld from every mining and
+        /// metadata path, and losing the login stops any mining that was running.
+        /// </summary>
+        public void SetAuthenticated(bool authenticated)
+        {
+            if (_isAuthenticated == authenticated)
+                return;
+
+            _isAuthenticated = authenticated;
+            RefreshMiningServices();
+
+            if (authenticated)
+            {
+                ScheduleKickStreamerMetadataRefresh();
+                ScheduleTwitchStreamerMetadataRefresh();
+                return;
+            }
+
+            _ = PauseMiningAsync();
         }
 
         /// <summary>

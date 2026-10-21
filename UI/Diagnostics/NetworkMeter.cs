@@ -47,6 +47,42 @@ namespace UI.Diagnostics
         /// <summary>Gets the total bytes sent to the network (uploaded) so far.</summary>
         public long BytesSent => Interlocked.Read(ref _sentBytes);
 
+        private const double SampleIntervalSeconds = 0.9;
+        private const double LiveWindowSeconds = 10;
+
+        private readonly object _sampleGate = new();
+        private readonly Queue<(DateTime At, long Bytes)> _samples = new();
+        private DateTime _lastSampleAt = DateTime.MinValue;
+        private long _sampledBytes;
+        private double _sampledLiveMbps;
+
+        /// <summary>
+        /// Gets the total downloaded and the live rate (average over the last ~10 seconds), sampled by the meter itself
+        /// so every account on a shared profile reads the same values whenever it asks.
+        /// </summary>
+        public (long Bytes, double LiveMbps) Sample()
+        {
+            lock (_sampleGate)
+            {
+                DateTime now = DateTime.UtcNow;
+                if ((now - _lastSampleAt).TotalSeconds < SampleIntervalSeconds)
+                    return (_sampledBytes, _sampledLiveMbps);
+
+                long total = BytesReceived;
+                _samples.Enqueue((now, total));
+                while (_samples.Count > 1 && (now - _samples.Peek().At).TotalSeconds > LiveWindowSeconds)
+                    _samples.Dequeue();
+
+                (DateTime oldestAt, long oldestBytes) = _samples.Peek();
+                double seconds = (now - oldestAt).TotalSeconds;
+
+                _lastSampleAt = now;
+                _sampledBytes = total;
+                _sampledLiveMbps = seconds > 0.5 ? (total - oldestBytes) * 8 / seconds / 1_000_000 : 0;
+                return (_sampledBytes, _sampledLiveMbps);
+            }
+        }
+
         /// <summary>Starts listening on a free loopback port.</summary>
         public NetworkMeter()
         {
@@ -192,6 +228,14 @@ namespace UI.Diagnostics
             }
 
             Interlocked.Exchange(ref _startedTicks, DateTime.UtcNow.Ticks);
+
+            lock (_sampleGate)
+            {
+                _samples.Clear();
+                _lastSampleAt = DateTime.MinValue;
+                _sampledBytes = 0;
+                _sampledLiveMbps = 0;
+            }
         }
 
         /// <summary>Stops the proxy.</summary>

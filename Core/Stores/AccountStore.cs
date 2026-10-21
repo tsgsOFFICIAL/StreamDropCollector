@@ -34,7 +34,7 @@ namespace Core.Stores
 
         /// <summary>
         /// Loads the saved accounts. On first run (no file) returns one legacy Twitch and one legacy Kick account that
-        /// reuse the original browser profile so existing logins keep working.
+        /// reuse the original browser profile so existing logins keep working, or no accounts when that profile does not exist.
         /// </summary>
         public List<AccountModel> Load()
         {
@@ -55,15 +55,24 @@ namespace Core.Stores
                 }
             }
 
-            List<AccountModel> defaults =
-            [
-                new AccountModel { Id = "legacy-twitch", Platform = Platform.Twitch, DisplayName = "Twitch account", UsesLegacyProfile = true },
-                new AccountModel { Id = "legacy-kick", Platform = Platform.Kick, DisplayName = "Kick account", UsesLegacyProfile = true }
-            ];
+            // Only users who ran a version before multi-account support have a profile to carry over; new users add accounts themselves.
+            List<AccountModel> defaults = LegacyProfileExists()
+                ?
+                [
+                    new AccountModel { Id = "legacy-twitch", Platform = Platform.Twitch, DisplayName = "Twitch account", UsesLegacyProfile = true },
+                    new AccountModel { Id = "legacy-kick", Platform = Platform.Kick, DisplayName = "Kick account", UsesLegacyProfile = true }
+                ]
+                : [];
 
             Save(defaults);
             return defaults;
         }
+
+        /// <summary>
+        /// Whether the original shared WebView2 profile (used before multi-account support) exists on disk.
+        /// </summary>
+        private static bool LegacyProfileExists() =>
+            Directory.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Stream Drop Collector.exe.WebView2", "EBWebView"));
 
         /// <summary>
         /// Saves the given accounts.

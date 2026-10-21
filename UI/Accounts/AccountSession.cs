@@ -74,7 +74,6 @@ namespace UI.Accounts
 
         private HiddenWebViewHost? _host;
         private System.Windows.Threading.DispatcherTimer? _netTimer;
-        private readonly Queue<(DateTime At, long Bytes)> _netSamples = new();
         private DateTime _lastNetLogUtc;
         private long _lastNetLogBytes;
         private long _lastNetTotal;
@@ -172,7 +171,6 @@ namespace UI.Accounts
                 return;
 
             meter.Reset();
-            _netSamples.Clear();
             _lastNetLogUtc = DateTime.UtcNow;
             _lastNetLogBytes = 0;
             _lastNetTotal = 0;
@@ -186,7 +184,6 @@ namespace UI.Accounts
             if (_host?.NetworkMeter == null)
                 return;
 
-            _netSamples.Clear();
             _lastNetLogUtc = DateTime.UtcNow;
             _lastNetLogBytes = 0;
 
@@ -233,27 +230,19 @@ namespace UI.Accounts
             }
 
             DateTime now = DateTime.UtcNow;
-            long total = meter.BytesReceived;
+
+            // Sampled by the meter, so accounts sharing a profile show identical numbers.
+            (long total, double liveMbps) = meter.Sample();
 
             // The total only drops when the (possibly shared) meter was reset from elsewhere.
             if (total < _lastNetTotal)
             {
                 _lastHostSnapshot = new Dictionary<string, long>();
-                _netSamples.Clear();
                 _lastNetLogUtc = now;
                 _lastNetLogBytes = 0;
             }
 
             _lastNetTotal = total;
-
-            // Live rate: average over the last ~10 seconds.
-            _netSamples.Enqueue((now, total));
-            while (_netSamples.Count > 1 && (now - _netSamples.Peek().At).TotalSeconds > 10)
-                _netSamples.Dequeue();
-
-            (DateTime oldestAt, long oldestBytes) = _netSamples.Peek();
-            double liveSeconds = (now - oldestAt).TotalSeconds;
-            double liveMbps = liveSeconds > 0.5 ? (total - oldestBytes) * 8 / liveSeconds / 1_000_000 : 0;
 
             double sinceLaunchSeconds = Math.Max(1, (now - meter.StartedAtUtc).TotalSeconds);
             double averageMbps = total * 8 / sinceLaunchSeconds / 1_000_000;
@@ -312,6 +301,8 @@ namespace UI.Accounts
             {
                 Engine.InitializeWebViews(null, _host);
             }
+
+            Engine.SetAuthenticated(_loginService.Status == ConnectionStatus.Connected);
         }
 
         /// <summary>
@@ -323,6 +314,7 @@ namespace UI.Accounts
             StopNetworkUsageTimer();
             _host = null;
             _gqlService = null;
+            Engine.SetAuthenticated(false);
             Engine.InitializeWebViews(null, null);
 
             if (host == null)
@@ -645,7 +637,7 @@ namespace UI.Accounts
 
             Engine.MinerStatusChanged += status => OnUi(() =>
             {
-                if (!Enabled)
+                if (!Enabled || !IsConnected)
                     return;
 
                 switch (status)
@@ -664,6 +656,12 @@ namespace UI.Accounts
             {
                 string platform = PlatformName;
                 Connection.LoginButtonText = "Checking...";
+
+                // Withhold the browser from the engine until the login is confirmed; a lost login stops mining.
+                if (status == ConnectionStatus.Connected)
+                    Engine.SetAuthenticated(true);
+                else if (status == ConnectionStatus.NotConnected)
+                    Engine.SetAuthenticated(false);
 
                 switch (status)
                 {
