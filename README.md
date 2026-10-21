@@ -40,6 +40,7 @@
 - Live progress tracking: real-time percentage and mined channel display
 - Clean modern UI: built with WPF, dark mode, responsive cards
 - Background operation: runs quietly while you do whatever you want
+- Optional beta updates: opt in under Settings → Updates to also receive nightly builds alongside stable releases
 
 ## Privacy & Safety
 
@@ -52,12 +53,17 @@
 ## Screenshots
 
 ![Dashboard](https://github.com/tsgsOFFICIAL/StreamDropCollector/blob/master/Github-Assets/Dashboard.png?raw=true)
-_Main dashboard showing live progress for both platforms_
+_Main dashboard with every Twitch and Kick account mining in parallel, each with its own live progress and network usage_
 
 ---
 
 ![Inventory](https://github.com/tsgsOFFICIAL/StreamDropCollector/blob/master/Github-Assets/Inventory.png?raw=true)
-_Active campaigns and rewards overview_
+_Active campaigns, eligible streamers and reward progress per account_
+
+---
+
+![Settings](https://github.com/tsgsOFFICIAL/StreamDropCollector/blob/master/Github-Assets/Settings.png?raw=true)
+_Settings, including update frequency and the optional beta update channel_
 
 ---
 
