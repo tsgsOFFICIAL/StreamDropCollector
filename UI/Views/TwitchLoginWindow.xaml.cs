@@ -40,6 +40,20 @@ namespace UI.Views
 
             Web.NavigationCompleted -= OnNavigationCompleted;
             _ = PollAndCloseWhenLoggedInAsync();
+            _ = RejectCookieBannerAsync();
+        }
+
+        private async Task RejectCookieBannerAsync()
+        {
+            try
+            {
+                await PlatformLoginDetector.RejectTwitchCookieBannerAsync(
+                    script => Web.ExecuteScriptAsync(script),
+                    cancellationToken: _cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
         private async Task PollAndCloseWhenLoggedInAsync()

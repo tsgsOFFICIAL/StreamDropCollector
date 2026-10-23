@@ -28,6 +28,10 @@ namespace Core.Helpers
         private const string KickCookieBannerSelector = "#onetrust-banner-sdk";
         private const string KickCookieRejectSelector = "#onetrust-reject-all-handler";
         private const string KickCookieSdkSelector = "#onetrust-consent-sdk";
+        private const string TwitchCookieBannerSelector = "[data-a-target='consent-banner']";
+        private const string TwitchCookieAcceptSelector = "[data-a-target='consent-banner-accept']";
+        private const string TwitchCookieCustomizeSelector = "[data-a-target='consent-banner-manage-preferences']";
+        private const int TwitchCookieBannerGraceMs = 8000;
         private const int KickCookieSdkGraceMs = 8000;
         private const int KickLoginClickRetryMs = 2000;
 
@@ -297,6 +301,77 @@ namespace Core.Helpers
                     elapsed += pollIntervalMs;
             }
 
+            return false;
+        }
+
+        /// <summary>
+        /// Builds a script that rejects Twitch's cookie banner when it is visible and returns <c>"banner"</c>, else <c>"idle"</c>.
+        /// Reject has no stable attribute, so it is the banner button that is neither Accept nor Customize.
+        /// </summary>
+        public static string BuildTwitchRejectCookieBannerScript()
+        {
+            string banner = JsonSerializer.Serialize(TwitchCookieBannerSelector);
+            string accept = JsonSerializer.Serialize(TwitchCookieAcceptSelector);
+            string customize = JsonSerializer.Serialize(TwitchCookieCustomizeSelector);
+
+            return $$"""
+                (() => {
+                    const visible = el => {
+                        const r = el.getBoundingClientRect();
+                        return r.width > 0 && r.height > 0;
+                    };
+                    const banner = [...document.querySelectorAll({{banner}})].find(visible);
+                    if (!banner) return 'idle';
+                    const reject = [...banner.querySelectorAll('button')].find(b =>
+                        visible(b) && !b.matches({{accept}}) && !b.matches({{customize}}) && (b.innerText || '').trim().length > 0);
+                    reject?.click();
+                    return 'banner';
+                })()
+                """;
+        }
+
+        /// <summary>
+        /// Rejects Twitch's cookie banner once it appears, so it no longer covers the login form.
+        /// Returns <see langword="true"/> when a banner was seen and has gone, <see langword="false"/> if none appeared in time.
+        /// </summary>
+        public static async Task<bool> RejectTwitchCookieBannerAsync(
+            Func<string, Task<string>> executeScriptAsync,
+            int pollIntervalMs = DefaultPollIntervalMs,
+            CancellationToken cancellationToken = default)
+        {
+            string script = BuildTwitchRejectCookieBannerScript();
+            bool sawBanner = false;
+            int elapsed = 0;
+
+            while (!cancellationToken.IsCancellationRequested && (sawBanner || elapsed < TwitchCookieBannerGraceMs))
+            {
+                string step;
+                try
+                {
+                    step = (await executeScriptAsync(script))?.Trim('"') ?? "";
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppLogger.Debug("LoginDetect", $"RejectTwitchCookieBannerAsync script failed: {ex.Message}");
+                    step = "";
+                }
+
+                if (step == "banner" && !sawBanner)
+                {
+                    sawBanner = true;
+                    AppLogger.Debug("LoginDetect", $"RejectTwitchCookieBannerAsync rejecting banner after {elapsed}ms.");
+                }
+                else if (step == "idle" && sawBanner)
+                {
+                    AppLogger.Debug("LoginDetect", $"RejectTwitchCookieBannerAsync banner dismissed after {elapsed}ms.");
+                    return true;
+                }
+
+                await Task.Delay(pollIntervalMs, cancellationToken);
+                elapsed += pollIntervalMs;
+            }
+
+            AppLogger.Debug("LoginDetect", $"RejectTwitchCookieBannerAsync finished after {elapsed}ms (sawBanner={sawBanner}).");
             return false;
         }
 
