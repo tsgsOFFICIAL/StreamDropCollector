@@ -26,12 +26,16 @@ namespace UI.Views
             AccountSettingsOverrides overrides = session.Model.Overrides;
             TitleText.Text = $"{session.DisplayName} ({session.PlatformName})";
             LevelFarmingCard.Visibility = session.Model.Platform == Platform.Kick ? Visibility.Visible : Visibility.Collapsed;
+            DailyClaimCard.Visibility = LevelFarmingCard.Visibility;
 
             UseGlobalAutoClaim.IsChecked = overrides.AutoClaimRewards is null;
             AutoClaimBox.IsChecked = overrides.AutoClaimRewards ?? Core.Managers.UISettingsManager.Instance.AutoClaimRewards;
 
             UseGlobalLevelFarming.IsChecked = overrides.KickLevelFarming is null;
             LevelFarmingBox.IsChecked = overrides.KickLevelFarming ?? Core.Managers.UISettingsManager.Instance.KickLevelFarming;
+
+            UseGlobalDailyClaim.IsChecked = overrides.KickDailyClaim is null;
+            DailyClaimBox.IsChecked = overrides.KickDailyClaim ?? Core.Managers.UISettingsManager.Instance.KickDailyClaim;
 
             UseGlobalPriority.IsChecked = overrides.MiningPriorityMode is null;
             PriorityBox.SelectedValue = overrides.MiningPriorityMode ?? Core.Managers.UISettingsManager.Instance.MiningPriorityMode;
@@ -81,6 +85,9 @@ namespace UI.Views
             overrides.KickLevelFarming = _session.Model.Platform != Platform.Kick || UseGlobalLevelFarming.IsChecked == true
                 ? null
                 : LevelFarmingBox.IsChecked == true;
+            overrides.KickDailyClaim = _session.Model.Platform != Platform.Kick || UseGlobalDailyClaim.IsChecked == true
+                ? null
+                : DailyClaimBox.IsChecked == true;
             overrides.MiningPriorityMode = UseGlobalPriority.IsChecked == true || PriorityBox.SelectedValue is not MiningPriorityMode mode
                 ? null
                 : mode;

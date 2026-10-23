@@ -14,6 +14,9 @@ namespace Core.Models
         /// <summary>Overrides Kick level farming; <see langword="null"/> uses the global setting.</summary>
         public bool? KickLevelFarming { get; set; }
 
+        /// <summary>Overrides claiming the Kick daily reward; <see langword="null"/> uses the global setting.</summary>
+        public bool? KickDailyClaim { get; set; }
+
         /// <summary>Overrides the mining priority; <see langword="null"/> uses the global setting.</summary>
         public MiningPriorityMode? MiningPriorityMode { get; set; }
 
@@ -34,7 +37,7 @@ namespace Core.Models
 
         /// <summary>Gets a value indicating whether any setting is overridden.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
-        public bool HasAny => AutoClaimRewards.HasValue || KickLevelFarming.HasValue
+        public bool HasAny => AutoClaimRewards.HasValue || KickLevelFarming.HasValue || KickDailyClaim.HasValue
             || MiningPriorityMode.HasValue || PrioritizeBadges.HasValue || HeadOnlyMining.HasValue || GameWhitelistSlugs != null;
     }
 

@@ -88,6 +88,7 @@ namespace Core.Managers
         private readonly object _knownGamesFileLock = new();
         private bool _knownGamesLoaded;
         private bool _kickLevelFarming;
+        private bool _kickDailyClaim;
         private bool _prioritizeBadges;
         private bool _headOnlyMining;
         private bool _hideCompletedCampaigns = true;
@@ -223,6 +224,14 @@ namespace Core.Managers
                 if (SetField(ref _kickLevelFarming, value) && !_isLoadingSettings)
                     KickLevelFarmingChanged?.Invoke(value);
             }
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether the Kick daily reward is claimed automatically once its watch time is reached.
+        /// </summary>
+        public bool KickDailyClaim
+        {
+            get => _kickDailyClaim;
+            set => SetField(ref _kickDailyClaim, value);
         }
         /// <summary>
         /// Gets or sets a value indicating whether mining only requests stream segments with HEAD instead of playing the
@@ -557,6 +566,7 @@ namespace Core.Managers
                     AutoClaimRewards = settings.AutoClaimRewards;
                     MiningPriorityMode = settings.MiningPriorityMode;
                     KickLevelFarming = settings.KickLevelFarming;
+                    KickDailyClaim = settings.KickDailyClaim;
                     PrioritizeBadges = settings.PrioritizeBadges;
                     HeadOnlyMining = settings.HeadOnlyMining;
                     HideCompletedCampaigns = settings.HideCompletedCampaigns;
@@ -608,6 +618,7 @@ namespace Core.Managers
                     AutoClaimRewards = AutoClaimRewards,
                     MiningPriorityMode = MiningPriorityMode,
                     KickLevelFarming = KickLevelFarming,
+                    KickDailyClaim = KickDailyClaim,
                     PrioritizeBadges = PrioritizeBadges,
                     HeadOnlyMining = HeadOnlyMining,
                     HideCompletedCampaigns = HideCompletedCampaigns,

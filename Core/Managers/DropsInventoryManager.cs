@@ -43,6 +43,11 @@ namespace Core.Managers
         public bool EffectiveKickLevelFarming => Account.Overrides.KickLevelFarming ?? UISettingsManager.Instance.KickLevelFarming;
 
         /// <summary>
+        /// Gets whether the Kick daily reward is claimed for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveKickDailyClaim => Account.Overrides.KickDailyClaim ?? UISettingsManager.Instance.KickDailyClaim;
+
+        /// <summary>
         /// Gets whether badge campaigns are mined first for this account (account override, else global setting).
         /// </summary>
         public bool EffectivePrioritizeBadges => Account.Overrides.PrioritizeBadges ?? UISettingsManager.Instance.PrioritizeBadges;
@@ -313,6 +318,12 @@ namespace Core.Managers
         private readonly System.Timers.Timer _progressVerifyTimer = new(TimeSpan.FromMinutes(2).TotalMilliseconds);
         private readonly System.Timers.Timer _kickLevelTimer = new(TimeSpan.FromSeconds(30).TotalMilliseconds);
         private int _kickLevelRefreshing;
+        private int _kickDailyChecking;
+        private DateTime _lastKickDailyCheck = DateTime.MinValue;
+        private string? _kickDailyAttemptChallengeId;
+        private int _kickDailyAttempts;
+        private static readonly TimeSpan KickDailyCheckInterval = TimeSpan.FromMinutes(5);
+        private const int KickDailyMaxClaimAttempts = 3;
         private System.Timers.Timer? _recheckTimer;
         private readonly SemaphoreSlim _progressVerifyLock = new(1, 1);
         private int _progressVerifyScheduled;
@@ -395,7 +406,11 @@ namespace Core.Managers
             _progressVerifyTimer.Elapsed += (_, _) => ScheduleServerProgressVerification();
             _progressVerifyTimer.AutoReset = true;
 
-            _kickLevelTimer.Elapsed += (_, _) => ScheduleKickLevelRefresh();
+            _kickLevelTimer.Elapsed += (_, _) =>
+            {
+                ScheduleKickLevelRefresh();
+                ScheduleKickDailyCheck();
+            };
             _kickLevelTimer.AutoReset = true;
 
             _kickMetadataTimer.Elapsed += (_, _) => ScheduleKickStreamerMetadataRefresh();
@@ -1488,6 +1503,65 @@ namespace Core.Managers
                 finally
                 {
                     Interlocked.Exchange(ref _kickLevelRefreshing, 0);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Checks the Kick daily reward (at most every few minutes, while a Kick stream is watched) and claims it once
+        /// its watch time is reached. Gives up on a challenge after a few failed claims.
+        /// </summary>
+        private void ScheduleKickDailyCheck()
+        {
+            if (_isPaused || !EffectiveKickDailyClaim || KickWebView is not { } host || _selection.CurrentKickCampaign == null)
+                return;
+
+            if (DateTime.Now - _lastKickDailyCheck < KickDailyCheckInterval)
+                return;
+
+            if (Interlocked.CompareExchange(ref _kickDailyChecking, 1, 0) != 0)
+                return;
+
+            _lastKickDailyCheck = DateTime.Now;
+
+            _ = Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    KickChallenge? daily = await KickDailyRewardClient.FetchDailyAsync(host);
+                    if (daily == null)
+                    {
+                        AppLogger.Debug("KickDaily", "No daily challenge returned.");
+                        return;
+                    }
+
+                    AppLogger.Debug("KickDaily", $"Daily '{daily.Name}' status={daily.Status} progress={daily.Progress}/{daily.Threshold}.");
+
+                    if (!daily.IsClaimable)
+                        return;
+
+                    if (_kickDailyAttemptChallengeId != daily.Id)
+                    {
+                        _kickDailyAttemptChallengeId = daily.Id;
+                        _kickDailyAttempts = 0;
+                    }
+
+                    if (_kickDailyAttempts >= KickDailyMaxClaimAttempts)
+                        return;
+
+                    _kickDailyAttempts++;
+                    if (await KickDailyRewardClient.ClaimAsync(host, daily))
+                        AppLogger.Info("KickDaily", "Claimed Kick daily reward.");
+                    else
+                        _lastKickDailyCheck = DateTime.MinValue;
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("KickDaily", $"Daily reward check failed: {ex.Message}");
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _kickDailyChecking, 0);
                 }
             });
         }

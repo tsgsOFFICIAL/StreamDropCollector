@@ -85,6 +85,10 @@ namespace Core.Models
         /// </summary>
         public bool KickLevelFarming { get; set; }
         /// <summary>
+        /// Gets or sets a value indicating whether the Kick daily reward is claimed automatically once its watch time is reached.
+        /// </summary>
+        public bool KickDailyClaim { get; set; }
+        /// <summary>
         /// Gets or sets the Twitch game slug whitelist used to filter eligible campaigns.
         /// </summary>
         public List<string> TwitchGameWhitelistSlugs { get; set; } = new List<string>();

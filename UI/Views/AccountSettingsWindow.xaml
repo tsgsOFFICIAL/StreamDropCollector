@@ -48,6 +48,19 @@
                     </StackPanel>
                 </Border>
 
+                <Border x:Name="DailyClaimCard" Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Kick daily reward" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="UseGlobalDailyClaim" Content="Use global setting"
+                                  Style="{StaticResource ModernCheckBoxStyle}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="DailyClaimBox" Content="Claim the Kick daily reward when ready"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  IsEnabled="{Binding IsChecked, ElementName=UseGlobalDailyClaim, Converter={StaticResource InverseBooleanConverter}}"/>
+                        <TextBlock Text="Needs 60 minutes of Kick watch time a day. Kick level farming is recommended ON so the miner keeps watching when no drops are available."
+                                   TextWrapping="Wrap" Opacity="0.7" FontSize="12" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Border>
+
                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="Mining priority" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
