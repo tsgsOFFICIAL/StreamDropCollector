@@ -14,6 +14,9 @@ namespace Core.Mining
     {
         private readonly DropClaimService _dropClaimService = new();
 
+        /// <summary>How soon to re-check for a live campaign streamer while level farming only as a fallback.</summary>
+        private static readonly TimeSpan KickCampaignRecheckWhileFarming = TimeSpan.FromMinutes(5);
+
         /// <summary>
         /// Runs one mining evaluation cycle against the provided campaign snapshot.
         /// </summary>
@@ -179,6 +182,7 @@ namespace Core.Mining
                     $"MiningOrchestrator twitchResult OK campaign='{twitchResult.Campaign.Name}' login={twitchResult.Login} url={twitchResult.StreamUrl}");
 
             PlatformMiningResult? kickResult = null;
+            bool farmingWhileKickCampaignsPending = false;
             if (kickCampaigns.Count == 0)
             {
                 AppLogger.Warn("KickSelection", "MiningOrchestrator SKIP Kick selection - no Kick campaigns with progress.");
@@ -202,6 +206,13 @@ namespace Core.Mining
                     lastMinedStreamers,
                     onKickSelectionPreview,
                     cancellationToken);
+
+                if (kickResult is null)
+                {
+                    AppLogger.Info("Miner", "No eligible live streamer for any Kick campaign with progress; falling back to level farming.");
+                    kickResult = await TryFarmKickAsync();
+                    farmingWhileKickCampaignsPending = kickResult != null;
+                }
             }
 
             if (kickResult is null)
@@ -216,6 +227,11 @@ namespace Core.Mining
 
             if (kickResult?.SuggestedNextCheckAt != null)
                 nextCheckAt = MiningBaselineInitializer.Earliest(nextCheckAt, kickResult.SuggestedNextCheckAt);
+
+            // The health monitor only reacts when the watched channel goes offline, so a campaign streamer going live
+            // would otherwise go unnoticed until the next scheduled check.
+            if (farmingWhileKickCampaignsPending)
+                nextCheckAt = MiningBaselineInitializer.Earliest(nextCheckAt, DateTime.Now.Add(KickCampaignRecheckWhileFarming));
 
             if (twitchResult == null && kickResult == null)
                 AppLogger.Warn("Miner", "No stream selected after evaluation cycle; status may oscillate with health checks.");
