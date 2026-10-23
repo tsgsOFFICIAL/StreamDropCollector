@@ -90,13 +90,16 @@
 
             <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
                         Visibility="{Binding LevelLineText, Converter={StaticResource StringToVisibilityConverter}}">
-                <Image Width="20" Height="20" Margin="0,0,6,0" Stretch="Uniform"
-                       local:ImageEx.SourceUrl="{Binding LevelBadgeUrl}"
-                       Visibility="{Binding LevelBadgeUrl, Converter={StaticResource StringToVisibilityConverter}}"/>
+                <!-- Fixed-size slot so the text does not shift sideways when the badge loads. -->
+                <Grid Width="20" Height="20" Margin="0,0,6,0">
+                    <Image Stretch="Uniform"
+                           local:ImageEx.SourceUrl="{Binding LevelBadgeUrl}"
+                           Visibility="{Binding LevelBadgeUrl, Converter={StaticResource StringToVisibilityConverter}}"/>
+                </Grid>
                 <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                     <Run Text="{Binding LevelLineText, Mode=OneWay}" FontWeight="SemiBold"
                          Foreground="{Binding BrandBrushKey, Mode=OneWay, Converter={StaticResource ResourceKeyToBrushConverter}}"/>
-                    <Run Text="{Binding LevelPercent, StringFormat='  ({0:F1}% to next level)', Mode=OneWay}"
+                    <Run Text="{Binding LevelPercentText, Mode=OneWay}"
                          Foreground="{DynamicResource TextMutedBrush}"/>
                 </TextBlock>
             </StackPanel>

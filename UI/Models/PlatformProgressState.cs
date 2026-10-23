@@ -166,15 +166,29 @@ namespace UI.Models
         /// <summary>Image beside the campaign name: the level badge while farming, otherwise the campaign image.</summary>
         public string DisplayCampaignImageUrl => IsLevelFarming && !string.IsNullOrEmpty(LevelBadgeUrl) ? LevelBadgeUrl : CampaignImageUrl;
 
+        /// <summary>
+        /// True for Kick accounts, whose card reserves the level and daily lines (showing "?" until loaded) so the layout
+        /// does not jump when the data arrives.
+        /// </summary>
+        public bool ShowKickExtras { get; init; }
+
         /// <summary>Compact level line shown only when the campaign bar is not already showing level progress.</summary>
-        public string LevelLineText => IsLevelFarming ? string.Empty : LevelText;
+        public string LevelLineText => IsLevelFarming ? string.Empty
+            : !string.IsNullOrEmpty(LevelText) ? LevelText
+            : ShowKickExtras ? "Level ? • ? / ? XP"
+            : string.Empty;
+
+        /// <summary>Percentage caption beside the level line; "?" until the level is known.</summary>
+        public string LevelPercentText => string.IsNullOrEmpty(LevelText)
+            ? "  (?% to next level)"
+            : $"  ({LevelPercent:F1}% to next level)";
 
         private string _dailyText = string.Empty;
 
         /// <summary>Kick daily streak and daily-reward progress (for example "Daily streak: 3 days"); empty when unknown.</summary>
         public string DailyText
         {
-            get => _dailyText;
+            get => string.IsNullOrEmpty(_dailyText) && ShowKickExtras ? "Daily streak: ? • Daily reward ?" : _dailyText;
             set { _dailyText = value; OnPropertyChanged(); }
         }
 
@@ -209,6 +223,7 @@ namespace UI.Models
             OnPropertyChanged(nameof(CampaignCaptionText));
             OnPropertyChanged(nameof(DisplayCampaignImageUrl));
             OnPropertyChanged(nameof(LevelLineText));
+            OnPropertyChanged(nameof(LevelPercentText));
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

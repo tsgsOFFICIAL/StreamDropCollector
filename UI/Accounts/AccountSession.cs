@@ -48,7 +48,7 @@ namespace UI.Accounts
                 ConnectionStatus = "Checking...",
                 ConnectionColor = "Orange"
             };
-            Progress = new PlatformProgressState(platformName, brandBrush);
+            Progress = new PlatformProgressState(platformName, brandBrush) { ShowKickExtras = !isTwitch };
 
             _loginService = isTwitch ? new TwitchLoginService() : new KickLoginService();
             _loginService.StatusChanged += OnStatusChanged;
@@ -635,18 +635,16 @@ namespace UI.Accounts
                 });
                 Engine.KickDailyChanged += (streakDays, daily) => OnUi(() =>
                 {
-                    List<string> parts = [];
-                    if (streakDays is { } days)
-                        parts.Add($"Daily streak: {days} {(days == 1 ? "day" : "days")}");
+                    string streak = streakDays is { } days
+                        ? $"Daily streak: {days} {(days == 1 ? "day" : "days")}"
+                        : "Daily streak: ?";
 
-                    if (daily != null)
-                    {
-                        parts.Add(daily.IsClaimed ? "Daily reward claimed"
-                            : daily.IsClaimable ? "Daily reward ready"
-                            : $"Daily reward {daily.Progress}/{daily.Threshold} min");
-                    }
+                    string reward = daily == null ? "Daily reward ?"
+                        : daily.IsClaimed ? "Daily reward claimed"
+                        : daily.IsClaimable ? "Daily reward ready"
+                        : $"Daily reward {daily.Progress}/{daily.Threshold} min";
 
-                    Progress.DailyText = string.Join(" • ", parts);
+                    Progress.DailyText = $"{streak} • {reward}";
                 });
             }
 
