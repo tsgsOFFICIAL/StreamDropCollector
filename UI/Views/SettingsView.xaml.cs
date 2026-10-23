@@ -1,4 +1,5 @@
 ﻿using MessageBox = System.Windows.MessageBox;
+using UI.Controls;
 using System.Diagnostics;
 using System.Windows;
 using Core.Managers;
@@ -101,6 +102,9 @@ namespace UI.Views
                 MessageBox.Show($"Failed to open logs folder.\n\n{ex.Message}", "Logs", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+        private void OnPriorityMove(object sender, PriorityMoveEventArgs e) =>
+            UISettingsManager.Instance.MoveGamePriority(e.Option.Platform, e.Option.Slug, e.Offset);
 
         private void OnClearTwitchWhitelistClick(object sender, RoutedEventArgs e)
         {

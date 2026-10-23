@@ -143,6 +143,8 @@
                         <controls:GameFilterPanel PlatformTitle="Twitch"
                                               WhitelistSummary="{Binding TwitchWhitelistSummary}"
                                               GameOptions="{Binding TwitchGameFilterOptions}"
+                                              PriorityOptions="{Binding TwitchGamePriority}"
+                                              PriorityMove="OnPriorityMove"
                                               IsBlacklistMode="{Binding TwitchGameFilterBlacklistMode, Mode=TwoWay}"
                                               ClearButtonText="Clear Twitch whitelist"
                                               ClearButtonMargin="0,0,0,12"
@@ -151,6 +153,8 @@
                         <controls:GameFilterPanel PlatformTitle="Kick"
                                                   WhitelistSummary="{Binding KickWhitelistSummary}"
                                                   GameOptions="{Binding KickGameFilterOptions}"
+                                                  PriorityOptions="{Binding KickGamePriority}"
+                                                  PriorityMove="OnPriorityMove"
                                                   IsBlacklistMode="{Binding KickGameFilterBlacklistMode, Mode=TwoWay}"
                                                   ClearButtonText="Clear Kick whitelist"
                                                   ClearClick="OnClearKickWhitelistClick"/>

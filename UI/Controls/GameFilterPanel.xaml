@@ -35,6 +35,32 @@
                 </ListBox.ItemTemplate>
             </ListBox>
         </Border>
+        <StackPanel x:Name="PriorityPanel" Margin="0,0,0,8">
+            <TextBlock Text="Mining priority: top game is mined first, later games only when it has nothing to mine."
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,6"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource InsetPanelBorder}">
+                    <ListBox x:Name="PriorityList"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             MaxHeight="120"
+                             DisplayMemberPath="DisplayName"
+                             Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Top">
+                    <Button Content="▲" ToolTip="Raise priority" Click="OnMoveUpClick"
+                            Style="{StaticResource AccentButtonStyle}" Margin="0,0,0,4"/>
+                    <Button Content="▼" ToolTip="Lower priority" Click="OnMoveDownClick"
+                            Style="{StaticResource AccentButtonStyle}"/>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
         <CheckBox Content="Blacklist selected games (mine everything except these)"
                   IsChecked="{Binding IsBlacklistMode, ElementName=Root, Mode=TwoWay}"
                   Style="{StaticResource ModernCheckBoxStyle}"

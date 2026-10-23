@@ -105,6 +105,16 @@ namespace Core.Managers
         public ObservableCollection<GameFilterOption> KickGameFilterOptions { get; } = new ObservableCollection<GameFilterOption>();
 
         /// <summary>
+        /// Gets the selected Twitch games in mining priority order (first is mined first).
+        /// </summary>
+        public ObservableCollection<GameFilterOption> TwitchGamePriority { get; } = new ObservableCollection<GameFilterOption>();
+
+        /// <summary>
+        /// Gets the selected Kick games in mining priority order (first is mined first).
+        /// </summary>
+        public ObservableCollection<GameFilterOption> KickGamePriority { get; } = new ObservableCollection<GameFilterOption>();
+
+        /// <summary>
         /// Gets or sets a value indicating whether the application starts automatically when Windows starts.
         /// </summary>
         /// <remarks>Disabling this option may also disable related startup behaviors, such as minimizing
@@ -590,6 +600,8 @@ namespace Core.Managers
                 _isLoadingSettings = false;
             }
 
+            RefreshGamePriority(Platform.Twitch);
+            RefreshGamePriority(Platform.Kick);
             OnPropertyChanged(nameof(TwitchWhitelistSummary));
             OnPropertyChanged(nameof(KickWhitelistSummary));
 
@@ -776,6 +788,8 @@ namespace Core.Managers
                 _isUpdatingGameFilterOptions = false;
             }
 
+            RefreshGamePriority(Platform.Twitch);
+            RefreshGamePriority(Platform.Kick);
             OnPropertyChanged(nameof(TwitchWhitelistSummary));
             OnPropertyChanged(nameof(KickWhitelistSummary));
         }
@@ -867,6 +881,7 @@ namespace Core.Managers
                 _isUpdatingGameFilterOptions = false;
             }
 
+            RefreshGamePriority(platform);
             OnPropertyChanged(platform == Platform.Twitch ? nameof(TwitchWhitelistSummary) : nameof(KickWhitelistSummary));
             Task.Run(SaveSettings);
             GameWhitelistChanged?.Invoke(platform);
@@ -991,6 +1006,7 @@ namespace Core.Managers
             else
                 _kickGameWhitelistSlugs = NormalizeWhitelist(whitelist);
 
+            RefreshGamePriority(option.Platform);
             OnPropertyChanged(option.Platform == Platform.Twitch ? nameof(TwitchWhitelistSummary) : nameof(KickWhitelistSummary));
             Task.Run(SaveSettings);
             GameWhitelistChanged?.Invoke(option.Platform);
@@ -1005,8 +1021,53 @@ namespace Core.Managers
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Select(x => x.Trim().ToLowerInvariant())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Gets the game slugs of a platform in mining priority order, or an empty list when the filter is an exclude list.
+        /// </summary>
+        public IReadOnlyList<string> GetGamePriority(Platform platform) =>
+            platform == Platform.Twitch
+                ? (_twitchGameFilterBlacklistMode ? [] : _twitchGameWhitelistSlugs)
+                : (_kickGameFilterBlacklistMode ? [] : _kickGameWhitelistSlugs);
+
+        /// <summary>
+        /// Moves a selected game up or down the mining priority order of its platform.
+        /// </summary>
+        /// <param name="platform">The platform whose order changes.</param>
+        /// <param name="slug">The game to move.</param>
+        /// <param name="offset">-1 raises the priority by one place, 1 lowers it.</param>
+        public void MoveGamePriority(Platform platform, string slug, int offset)
+        {
+            List<string> whitelist = platform == Platform.Twitch ? _twitchGameWhitelistSlugs : _kickGameWhitelistSlugs;
+            int index = whitelist.FindIndex(x => string.Equals(x, slug, StringComparison.OrdinalIgnoreCase));
+            int target = index + offset;
+            if (index < 0 || target < 0 || target >= whitelist.Count)
+                return;
+
+            (whitelist[index], whitelist[target]) = (whitelist[target], whitelist[index]);
+
+            RefreshGamePriority(platform);
+            Task.Run(SaveSettings);
+            GameWhitelistChanged?.Invoke(platform);
+        }
+
+        private void RefreshGamePriority(Platform platform)
+        {
+            bool twitch = platform == Platform.Twitch;
+            ObservableCollection<GameFilterOption> priority = twitch ? TwitchGamePriority : KickGamePriority;
+            Dictionary<string, GameFilterOption> options = (twitch ? TwitchGameFilterOptions : KickGameFilterOptions)
+                .GroupBy(o => o.Slug, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            priority.Clear();
+            foreach (string slug in twitch ? _twitchGameWhitelistSlugs : _kickGameWhitelistSlugs)
+            {
+                priority.Add(options.TryGetValue(slug, out GameFilterOption? option)
+                    ? option
+                    : new GameFilterOption(platform, slug, slug, true));
+            }
         }
     }
 }

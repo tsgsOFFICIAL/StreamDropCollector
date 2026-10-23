@@ -1791,7 +1791,8 @@ namespace Core.Managers
                 campaigns,
                 _pinnedCampaignStore.CampaignId,
                 EffectiveMiningPriority,
-                EffectivePrioritizeBadges);
+                EffectivePrioritizeBadges,
+                Account.Overrides.GameWhitelistSlugs is null ? UISettingsManager.Instance.GetGamePriority(Account.Platform) : null);
 
             // The pin is shared across platforms, and a platform's candidate list (or a retry after a failed stream
             // check) may legitimately omit it, so only release it once the campaign has nothing left to mine.
