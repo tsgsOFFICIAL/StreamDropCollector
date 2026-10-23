@@ -101,6 +101,10 @@
                 </TextBlock>
             </StackPanel>
 
+            <TextBlock Text="{Binding DailyText}" Margin="0,5,0,0" FontSize="12" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Visibility="{Binding DailyText, Converter={StaticResource StringToVisibilityConverter}}"/>
+
             <TextBlock Margin="0,5,0,0"
                        Visibility="{Binding MinedChannel, Converter={StaticResource StringToVisibilityConverter}}">
                 <Run Text="Mining: " Foreground="{DynamicResource TextSecondaryBrush}"/>

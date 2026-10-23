@@ -15,6 +15,12 @@ namespace Core.Services.Mining.Kick
     public static class KickDailyRewardClient
     {
         private const string ChallengesUrl = "https://web.kick.com/api/v1/gamification/challenges";
+        private const string StreakUrlFormat = "https://web.kick.com/api/v1/gamification/users/{0}/streak";
+
+        // Kick's own site calls this route for the signed-in user; the response is logged at debug level in case its shape differs.
+        private const string UserUrl = "https://kick.com/api/v1/user";
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> UserIds = new();
 
         /// <summary>
         /// Claim URL with a <c>{id}</c> placeholder for the challenge id. <see langword="null"/> until the real request is captured.
@@ -34,6 +40,81 @@ namespace Core.Services.Mining.Kick
 
             AppLogger.Debug("KickDaily", $"challenges body={body}");
             return ParseDaily(body);
+        }
+
+        /// <summary>
+        /// Fetches the current daily streak length in days, or <see langword="null"/> when unavailable.
+        /// The streak route is keyed by the numeric user id, which is looked up once per account and cached.
+        /// </summary>
+        public static async Task<int?> FetchStreakDaysAsync(IWebViewHost host, CancellationToken ct = default)
+        {
+            if (!UserIds.TryGetValue(host.AccountId, out long userId))
+            {
+                string? userBody = await SendAsync(host, "GET", UserUrl, requestBody: null, ct);
+                if (userBody is null)
+                    return null;
+
+                AppLogger.Debug("KickDaily", $"user body={userBody}");
+                if (ParseUserId(userBody) is not { } parsedId)
+                    return null;
+
+                userId = parsedId;
+                UserIds[host.AccountId] = userId;
+            }
+
+            string? body = await SendAsync(host, "GET", string.Format(StreakUrlFormat, userId), requestBody: null, ct);
+            if (body is null)
+                return null;
+
+            AppLogger.Debug("KickDaily", $"streak body={body}");
+            return ParseStreakDays(body);
+        }
+
+        /// <summary>
+        /// Parses a streak payload (<c>{"data":{"length_days":N}}</c>) into the streak length.
+        /// </summary>
+        public static int? ParseStreakDays(string json)
+        {
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(json);
+                return doc.RootElement.TryGetProperty("data", out JsonElement data)
+                    && data.ValueKind == JsonValueKind.Object
+                    && data.TryGetProperty("length_days", out JsonElement days)
+                    && days.TryGetInt32(out int value)
+                        ? value
+                        : null;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Parses the numeric user id from a user payload, accepting it at the root or under <c>data</c>.
+        /// </summary>
+        public static long? ParseUserId(string json)
+        {
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(json);
+                JsonElement root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out JsonElement data)
+                    && data.ValueKind == JsonValueKind.Object)
+                    root = data;
+
+                return root.ValueKind == JsonValueKind.Object
+                    && root.TryGetProperty("id", out JsonElement id)
+                    && id.ValueKind == JsonValueKind.Number
+                    && id.TryGetInt64(out long value)
+                        ? value
+                        : null;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
 
         /// <summary>

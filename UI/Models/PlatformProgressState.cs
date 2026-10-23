@@ -169,6 +169,15 @@ namespace UI.Models
         /// <summary>Compact level line shown only when the campaign bar is not already showing level progress.</summary>
         public string LevelLineText => IsLevelFarming ? string.Empty : LevelText;
 
+        private string _dailyText = string.Empty;
+
+        /// <summary>Kick daily streak and daily-reward progress (for example "Daily streak: 3 days"); empty when unknown.</summary>
+        public string DailyText
+        {
+            get => _dailyText;
+            set { _dailyText = value; OnPropertyChanged(); }
+        }
+
         /// <summary>Clears all progress, campaign, drop, channel and level state (for example when an account is disabled).</summary>
         public void Reset()
         {
@@ -184,6 +193,7 @@ namespace UI.Models
             _levelText = string.Empty;
             _levelPercent = 0;
             _levelBadgeUrl = string.Empty;
+            DailyText = string.Empty;
             NotifyLevelDerived();
         }
 

@@ -233,6 +233,11 @@ namespace Core.Managers
         public event Action<KickLevelProgress>? KickLevelChanged;
 
         /// <summary>
+        /// Raised with the Kick daily streak (days, when known) and the daily challenge (when one is active) after each check.
+        /// </summary>
+        public event Action<int?, KickChallenge?>? KickDailyChanged;
+
+        /// <summary>
         /// Occurs when the miner status label changes (for example, Idle, Starting, Evaluating, or Mining).
         /// </summary>
         public event Action<string>? MinerStatusChanged;
@@ -1513,7 +1518,7 @@ namespace Core.Managers
         /// </summary>
         private void ScheduleKickDailyCheck()
         {
-            if (_isPaused || !EffectiveKickDailyClaim || KickWebView is not { } host || _selection.CurrentKickCampaign == null)
+            if (_isPaused || KickWebView is not { } host || _selection.CurrentKickCampaign == null)
                 return;
 
             if (DateTime.Now - _lastKickDailyCheck < KickDailyCheckInterval)
@@ -1528,16 +1533,19 @@ namespace Core.Managers
             {
                 try
                 {
+                    int? streakDays = await KickDailyRewardClient.FetchStreakDaysAsync(host);
                     KickChallenge? daily = await KickDailyRewardClient.FetchDailyAsync(host);
+                    KickDailyChanged?.Invoke(streakDays, daily);
+
                     if (daily == null)
                     {
                         AppLogger.Debug("KickDaily", "No daily challenge returned.");
                         return;
                     }
 
-                    AppLogger.Debug("KickDaily", $"Daily '{daily.Name}' status={daily.Status} progress={daily.Progress}/{daily.Threshold}.");
+                    AppLogger.Debug("KickDaily", $"Daily '{daily.Name}' status={daily.Status} progress={daily.Progress}/{daily.Threshold} streak={streakDays?.ToString() ?? "?"}.");
 
-                    if (!daily.IsClaimable)
+                    if (!EffectiveKickDailyClaim || !daily.IsClaimable)
                         return;
 
                     if (_kickDailyAttemptChallengeId != daily.Id)

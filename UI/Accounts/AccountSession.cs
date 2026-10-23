@@ -633,6 +633,21 @@ namespace UI.Accounts
                     Progress.LevelPercent = level.PercentExact;
                     Progress.LevelText = $"Level {level.Level} • {level.ProgressXp:N0} / {level.ProgressXp + level.XpToNextLevel:N0} XP";
                 });
+                Engine.KickDailyChanged += (streakDays, daily) => OnUi(() =>
+                {
+                    List<string> parts = [];
+                    if (streakDays is { } days)
+                        parts.Add($"Daily streak: {days} {(days == 1 ? "day" : "days")}");
+
+                    if (daily != null)
+                    {
+                        parts.Add(daily.IsClaimed ? "Daily reward claimed"
+                            : daily.IsClaimable ? "Daily reward ready"
+                            : $"Daily reward {daily.Progress}/{daily.Threshold} min");
+                    }
+
+                    Progress.DailyText = string.Join(" • ", parts);
+                });
             }
 
             Engine.MinerStatusChanged += status => OnUi(() =>
