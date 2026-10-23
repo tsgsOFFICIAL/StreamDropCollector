@@ -9,8 +9,8 @@ namespace Core.Services.Mining.Kick
     /// Reads and claims the logged-in account's Kick daily reward via authenticated in-page fetches.
     /// </summary>
     /// <remarks>
-    /// Progress comes from Kick's internal <c>gamification/challenges</c> route. The claim request has not been
-    /// captured yet, so <see cref="ClaimUrlTemplate"/> is unset and <see cref="ClaimAsync"/> only logs until it is filled in.
+    /// Progress comes from Kick's internal <c>gamification/challenges</c> route; once the watch-time threshold is
+    /// reached the reward is claimed with a POST to <c>challenges/{id}/claim</c>.
     /// </remarks>
     public static class KickDailyRewardClient
     {
@@ -23,9 +23,9 @@ namespace Core.Services.Mining.Kick
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> UserIds = new();
 
         /// <summary>
-        /// Claim URL with a <c>{id}</c> placeholder for the challenge id. <see langword="null"/> until the real request is captured.
+        /// Claim URL with a <c>{id}</c> placeholder for the challenge id.
         /// </summary>
-        private const string? ClaimUrlTemplate = null;
+        private const string ClaimUrlTemplate = "https://web.kick.com/api/v1/gamification/challenges/{id}/claim";
 
         /// <summary>
         /// Fetches the current daily challenge, or <see langword="null"/> when unavailable or none is active.
@@ -118,16 +118,10 @@ namespace Core.Services.Mining.Kick
         }
 
         /// <summary>
-        /// Claims the given challenge. Returns <see langword="false"/> while the claim endpoint is not configured.
+        /// Claims the given challenge. Returns <see langword="true"/> when Kick accepted the claim.
         /// </summary>
         public static async Task<bool> ClaimAsync(IWebViewHost host, KickChallenge challenge, CancellationToken ct = default)
         {
-            if (ClaimUrlTemplate is null)
-            {
-                AppLogger.Warn("KickDaily", $"Daily reward '{challenge.Id}' is claimable but the claim endpoint is not configured yet.");
-                return false;
-            }
-
             string url = ClaimUrlTemplate.Replace("{id}", Uri.EscapeDataString(challenge.Id));
             string? body = await SendAsync(host, "POST", url, requestBody: "{}", ct);
             AppLogger.Debug("KickDaily", $"claim id={challenge.Id} body={body ?? "(failed)"}");

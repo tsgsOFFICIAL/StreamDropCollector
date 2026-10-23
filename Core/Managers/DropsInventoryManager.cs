@@ -1560,7 +1560,12 @@ namespace Core.Managers
 
                     _kickDailyAttempts++;
                     if (await KickDailyRewardClient.ClaimAsync(host, daily))
+                    {
                         AppLogger.Info("KickDaily", "Claimed Kick daily reward.");
+                        KickDailyChanged?.Invoke(
+                            await KickDailyRewardClient.FetchStreakDaysAsync(host),
+                            await KickDailyRewardClient.FetchDailyAsync(host));
+                    }
                     else
                         _lastKickDailyCheck = DateTime.MinValue;
                 }
