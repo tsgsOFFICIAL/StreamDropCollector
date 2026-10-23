@@ -21,11 +21,12 @@ namespace UI.Views
         /// Opens the Twitch activation page so the user can approve Helix API access.
         /// </summary>
         /// <param name="prompt">Device-code details from the Helix OAuth flow.</param>
-        public TwitchHelixAuthWindow(TwitchDeviceCodePrompt prompt)
+        /// <param name="account">Logged-in Twitch account whose browser profile is used so the activation page is already signed in; <see langword="null"/> uses the shared profile.</param>
+        public TwitchHelixAuthWindow(TwitchDeviceCodePrompt prompt, AccountModel? account = null)
         {
             _prompt = prompt ?? throw new ArgumentNullException(nameof(prompt));
             InitializeComponent();
-            Web.CreationProperties = UI.Diagnostics.NetworkMeters.CreateProperties(null);
+            Web.CreationProperties = UI.Diagnostics.NetworkMeters.CreateProperties(account?.UserDataFolder);
             Loaded += OnLoaded;
             Closed += (_, _) => _cts.Cancel();
         }

@@ -268,7 +268,7 @@ namespace UI.Accounts
 
                     bool authenticated = await TwitchHelixService.Instance.EnsureAuthenticatedAsync(async prompt =>
                     {
-                        await Application.Current.Dispatcher.InvokeAsync(() => new TwitchHelixAuthWindow(prompt).ShowDialog());
+                        await Application.Current.Dispatcher.InvokeAsync(() => new TwitchHelixAuthWindow(prompt, session.Model).ShowDialog());
                     });
 
                     if (authenticated)
