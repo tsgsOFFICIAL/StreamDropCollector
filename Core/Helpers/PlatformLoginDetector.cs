@@ -12,62 +12,118 @@ namespace Core.Helpers
     {
         public const int DefaultPollIntervalMs = 250;
 
-        public const string KickLoginHtmlMarker = "data-testid=\"login\"";
-        public const string TwitchLoginHtmlMarker = "data-a-target=\"login-button\"";
+        public const int DefaultStatePollsRequired = 3;
+        public const int DefaultStateTimeoutMs = 20000;
+
         public const string KickLoginButtonSelector = "[data-testid='login']";
         public const string TwitchLoginButtonSelector = "[data-a-target='login-button']";
         public const string TwitchHelixAuthCompleteUrl = "https://www.twitch.tv/settings/connections";
 
-        /// <summary>
-        /// Determines whether the user appears logged in based on page HTML.
-        /// </summary>
-        public static bool IsLoggedInFromHtml(Platform platform, string html)
-        {
-            bool loggedIn = platform switch
-            {
-                Platform.Kick => !html.Contains(KickLoginHtmlMarker, StringComparison.OrdinalIgnoreCase),
-                Platform.Twitch => !html.Contains(TwitchLoginHtmlMarker, StringComparison.OrdinalIgnoreCase),
-                _ => false
-            };
+        // Elements present in the platform header once it has rendered, whether or not the user is logged in.
+        private const string KickHeaderRenderedSelector = "[data-testid='navbar-search']";
+        private const string TwitchHeaderRenderedSelector = "[data-a-target='top-nav-container']";
+        private const string KickSignUpSelector = "[data-testid='sign-up']";
 
-            AppLogger.Debug(
-                "LoginDetect",
-                $"IsLoggedInFromHtml platform={platform} htmlLength={html.Length} loggedIn={loggedIn} " +
-                $"(marker={(platform == Platform.Kick ? KickLoginHtmlMarker : platform == Platform.Twitch ? TwitchLoginHtmlMarker : "n/a")})");
-
-            return loggedIn;
-        }
+        private const string KickAuthModalSelector = "[data-testid='auth-modal']";
+        private const string KickCookieBannerSelector = "#onetrust-banner-sdk";
+        private const string KickCookieRejectSelector = "#onetrust-reject-all-handler";
+        private const string KickCookieSdkSelector = "#onetrust-consent-sdk";
+        private const int KickCookieSdkGraceMs = 8000;
+        private const int KickLoginClickRetryMs = 2000;
 
         /// <summary>
-        /// Builds a script that returns <c>true</c> when the login button is present (page loaded, user not logged in).
+        /// Builds a script that returns <c>"loggedIn"</c>, <c>"loggedOut"</c> or <c>"unknown"</c>.
+        /// The result is only definitive once the document has loaded and the platform header has rendered,
+        /// so an unrendered page is never read as logged in.
         /// </summary>
-        public static string BuildHasLoginButtonScript(Platform platform)
+        public static string BuildLoginStateScript(Platform platform)
         {
-            string selector = platform switch
+            (string login, string rendered, string? extraLoggedOut) = platform switch
             {
-                Platform.Kick => KickLoginButtonSelector,
-                Platform.Twitch => TwitchLoginButtonSelector,
+                Platform.Kick => (KickLoginButtonSelector, KickHeaderRenderedSelector, KickSignUpSelector),
+                Platform.Twitch => (TwitchLoginButtonSelector, TwitchHeaderRenderedSelector, null),
                 _ => throw new ArgumentOutOfRangeException(nameof(platform))
             };
 
-            string escaped = JsonSerializer.Serialize(selector);
-            return $"!!document.querySelector({escaped})";
+            string loginJs = JsonSerializer.Serialize(login);
+            string renderedJs = JsonSerializer.Serialize(rendered);
+            string extraJs = extraLoggedOut is null ? "null" : JsonSerializer.Serialize(extraLoggedOut);
+
+            return $$"""
+                (() => {
+                    if (document.readyState !== 'complete') return 'unknown';
+                    const visible = el => {
+                        const r = el.getBoundingClientRect();
+                        return r.width > 0 && r.height > 0;
+                    };
+                    // Kick renders hidden duplicates of its header buttons, so look at every match.
+                    const anyVisible = sel => [...document.querySelectorAll(sel)].some(visible);
+                    if (anyVisible({{loginJs}})) return 'loggedOut';
+                    const extra = {{extraJs}};
+                    if (extra && anyVisible(extra)) return 'loggedOut';
+                    return document.querySelector({{renderedJs}}) ? 'loggedIn' : 'unknown';
+                })()
+                """;
         }
 
         /// <summary>
-        /// Builds a script that returns <c>true</c> when the login button is absent (user is logged in).
+        /// Runs the login-state script once. Script failures (for example mid-navigation) are reported as <see cref="LoginState.Unknown"/>.
         /// </summary>
-        public static string BuildIsLoggedInScript(Platform platform)
+        public static async Task<LoginState> GetLoginStateAsync(
+            Func<string, Task<string>> executeScriptAsync,
+            Platform platform)
         {
-            string selector = platform switch
+            try
             {
-                Platform.Kick => KickLoginButtonSelector,
-                Platform.Twitch => TwitchLoginButtonSelector,
-                _ => throw new ArgumentOutOfRangeException(nameof(platform))
-            };
+                string raw = await executeScriptAsync(BuildLoginStateScript(platform));
+                return raw?.Trim('"') switch
+                {
+                    "loggedIn" => LoginState.LoggedIn,
+                    "loggedOut" => LoginState.LoggedOut,
+                    _ => LoginState.Unknown
+                };
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Debug("LoginDetect", $"GetLoginStateAsync platform={platform} script failed: {ex.Message}");
+                return LoginState.Unknown;
+            }
+        }
 
-            string escaped = JsonSerializer.Serialize(selector);
-            return $"!document.querySelector({escaped})";
+        /// <summary>
+        /// Polls until the same definitive state is seen <paramref name="pollsRequired"/> times in a row,
+        /// so a transient re-render cannot flip the result. Returns <see cref="LoginState.Unknown"/> on timeout.
+        /// </summary>
+        public static async Task<LoginState> WaitForLoginStateAsync(
+            Func<string, Task<string>> executeScriptAsync,
+            Platform platform,
+            int pollIntervalMs = DefaultPollIntervalMs,
+            int timeoutMs = DefaultStateTimeoutMs,
+            int pollsRequired = DefaultStatePollsRequired,
+            CancellationToken cancellationToken = default)
+        {
+            LoginState last = LoginState.Unknown;
+            int streak = 0;
+            int elapsed = 0;
+
+            while (!cancellationToken.IsCancellationRequested && elapsed < timeoutMs)
+            {
+                LoginState state = await GetLoginStateAsync(executeScriptAsync, platform);
+                streak = state != LoginState.Unknown && state == last ? streak + 1 : state == LoginState.Unknown ? 0 : 1;
+                last = state;
+
+                if (streak >= pollsRequired)
+                {
+                    AppLogger.Debug("LoginDetect", $"WaitForLoginStateAsync platform={platform} state={state} after {elapsed}ms.");
+                    return state;
+                }
+
+                await Task.Delay(pollIntervalMs, cancellationToken);
+                elapsed += pollIntervalMs;
+            }
+
+            AppLogger.Warn("LoginDetect", $"WaitForLoginStateAsync platform={platform} TIMED OUT after {timeoutMs}ms (cancelled={cancellationToken.IsCancellationRequested}).");
+            return LoginState.Unknown;
         }
 
         /// <summary>
@@ -92,62 +148,59 @@ namespace Core.Helpers
             BuildUrlReachedScript(TwitchHelixAuthCompleteUrl);
 
         /// <summary>
-        /// Builds a script that returns <c>true</c> when Kick's login button is present but not yet labeled.
+        /// Builds a script that performs one step towards opening Kick's login modal and returns the outcome:
+        /// <c>"banner"</c> (cookie banner was visible, rejected it), <c>"modal"</c> (login modal is open),
+        /// <c>"clicked"</c> (login button clicked) or <c>"waiting"</c> (page not ready yet).
+        /// The cookie banner is dismissed first because, while it is up, Kick's login inputs are blocked.
         /// </summary>
-        public static string BuildKickEarlyLoginButtonReadyScript()
+        public static string BuildKickOpenLoginModalStepScript()
         {
-            string escaped = JsonSerializer.Serialize(KickLoginButtonSelector);
+            string login = JsonSerializer.Serialize(KickLoginButtonSelector);
+            string rendered = JsonSerializer.Serialize(KickHeaderRenderedSelector);
+            string modal = JsonSerializer.Serialize(KickAuthModalSelector);
+            string banner = JsonSerializer.Serialize(KickCookieBannerSelector);
+            string reject = JsonSerializer.Serialize(KickCookieRejectSelector);
+            string sdk = JsonSerializer.Serialize(KickCookieSdkSelector);
+
             return $$"""
                 (() => {
-                    const el = document.querySelector({{escaped}});
-                    if (!el) return false;
-                    const rect = el.getBoundingClientRect();
-                    return (el.textContent || '').trim().length === 0 && rect.width > 0 && rect.height > 0;
+                    const visible = el => {
+                        const r = el.getBoundingClientRect();
+                        return r.width > 0 && r.height > 0;
+                    };
+                    // Kick renders hidden duplicates of its header buttons, so only consider visible matches.
+                    const findVisible = sel => [...document.querySelectorAll(sel)].find(visible);
+                    const now = Date.now();
+                    window.__kickLoginStart = window.__kickLoginStart || now;
+
+                    if (findVisible({{banner}})) {
+                        findVisible({{reject}})?.click();
+                        return 'banner';
+                    }
+
+                    if (findVisible({{modal}})) return 'modal';
+                    if (document.readyState !== 'complete') return 'waiting';
+
+                    const loginBtn = findVisible({{login}});
+                    if (!loginBtn || !document.querySelector({{rendered}})) return 'waiting';
+
+                    // The consent SDK loads late; clicking before it does lets its banner appear over the modal.
+                    if (!document.querySelector({{sdk}}) && now - window.__kickLoginStart < {{KickCookieSdkGraceMs}}) return 'waiting';
+
+                    // Give a previous click time to open the modal before retrying.
+                    if (now - (window.__kickLoginClickAt || 0) < {{KickLoginClickRetryMs}}) return 'waiting';
+
+                    window.__kickLoginClickAt = now;
+                    loginBtn.click();
+                    return 'clicked';
                 })()
                 """;
         }
 
         /// <summary>
-        /// Builds a script that clicks Kick's login button when present.
-        /// </summary>
-        public static string BuildKickLoginButtonClickScript()
-        {
-            string escaped = JsonSerializer.Serialize(KickLoginButtonSelector);
-            return $"document.querySelector({escaped})?.click()";
-        }
-
-        /// <summary>
-        /// Polls until the platform homepage login button appears, indicating the page has loaded while logged out.
-        /// </summary>
-        public static async Task<bool> PollUntilLoginButtonPresentAsync(
-            Func<string, Task<string>> executeScriptAsync,
-            Platform platform,
-            int pollIntervalMs = DefaultPollIntervalMs,
-            int timeoutMs = 30000,
-            CancellationToken cancellationToken = default)
-        {
-            string script = BuildHasLoginButtonScript(platform);
-            int elapsed = 0;
-
-            while (!cancellationToken.IsCancellationRequested && elapsed < timeoutMs)
-            {
-                if (await executeScriptAsync(script) == "true")
-                {
-                    AppLogger.Debug("LoginDetect", $"PollUntilLoginButtonPresentAsync platform={platform} FOUND after {elapsed}ms.");
-                    return true;
-                }
-
-                await Task.Delay(pollIntervalMs, cancellationToken);
-                elapsed += pollIntervalMs;
-            }
-
-            AppLogger.Warn("LoginDetect", $"PollUntilLoginButtonPresentAsync platform={platform} TIMED OUT after {timeoutMs}ms (cancelled={cancellationToken.IsCancellationRequested}).");
-            return false;
-        }
-
-        /// <summary>
-        /// Polls until the platform login button disappears or the timeout/cancellation is reached.
-        /// Requires the login button to appear first so an unloaded page is not treated as logged in.
+        /// Polls until the platform page is stably logged in, or the timeout/cancellation is reached.
+        /// An unrendered page counts as unknown, so it is never treated as logged in, and a user who is
+        /// already logged in is detected without the login button ever appearing.
         /// </summary>
         public static async Task<bool> PollUntilLoggedInAsync(
             Func<string, Task<string>> executeScriptAsync,
@@ -156,20 +209,15 @@ namespace Core.Helpers
             int? timeoutMs = null,
             CancellationToken cancellationToken = default)
         {
-            if (!await PollUntilLoginButtonPresentAsync(
-                    executeScriptAsync,
-                    platform,
-                    pollIntervalMs,
-                    cancellationToken: cancellationToken))
-                return false;
-
-            string script = BuildIsLoggedInScript(platform);
             int elapsed = 0;
             int limit = timeoutMs ?? Timeout.Infinite;
+            int streak = 0;
 
             while (!cancellationToken.IsCancellationRequested && (limit == Timeout.Infinite || elapsed < limit))
             {
-                if (await executeScriptAsync(script) == "true")
+                streak = await GetLoginStateAsync(executeScriptAsync, platform) == LoginState.LoggedIn ? streak + 1 : 0;
+
+                if (streak >= DefaultStatePollsRequired)
                 {
                     AppLogger.Debug("LoginDetect", $"PollUntilLoggedInAsync platform={platform} LOGGED IN after {elapsed}ms.");
                     return true;
@@ -253,24 +301,38 @@ namespace Core.Helpers
         }
 
         /// <summary>
-        /// Polls until Kick's unlabeled login button is ready, then clicks it.
+        /// Rejects Kick's cookie banner, then clicks the login button until the login modal is open.
+        /// Retries a click that did not open the modal and keeps rejecting the banner if it appears late.
+        /// Returns <see langword="false"/> on timeout (for example when the user is already logged in).
         /// </summary>
-        public static async Task<bool> ClickKickLoginWhenEarlyAsync(
+        public static async Task<bool> OpenKickLoginModalAsync(
             Func<string, Task<string>> executeScriptAsync,
             int pollIntervalMs = DefaultPollIntervalMs,
             int timeoutMs = 30000,
             CancellationToken cancellationToken = default)
         {
-            string isEarlyScript = BuildKickEarlyLoginButtonReadyScript();
-            string clickScript = BuildKickLoginButtonClickScript();
-
+            string script = BuildKickOpenLoginModalStepScript();
             int elapsed = 0;
+
             while (!cancellationToken.IsCancellationRequested && elapsed < timeoutMs)
             {
-                if (await executeScriptAsync(isEarlyScript) == "true")
+                string step;
+                try
                 {
-                    AppLogger.Debug("LoginDetect", $"ClickKickLoginWhenEarlyAsync clicking early login button after {elapsed}ms.");
-                    await executeScriptAsync(clickScript);
+                    step = (await executeScriptAsync(script))?.Trim('"') ?? "";
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppLogger.Debug("LoginDetect", $"OpenKickLoginModalAsync script failed: {ex.Message}");
+                    step = "waiting";
+                }
+
+                if (step is "banner" or "clicked")
+                    AppLogger.Debug("LoginDetect", $"OpenKickLoginModalAsync step={step} after {elapsed}ms.");
+
+                if (step == "modal")
+                {
+                    AppLogger.Debug("LoginDetect", $"OpenKickLoginModalAsync login modal open after {elapsed}ms.");
                     return true;
                 }
 
@@ -278,7 +340,7 @@ namespace Core.Helpers
                 elapsed += pollIntervalMs;
             }
 
-            AppLogger.Warn("LoginDetect", $"ClickKickLoginWhenEarlyAsync TIMED OUT after {timeoutMs}ms - early login button never appeared.");
+            AppLogger.Warn("LoginDetect", $"OpenKickLoginModalAsync TIMED OUT after {timeoutMs}ms - login modal never opened.");
             return false;
         }
     }

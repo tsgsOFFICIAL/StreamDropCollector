@@ -48,12 +48,13 @@ namespace UI.Views
 
             try
             {
-                bool clicked = await PlatformLoginDetector.ClickKickLoginWhenEarlyAsync(
+                // Poll first so an already-logged-in session closes the window without waiting for the modal helper to time out.
+                _ = PollAndCloseWhenLoggedInAsync();
+
+                bool opened = await PlatformLoginDetector.OpenKickLoginModalAsync(
                     script => Web.ExecuteScriptAsync(script),
                     cancellationToken: _cts.Token);
-                AppLogger.Debug("KickLoginWindow", $"ClickKickLoginWhenEarlyAsync result={clicked}");
-
-                _ = PollAndCloseWhenLoggedInAsync();
+                AppLogger.Debug("KickLoginWindow", $"OpenKickLoginModalAsync result={opened}");
             }
             catch (OperationCanceledException)
             {

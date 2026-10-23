@@ -13,6 +13,7 @@ namespace Core.Services
         public override async Task ValidateCredentialsAsync(IWebViewHost host)
         {
             AppLogger.Debug("TwitchLogin", "Validating credentials...");
+            ConnectionStatus previous = Status == ConnectionStatus.Connected ? ConnectionStatus.Connected : ConnectionStatus.NotConnected;
             UpdateStatus(ConnectionStatus.Connecting);
 
             if (host == null)
@@ -31,13 +32,18 @@ namespace Core.Services
                 AppLogger.Warn("TwitchLogin", $"EnsureInitializedAsync failed but continuing: {ex.Message}");
             }
 
-            await host.NavigateAsync("https://twitch.tv/");
-
             UpdateStatus(ConnectionStatus.Validating);
 
-            string html = await GetPageHtmlAsync(host);
-            bool isLoggedIn = PlatformLoginDetector.IsLoggedInFromHtml(Platform.Twitch, html);
+            LoginState state = await NavigateAndGetLoginStateAsync(host, Platform.Twitch, "https://twitch.tv/");
 
+            if (state == LoginState.Unknown)
+            {
+                AppLogger.Warn("TwitchLogin", $"Could not determine login state; keeping previous status ({previous}).");
+                UpdateStatus(previous);
+                return;
+            }
+
+            bool isLoggedIn = state == LoginState.LoggedIn;
             AppLogger.Info("TwitchLogin", isLoggedIn ? "Twitch connected." : "Twitch not logged in.");
 
             UpdateStatus(isLoggedIn ? ConnectionStatus.Connected : ConnectionStatus.NotConnected);

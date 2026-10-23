@@ -13,6 +13,7 @@ namespace Core.Services
         public override async Task ValidateCredentialsAsync(IWebViewHost host)
         {
             AppLogger.Debug("KickLogin", "Validating credentials...");
+            ConnectionStatus previous = Status == ConnectionStatus.Connected ? ConnectionStatus.Connected : ConnectionStatus.NotConnected;
             UpdateStatus(ConnectionStatus.Connecting);
 
             if (host == null)
@@ -31,13 +32,18 @@ namespace Core.Services
                 AppLogger.Warn("KickLogin", $"EnsureInitializedAsync failed but continuing: {ex.Message}");
             }
 
-            await host.NavigateAsync("https://kick.com/");
-
             UpdateStatus(ConnectionStatus.Validating);
 
-            string html = await GetPageHtmlAsync(host);
-            bool isLoggedIn = PlatformLoginDetector.IsLoggedInFromHtml(Platform.Kick, html);
+            LoginState state = await NavigateAndGetLoginStateAsync(host, Platform.Kick, "https://kick.com/");
 
+            if (state == LoginState.Unknown)
+            {
+                AppLogger.Warn("KickLogin", $"Could not determine login state; keeping previous status ({previous}).");
+                UpdateStatus(previous);
+                return;
+            }
+
+            bool isLoggedIn = state == LoginState.LoggedIn;
             AppLogger.Info("KickLogin", isLoggedIn ? "Kick connected." : "Kick not logged in.");
 
             UpdateStatus(isLoggedIn ? ConnectionStatus.Connected : ConnectionStatus.NotConnected);

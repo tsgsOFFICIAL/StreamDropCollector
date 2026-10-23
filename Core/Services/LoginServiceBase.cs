@@ -1,5 +1,7 @@
 ﻿using Core.Interfaces;
 using Core.Enums;
+using Core.Helpers;
+using Core.Logging;
 
 namespace Core.Services
 {
@@ -42,10 +44,24 @@ namespace Core.Services
         /// <param name="status">The new connection status to be provided to event subscribers.</param>
         protected void UpdateStatus(ConnectionStatus status) => StatusChanged?.Invoke(status);
         public abstract Task ValidateCredentialsAsync(IWebViewHost host);
-        protected static async Task<string> GetPageHtmlAsync(IWebViewHost host)
+
+        /// <summary>
+        /// Navigates to the platform homepage and waits for a definitive login state, reloading once if the page never settles.
+        /// Returns <see cref="LoginState.Unknown"/> when the state could not be determined.
+        /// </summary>
+        protected static async Task<LoginState> NavigateAndGetLoginStateAsync(IWebViewHost host, Platform platform, string url)
         {
-            string htmlRaw = await host.ExecuteScriptAsync("document.documentElement.outerHTML;");
-            return System.Text.Json.JsonSerializer.Deserialize<string>(htmlRaw) ?? "";
+            for (int attempt = 1; attempt <= 2; attempt++)
+            {
+                await host.NavigateAsync(url);
+                LoginState state = await PlatformLoginDetector.WaitForLoginStateAsync(host.ExecuteScriptAsync, platform);
+                if (state != LoginState.Unknown)
+                    return state;
+
+                AppLogger.Warn("LoginValidate", $"{platform} login state unknown after attempt {attempt}/2.");
+            }
+
+            return LoginState.Unknown;
         }
     }
 }
