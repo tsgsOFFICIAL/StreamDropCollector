@@ -57,7 +57,7 @@
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   IsEnabled="{Binding IsChecked, ElementName=UseGlobalDailyClaim, Converter={StaticResource InverseBooleanConverter}}"/>
                         <TextBlock Text="Needs 60 minutes of Kick watch time a day. Kick level farming is recommended ON so the miner keeps watching when no drops are available."
-                                   TextWrapping="Wrap" Opacity="0.7" FontSize="12" Margin="0,8,0,0"/>
+                                   TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
 
