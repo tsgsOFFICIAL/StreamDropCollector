@@ -635,16 +635,11 @@ namespace UI.Accounts
                 });
                 Engine.KickDailyChanged += (streakDays, daily) => OnUi(() =>
                 {
-                    string streak = streakDays is { } days
-                        ? $"Daily streak: {days} {(days == 1 ? "day" : "days")}"
-                        : "Daily streak: ?";
-
-                    string reward = daily == null ? "Daily reward ?"
-                        : daily.IsClaimed ? "Daily reward claimed"
-                        : daily.IsClaimable ? "Daily reward ready"
-                        : $"Daily reward {daily.Progress}/{daily.Threshold} min";
-
-                    Progress.DailyText = $"{streak} • {reward}";
+                    Progress.DailyStreakText = streakDays is { } days ? $"{days} {(days == 1 ? "day" : "days")}" : "?";
+                    Progress.DailyRewardText = daily == null ? "?"
+                        : daily.IsClaimed ? "claimed"
+                        : daily.IsClaimable ? "ready to claim"
+                        : $"{daily.Progress}/{daily.Threshold} min";
                 });
             }
 

@@ -183,13 +183,21 @@ namespace UI.Models
             ? "  (?% to next level)"
             : $"  ({LevelPercent:F1}% to next level)";
 
-        private string _dailyText = string.Empty;
+        private string _dailyStreakText = "?";
+        private string _dailyRewardText = "?";
 
-        /// <summary>Kick daily streak and daily-reward progress (for example "Daily streak: 3 days"); empty when unknown.</summary>
-        public string DailyText
+        /// <summary>Kick daily streak value (for example "3 days"); "?" until loaded.</summary>
+        public string DailyStreakText
         {
-            get => string.IsNullOrEmpty(_dailyText) && ShowKickExtras ? "Daily streak: ? • Daily reward ?" : _dailyText;
-            set { _dailyText = value; OnPropertyChanged(); }
+            get => _dailyStreakText;
+            set { _dailyStreakText = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Kick daily reward value (for example "6/60 min", "ready to claim"); "?" until loaded.</summary>
+        public string DailyRewardText
+        {
+            get => _dailyRewardText;
+            set { _dailyRewardText = value; OnPropertyChanged(); }
         }
 
         /// <summary>Clears all progress, campaign, drop, channel and level state (for example when an account is disabled).</summary>
@@ -207,7 +215,8 @@ namespace UI.Models
             _levelText = string.Empty;
             _levelPercent = 0;
             _levelBadgeUrl = string.Empty;
-            DailyText = string.Empty;
+            DailyStreakText = "?";
+            DailyRewardText = "?";
             NotifyLevelDerived();
         }
 

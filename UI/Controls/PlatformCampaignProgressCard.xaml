@@ -104,9 +104,16 @@
                 </TextBlock>
             </StackPanel>
 
-            <TextBlock Text="{Binding DailyText}" Margin="0,5,0,0" FontSize="12" TextTrimming="CharacterEllipsis"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       Visibility="{Binding DailyText, Converter={StaticResource StringToVisibilityConverter}}"/>
+            <TextBlock Margin="0,5,0,0" TextTrimming="CharacterEllipsis"
+                       Visibility="{Binding ShowKickExtras, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Run Text="Daily streak: " Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Run Text="{Binding DailyStreakText, Mode=OneWay}" FontWeight="SemiBold"
+                     Foreground="{Binding BrandBrushKey, Mode=OneWay, Converter={StaticResource ResourceKeyToBrushConverter}}"/>
+                <Run Text="  •  " Foreground="{DynamicResource TextMutedBrush}"/>
+                <Run Text="Daily reward: " Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Run Text="{Binding DailyRewardText, Mode=OneWay}" FontWeight="SemiBold"
+                     Foreground="{Binding BrandBrushKey, Mode=OneWay, Converter={StaticResource ResourceKeyToBrushConverter}}"/>
+            </TextBlock>
 
             <TextBlock Margin="0,5,0,0"
                        Visibility="{Binding MinedChannel, Converter={StaticResource StringToVisibilityConverter}}">

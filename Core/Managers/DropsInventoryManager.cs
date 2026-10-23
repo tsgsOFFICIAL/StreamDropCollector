@@ -327,7 +327,8 @@ namespace Core.Managers
         private DateTime _lastKickDailyCheck = DateTime.MinValue;
         private string? _kickDailyAttemptChallengeId;
         private int _kickDailyAttempts;
-        private static readonly TimeSpan KickDailyCheckInterval = TimeSpan.FromMinutes(5);
+        // About once a minute. Slightly under 60s because the 30s timer ticks jitter, and an exact minute would often wait for the tick after.
+        private static readonly TimeSpan KickDailyCheckInterval = TimeSpan.FromSeconds(55);
         private const int KickDailyMaxClaimAttempts = 3;
         private System.Timers.Timer? _recheckTimer;
         private readonly SemaphoreSlim _progressVerifyLock = new(1, 1);
@@ -1513,7 +1514,7 @@ namespace Core.Managers
         }
 
         /// <summary>
-        /// Checks the Kick daily reward (at most every few minutes, while a Kick stream is watched) and claims it once
+        /// Checks the Kick daily reward (about once a minute, while a Kick stream is watched) and claims it once
         /// its watch time is reached. Gives up on a challenge after a few failed claims.
         /// </summary>
         private void ScheduleKickDailyCheck()
