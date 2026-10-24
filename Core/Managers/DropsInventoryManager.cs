@@ -657,6 +657,9 @@ namespace Core.Managers
         /// </summary>
         private void OnLiveProgressTick(object? sender, ElapsedEventArgs e)
         {
+            bool twitchWasSelected = _selection.CurrentTwitchCampaign != null;
+            bool kickWasSelected = _selection.CurrentKickCampaign != null;
+
             if (_selection.CurrentTwitchCampaign != null)
             {
                 LiveProgressTracker.ProcessTick(
@@ -681,6 +684,14 @@ namespace Core.Managers
                     (platform, campaignId, minutes) => _campaignUpdater.ApplyMinuteProgress(ActiveCampaigns, _selection, platform, campaignId, minutes, VerboseLog, EffectiveAutoClaim),
                     (campPct, dropPct) => RaiseProgress(Platform.Kick, _selection.CurrentKickCampaign, campPct, dropPct),
                     VerboseLog);
+            }
+
+            // A tick that found nothing left to mine clears the selection; without a re-evaluation the stream keeps
+            // playing and the status stays "Mining".
+            if (twitchWasSelected && _selection.CurrentTwitchCampaign == null ||
+                kickWasSelected && _selection.CurrentKickCampaign == null)
+            {
+                _ = StartMiningStreams(true);
             }
         }
         /// <summary>

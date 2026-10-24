@@ -21,7 +21,7 @@ namespace Core.Mining
         /// Determines whether the campaign has unclaimed rewards that still need mine progress.
         /// </summary>
         /// <param name="campaign">The campaign to evaluate.</param>
-        /// <param name="autoClaimRewards">When <see langword="true"/>, any unclaimed reward counts as progress to make.</param>
+        /// <param name="autoClaimRewards">Kept for call-site compatibility; completed-but-unclaimed rewards never count as progress to make.</param>
         /// <returns><see langword="true"/> when progress remains; otherwise <see langword="false"/>.
         /// Always <see langword="false"/> for a campaign that needs an account link the user hasn't made.</returns>
         public static bool HasProgressToMake(this DropsCampaign campaign, bool autoClaimRewards)
@@ -29,9 +29,8 @@ namespace Core.Mining
             if (campaign.NeedsAccountLink)
                 return false;
 
-            if (autoClaimRewards)
-                return campaign.Rewards.Any(r => !r.IsClaimed);
-
+            // A drop that is complete but still unclaimed has nothing left to mine, even with auto-claim on: claiming is
+            // handled separately, and mining it would only keep a stream running while a claim is pending or failing.
             return campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes);
         }
 
