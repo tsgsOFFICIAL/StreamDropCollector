@@ -205,6 +205,14 @@
                                         Margin="32,0,0,0"
                                         IsEnabled="{Binding WebhookEnabled}"
                                         Click="OnTestWebhookClick"/>
+                                <!-- Design-time helper: only made visible in DEBUG builds (see OnSendAllSamplesLoaded). -->
+                                <Button Content="Send All Sample Notifications (debug)"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        HorizontalAlignment="Left"
+                                        Margin="32,8,0,0"
+                                        Visibility="Collapsed"
+                                        Loaded="OnSendAllSamplesLoaded"
+                                        Click="OnSendAllSamplesClick"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>

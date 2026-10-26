@@ -124,6 +124,44 @@ namespace UI.Views
             }
         }
 
+        private void OnSendAllSamplesLoaded(object sender, RoutedEventArgs e)
+        {
+#if DEBUG
+            ((System.Windows.Controls.Button)sender).Visibility = Visibility.Visible;
+#endif
+        }
+
+        private async void OnSendAllSamplesClick(object sender, RoutedEventArgs e)
+        {
+            System.Windows.Controls.Button button = (System.Windows.Controls.Button)sender;
+            button.IsEnabled = false;
+
+            // Mirrors every ShowNotification call site; spaced out to stay under Discord's webhook rate limit.
+            (string Title, string Message, bool Webhook)[] samples =
+            [
+                ("Drop Claimed", "Successfully claimed drop reward: Sample Reward", true),
+                ("Drop Ready to Claim", "You have 2 drops rewards ready to claim. Please claim them manually.", true),
+                ("Drop Claim Failed", "Failed to claim drop reward, re-trying in a minute: Sample Reward", true),
+                ("Account Not Linked", "Link your game account on Kick, then claim manually: Sample Reward", true),
+                ("Update Available", "A new version is available.", true),
+                ("Stream Drop Collector", "Application updated successfully!", true),
+                ("Stream Drop Collector", "Minimized to tray - drops still farming!", false),
+            ];
+
+            try
+            {
+                foreach ((string title, string message, bool webhook) in samples)
+                {
+                    NotificationManager.ShowNotification(title, message, sendWebhook: webhook);
+                    await Task.Delay(1500);
+                }
+            }
+            finally
+            {
+                button.IsEnabled = true;
+            }
+        }
+
         private void OnPriorityMove(object sender, PriorityMoveEventArgs e) =>
             UISettingsManager.Instance.MoveGamePriority(e.Option.Platform, e.Option.Slug, e.Offset);
 

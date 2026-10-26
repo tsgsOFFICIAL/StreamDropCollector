@@ -10,6 +10,9 @@ namespace Core.Managers
     /// </summary>
     public class NotificationManager
     {
+        private const string BotName = "Stream Drop Collector";
+        // Must be a publicly reachable image URL; Discord/Slack fetch it themselves.
+        private const string BotAvatarUrl = "https://raw.githubusercontent.com/tsgsOFFICIAL/StreamDropCollector/master/UI/Assets/logo.png";
         private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
 
         /// <summary>
@@ -61,9 +64,9 @@ namespace Core.Managers
                 string host = uri.Host;
                 object payload;
                 if (host.Contains("discord", StringComparison.OrdinalIgnoreCase))
-                    payload = new { content = $"**{title}**\n{message}" };
+                    payload = new { username = BotName, avatar_url = BotAvatarUrl, content = $"**{title}**\n{message}" };
                 else if (host.Contains("slack", StringComparison.OrdinalIgnoreCase))
-                    payload = new { text = $"*{title}*\n{message}" };
+                    payload = new { username = BotName, icon_url = BotAvatarUrl, text = $"*{title}*\n{message}" };
                 else
                     payload = new { title, message, timestamp = DateTime.UtcNow };
 
