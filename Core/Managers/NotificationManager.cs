@@ -1,6 +1,7 @@
 ﻿using System.Net.Http;
 using System.Net.Http.Json;
 using Core.Logging;
+using Core.Enums;
 using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace Core.Managers
@@ -20,16 +21,16 @@ namespace Core.Managers
         /// </summary>
         /// <param name="title">The title text shown in the notification.</param>
         /// <param name="message">The body text shown in the notification.</param>
+        /// <param name="type">The kind of notification; decides whether the webhook is allowed to receive it.</param>
         /// <param name="timeoutSeconds">The number of seconds before the toast expires. Defaults to 1 second.</param>
-        /// <param name="sendWebhook">Whether the notification may also be sent to the webhook. Defaults to <see langword="true"/>.</param>
-        public static void ShowNotification(string title, string message, double timeoutSeconds = 1, bool sendWebhook = true)
+        public static void ShowNotification(string title, string message, NotificationType type, double timeoutSeconds = 1)
         {
             UISettingsManager settings = UISettingsManager.Instance;
 
             if (!settings.QuietMode)
                 ShowToast(title, message, timeoutSeconds);
 
-            if (sendWebhook && settings.WebhookEnabled && !string.IsNullOrWhiteSpace(settings.WebhookUrl))
+            if (settings.WebhookEnabled && !string.IsNullOrWhiteSpace(settings.WebhookUrl) && settings.IsWebhookEventEnabled(type))
                 _ = SendWebhookAsync(settings.WebhookUrl, title, message);
         }
 

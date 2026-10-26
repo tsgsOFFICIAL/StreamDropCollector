@@ -92,22 +92,22 @@ namespace Core.Mining
                             AppLogger.Debug("Miner", $"Applied immediate claimed-state update. campaignId={parentCampaign.Id}, rewardId={item.Id}");
 
                         if (UISettingsManager.Instance.NotifyOnAutoClaimed)
-                            NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}");
+                            NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}", NotificationType.DropClaimed);
                     }
                     else if (parentCampaign.Platform == Platform.Kick && KickUnlinkedClaims.IsBlocked(kickWebView?.AccountId ?? string.Empty, parentCampaign.Id, item.Id))
                     {
-                        NotificationManager.ShowNotification("Account Not Linked", $"Link your game account on Kick, then claim manually: {item.Name}");
+                        NotificationManager.ShowNotification("Account Not Linked", $"Link your game account on Kick, then claim manually: {item.Name}", NotificationType.AccountNotLinked);
                     }
                     else
                     {
                         nextCheckAt = DateTime.Now.AddMinutes(1);
-                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward, re-trying in a minute: {item.Name}");
+                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward, re-trying in a minute: {item.Name}", NotificationType.DropClaimFailed);
                     }
                 }
             }
             else if (UISettingsManager.Instance.NotifyOnReadyToClaim && readyToClaimRewards.Count > 0)
             {
-                NotificationManager.ShowNotification("Drop Ready to Claim", $"You have {readyToClaimRewards.Count} drops rewards ready to claim. Please claim them manually.");
+                NotificationManager.ShowNotification("Drop Ready to Claim", $"You have {readyToClaimRewards.Count} drops rewards ready to claim. Please claim them manually.", NotificationType.DropReadyToClaim);
             }
 
             return nextCheckAt;

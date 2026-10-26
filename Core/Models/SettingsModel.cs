@@ -60,6 +60,30 @@ namespace Core.Models
         /// </summary>
         public string? WebhookUrl { get; set; }
         /// <summary>
+        /// Gets or sets a value indicating whether auto-claimed drops are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnDropClaimed { get; set; } = true;
+        /// <summary>
+        /// Gets or sets a value indicating whether "ready to claim" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnDropReadyToClaim { get; set; } = true;
+        /// <summary>
+        /// Gets or sets a value indicating whether claim failures are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnDropClaimFailed { get; set; } = true;
+        /// <summary>
+        /// Gets or sets a value indicating whether "account not linked" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnAccountNotLinked { get; set; } = true;
+        /// <summary>
+        /// Gets or sets a value indicating whether "update available" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnUpdateAvailable { get; set; } = true;
+        /// <summary>
+        /// Gets or sets a value indicating whether "application updated" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnAppUpdated { get; set; } = true;
+        /// <summary>
         /// Gets or sets a value indicating whether verbose debug messages are written to the application log.
         /// </summary>
         public bool VerboseDebugLogging { get; set; }

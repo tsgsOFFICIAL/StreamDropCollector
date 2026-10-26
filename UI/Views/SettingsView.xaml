@@ -205,6 +205,41 @@
                                         Margin="32,0,0,0"
                                         IsEnabled="{Binding WebhookEnabled}"
                                         Click="OnTestWebhookClick"/>
+                                <StackPanel Margin="32,16,0,0"
+                                            Visibility="{Binding WebhookEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock Text="Send these to the webhook:"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               FontSize="12"
+                                               Margin="0,0,0,8"/>
+                                    <CheckBox IsChecked="{Binding WebhookOnDropClaimed, Mode=TwoWay}"
+                                              Style="{StaticResource ModernCheckBoxStyle}"
+                                              Content="Drop auto-claimed"
+                                              Margin="0,0,0,8"/>
+                                    <CheckBox IsChecked="{Binding WebhookOnDropReadyToClaim, Mode=TwoWay}"
+                                              Style="{StaticResource ModernCheckBoxStyle}"
+                                              Content="Drop ready to claim"
+                                              Margin="0,0,0,8"/>
+                                    <CheckBox IsChecked="{Binding WebhookOnDropClaimFailed, Mode=TwoWay}"
+                                              Style="{StaticResource ModernCheckBoxStyle}"
+                                              Content="Drop claim failed"
+                                              Margin="0,0,0,8"/>
+                                    <CheckBox IsChecked="{Binding WebhookOnAccountNotLinked, Mode=TwoWay}"
+                                              Style="{StaticResource ModernCheckBoxStyle}"
+                                              Content="Game account not linked"
+                                              Margin="0,0,0,8"/>
+                                    <CheckBox IsChecked="{Binding WebhookOnUpdateAvailable, Mode=TwoWay}"
+                                              Style="{StaticResource ModernCheckBoxStyle}"
+                                              Content="New update is available"
+                                              Margin="0,0,0,8"/>
+                                    <CheckBox IsChecked="{Binding WebhookOnAppUpdated, Mode=TwoWay}"
+                                              Style="{StaticResource ModernCheckBoxStyle}"
+                                              Content="Application updated successfully"/>
+                                    <TextBlock Text="These only apply to notifications that are already enabled above."
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Margin="0,8,0,0"/>
+                                </StackPanel>
                                 <!-- Design-time helper: only made visible in DEBUG builds (see OnSendAllSamplesLoaded). -->
                                 <Button Content="Send All Sample Notifications (debug)"
                                         Style="{StaticResource AccentButtonStyle}"

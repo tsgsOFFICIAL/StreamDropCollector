@@ -10,6 +10,7 @@ using System.IO.Pipes;
 using System.Windows;
 using Core.Managers;
 using Core.Logging;
+using Core.Enums;
 using System.IO;
 using UI.Views;
 using Core;
@@ -214,7 +215,7 @@ namespace UI
                             }
                         });
 
-                        NotificationManager.ShowNotification("Stream Drop Collector", "Application updated successfully!");
+                        NotificationManager.ShowNotification("Stream Drop Collector", "Application updated successfully!", NotificationType.AppUpdated);
                         break;
                     case "--minimize":
                         EnterTrayMode();
@@ -376,7 +377,7 @@ namespace UI
             int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TOOLWINDOW);
 
-            NotificationManager.ShowNotification("Stream Drop Collector", "Minimized to tray - drops still farming!", sendWebhook: false);
+            NotificationManager.ShowNotification("Stream Drop Collector", "Minimized to tray - drops still farming!", NotificationType.MinimizedToTray);
             MinimizeAndRestore.Header = "Restore";
             MyNotifyIcon.ToolTipText = "Stream Drop Collector - Farming in background";
         }

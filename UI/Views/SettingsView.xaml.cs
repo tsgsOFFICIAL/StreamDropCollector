@@ -137,22 +137,22 @@ namespace UI.Views
             button.IsEnabled = false;
 
             // Mirrors every ShowNotification call site; spaced out to stay under Discord's webhook rate limit.
-            (string Title, string Message, bool Webhook)[] samples =
+            (string Title, string Message, NotificationType Type)[] samples =
             [
-                ("Drop Claimed", "Successfully claimed drop reward: Sample Reward", true),
-                ("Drop Ready to Claim", "You have 2 drops rewards ready to claim. Please claim them manually.", true),
-                ("Drop Claim Failed", "Failed to claim drop reward, re-trying in a minute: Sample Reward", true),
-                ("Account Not Linked", "Link your game account on Kick, then claim manually: Sample Reward", true),
-                ("Update Available", "A new version is available.", true),
-                ("Stream Drop Collector", "Application updated successfully!", true),
-                ("Stream Drop Collector", "Minimized to tray - drops still farming!", false),
+                ("Drop Claimed", "Successfully claimed drop reward: Sample Reward", NotificationType.DropClaimed),
+                ("Drop Ready to Claim", "You have 2 drops rewards ready to claim. Please claim them manually.", NotificationType.DropReadyToClaim),
+                ("Drop Claim Failed", "Failed to claim drop reward, re-trying in a minute: Sample Reward", NotificationType.DropClaimFailed),
+                ("Account Not Linked", "Link your game account on Kick, then claim manually: Sample Reward", NotificationType.AccountNotLinked),
+                ("Update Available", "A new version is available.", NotificationType.UpdateAvailable),
+                ("Stream Drop Collector", "Application updated successfully!", NotificationType.AppUpdated),
+                ("Stream Drop Collector", "Minimized to tray - drops still farming!", NotificationType.MinimizedToTray),
             ];
 
             try
             {
-                foreach ((string title, string message, bool webhook) in samples)
+                foreach ((string title, string message, NotificationType type) in samples)
                 {
-                    NotificationManager.ShowNotification(title, message, sendWebhook: webhook);
+                    NotificationManager.ShowNotification(title, message, type);
                     await Task.Delay(1500);
                 }
             }

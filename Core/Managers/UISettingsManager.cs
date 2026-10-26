@@ -74,6 +74,12 @@ namespace Core.Managers
         private bool _quietMode;
         private bool _webhookEnabled;
         private string _webhookUrl = string.Empty;
+        private bool _webhookOnDropClaimed = true;
+        private bool _webhookOnDropReadyToClaim = true;
+        private bool _webhookOnDropClaimFailed = true;
+        private bool _webhookOnAccountNotLinked = true;
+        private bool _webhookOnUpdateAvailable = true;
+        private bool _webhookOnAppUpdated = true;
         private bool _verboseDebugLogging;
         private bool _updateAvailable = false;
         private bool _includeBetaUpdates = false;
@@ -351,6 +357,69 @@ namespace Core.Managers
             set => SetField(ref _webhookUrl, value?.Trim() ?? string.Empty);
         }
         /// <summary>
+        /// Gets or sets a value indicating whether auto-claimed drops are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnDropClaimed
+        {
+            get => _webhookOnDropClaimed;
+            set => SetField(ref _webhookOnDropClaimed, value);
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether "ready to claim" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnDropReadyToClaim
+        {
+            get => _webhookOnDropReadyToClaim;
+            set => SetField(ref _webhookOnDropReadyToClaim, value);
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether claim failures are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnDropClaimFailed
+        {
+            get => _webhookOnDropClaimFailed;
+            set => SetField(ref _webhookOnDropClaimFailed, value);
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether "account not linked" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnAccountNotLinked
+        {
+            get => _webhookOnAccountNotLinked;
+            set => SetField(ref _webhookOnAccountNotLinked, value);
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether "update available" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnUpdateAvailable
+        {
+            get => _webhookOnUpdateAvailable;
+            set => SetField(ref _webhookOnUpdateAvailable, value);
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether "application updated" notices are sent to the webhook.
+        /// </summary>
+        public bool WebhookOnAppUpdated
+        {
+            get => _webhookOnAppUpdated;
+            set => SetField(ref _webhookOnAppUpdated, value);
+        }
+        /// <summary>
+        /// Returns whether the webhook should receive notifications of the given type.
+        /// </summary>
+        /// <param name="type">The notification type.</param>
+        /// <returns><see langword="true"/> if that type is enabled for the webhook; local-only types always return <see langword="false"/>.</returns>
+        public bool IsWebhookEventEnabled(NotificationType type) => type switch
+        {
+            NotificationType.DropClaimed => WebhookOnDropClaimed,
+            NotificationType.DropReadyToClaim => WebhookOnDropReadyToClaim,
+            NotificationType.DropClaimFailed => WebhookOnDropClaimFailed,
+            NotificationType.AccountNotLinked => WebhookOnAccountNotLinked,
+            NotificationType.UpdateAvailable => WebhookOnUpdateAvailable,
+            NotificationType.AppUpdated => WebhookOnAppUpdated,
+            _ => false
+        };
+        /// <summary>
         /// Gets or sets a value indicating whether verbose diagnostic logging is enabled.
         /// </summary>
         public bool VerboseDebugLogging
@@ -387,7 +456,7 @@ namespace Core.Managers
                 SetField(ref _updateAvailable, value);
 
                 if (value && NotifyOnNewUpdateAvailable)
-                    NotificationManager.ShowNotification("Update Available", "A new version is available.");
+                    NotificationManager.ShowNotification("Update Available", "A new version is available.", NotificationType.UpdateAvailable);
             }
         }
         /// <summary>
@@ -612,6 +681,12 @@ namespace Core.Managers
                     QuietMode = settings.QuietMode;
                     WebhookEnabled = settings.WebhookEnabled;
                     WebhookUrl = settings.WebhookUrl ?? string.Empty;
+                    WebhookOnDropClaimed = settings.WebhookOnDropClaimed;
+                    WebhookOnDropReadyToClaim = settings.WebhookOnDropReadyToClaim;
+                    WebhookOnDropClaimFailed = settings.WebhookOnDropClaimFailed;
+                    WebhookOnAccountNotLinked = settings.WebhookOnAccountNotLinked;
+                    WebhookOnUpdateAvailable = settings.WebhookOnUpdateAvailable;
+                    WebhookOnAppUpdated = settings.WebhookOnAppUpdated;
                     VerboseDebugLogging = settings.VerboseDebugLogging;
                     NotifyOnNewUpdateAvailable = settings.NotifyOnNewUpdateAvailable;
                     _lastUpdateCheck = settings.LastUpdateCheck;
@@ -669,6 +744,12 @@ namespace Core.Managers
                     QuietMode = QuietMode,
                     WebhookEnabled = WebhookEnabled,
                     WebhookUrl = WebhookUrl,
+                    WebhookOnDropClaimed = WebhookOnDropClaimed,
+                    WebhookOnDropReadyToClaim = WebhookOnDropReadyToClaim,
+                    WebhookOnDropClaimFailed = WebhookOnDropClaimFailed,
+                    WebhookOnAccountNotLinked = WebhookOnAccountNotLinked,
+                    WebhookOnUpdateAvailable = WebhookOnUpdateAvailable,
+                    WebhookOnAppUpdated = WebhookOnAppUpdated,
                     VerboseDebugLogging = VerboseDebugLogging,
                     NotifyOnNewUpdateAvailable = NotifyOnNewUpdateAvailable,
                     LastUpdateCheck = _lastUpdateCheck,
