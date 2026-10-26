@@ -178,6 +178,35 @@
                                   Content="New update is available"
                                   Margin="0,0,0,12"
                                   IsEnabled="{Binding IsUpdateNotificationEnabled}"/>
+                        <CheckBox IsChecked="{Binding QuietMode, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Quiet mode (hide Windows toast notifications)"
+                                  Margin="0,0,0,12"/>
+
+                        <Border Style="{StaticResource InsetPanelBorder}" Padding="12">
+                            <StackPanel>
+                                <CheckBox IsChecked="{Binding WebhookEnabled, Mode=TwoWay}"
+                                          Style="{StaticResource ModernCheckBoxStyle}"
+                                          Content="Also send notifications to a webhook"
+                                          Margin="0,0,0,6"/>
+                                <TextBlock Text="Works with Discord, Slack or any URL accepting a JSON POST. Treat the URL like a password."
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Margin="32,0,0,8"/>
+                                <TextBox Style="{StaticResource PlaceholderSearchTextBoxStyle}"
+                                         Tag="https://discord.com/api/webhooks/…"
+                                         Text="{Binding WebhookUrl, Mode=TwoWay}"
+                                         IsEnabled="{Binding WebhookEnabled}"
+                                         Margin="32,0,0,8"/>
+                                <Button Content="Send Test"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        HorizontalAlignment="Left"
+                                        Margin="32,0,0,0"
+                                        IsEnabled="{Binding WebhookEnabled}"
+                                        Click="OnTestWebhookClick"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </controls:SettingsSectionCard>
 

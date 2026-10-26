@@ -376,7 +376,7 @@ namespace UI
             int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TOOLWINDOW);
 
-            NotificationManager.ShowNotification("Stream Drop Collector", "Minimized to tray - drops still farming!");
+            NotificationManager.ShowNotification("Stream Drop Collector", "Minimized to tray - drops still farming!", sendWebhook: false);
             MinimizeAndRestore.Header = "Restore";
             MyNotifyIcon.ToolTipText = "Stream Drop Collector - Farming in background";
         }

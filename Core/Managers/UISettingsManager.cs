@@ -71,6 +71,9 @@ namespace Core.Managers
         private bool _autoClaimRewards = true;
         private bool _notifyOnReadyToClaim;
         private bool _notifyOnAutoClaimed = true;
+        private bool _quietMode;
+        private bool _webhookEnabled;
+        private string _webhookUrl = string.Empty;
         private bool _verboseDebugLogging;
         private bool _updateAvailable = false;
         private bool _includeBetaUpdates = false;
@@ -322,6 +325,30 @@ namespace Core.Managers
                 else
                     SetField(ref _notifyOnAutoClaimed, value);
             }
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether Windows toast notifications are suppressed. Webhooks are unaffected.
+        /// </summary>
+        public bool QuietMode
+        {
+            get => _quietMode;
+            set => SetField(ref _quietMode, value);
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether notifications are also posted to <see cref="WebhookUrl"/>.
+        /// </summary>
+        public bool WebhookEnabled
+        {
+            get => _webhookEnabled;
+            set => SetField(ref _webhookEnabled, value);
+        }
+        /// <summary>
+        /// Gets or sets the webhook URL (Discord, Slack or any endpoint accepting a JSON POST).
+        /// </summary>
+        public string WebhookUrl
+        {
+            get => _webhookUrl;
+            set => SetField(ref _webhookUrl, value?.Trim() ?? string.Empty);
         }
         /// <summary>
         /// Gets or sets a value indicating whether verbose diagnostic logging is enabled.
@@ -582,6 +609,9 @@ namespace Core.Managers
                     HideCompletedCampaigns = settings.HideCompletedCampaigns;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
                     NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
+                    QuietMode = settings.QuietMode;
+                    WebhookEnabled = settings.WebhookEnabled;
+                    WebhookUrl = settings.WebhookUrl ?? string.Empty;
                     VerboseDebugLogging = settings.VerboseDebugLogging;
                     NotifyOnNewUpdateAvailable = settings.NotifyOnNewUpdateAvailable;
                     _lastUpdateCheck = settings.LastUpdateCheck;
@@ -636,6 +666,9 @@ namespace Core.Managers
                     HideCompletedCampaigns = HideCompletedCampaigns,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,
                     NotifyOnAutoClaimed = NotifyOnAutoClaimed,
+                    QuietMode = QuietMode,
+                    WebhookEnabled = WebhookEnabled,
+                    WebhookUrl = WebhookUrl,
                     VerboseDebugLogging = VerboseDebugLogging,
                     NotifyOnNewUpdateAvailable = NotifyOnNewUpdateAvailable,
                     LastUpdateCheck = _lastUpdateCheck,

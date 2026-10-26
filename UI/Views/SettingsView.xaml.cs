@@ -103,6 +103,27 @@ namespace UI.Views
             }
         }
 
+        private async void OnTestWebhookClick(object sender, RoutedEventArgs e)
+        {
+            System.Windows.Controls.Button button = (System.Windows.Controls.Button)sender;
+            button.IsEnabled = false;
+            button.Content = "Sending...";
+
+            try
+            {
+                string? error = await NotificationManager.SendTestWebhookAsync(UISettingsManager.Instance.WebhookUrl);
+                if (error == null)
+                    MessageBox.Show("Test message sent.", "Webhook", MessageBoxButton.OK, MessageBoxImage.Information);
+                else
+                    MessageBox.Show($"Webhook test failed.\n\n{error}", "Webhook", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                button.Content = "Send Test";
+                button.IsEnabled = true;
+            }
+        }
+
         private void OnPriorityMove(object sender, PriorityMoveEventArgs e) =>
             UISettingsManager.Instance.MoveGamePriority(e.Option.Platform, e.Option.Slug, e.Offset);
 

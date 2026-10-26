@@ -48,6 +48,18 @@ namespace Core.Models
         /// </summary>
         public bool NotifyOnAutoClaimed { get; set; }
         /// <summary>
+        /// Gets or sets a value indicating whether Windows toast notifications are suppressed.
+        /// </summary>
+        public bool QuietMode { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether notifications are also sent to the webhook.
+        /// </summary>
+        public bool WebhookEnabled { get; set; }
+        /// <summary>
+        /// Gets or sets the webhook URL notifications are posted to.
+        /// </summary>
+        public string? WebhookUrl { get; set; }
+        /// <summary>
         /// Gets or sets a value indicating whether verbose debug messages are written to the application log.
         /// </summary>
         public bool VerboseDebugLogging { get; set; }
