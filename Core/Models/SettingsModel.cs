@@ -113,6 +113,10 @@ namespace Core.Models
         /// </summary>
         public bool PrioritizeBadges { get; set; }
         /// <summary>
+        /// Gets or sets a value indicating whether campaigns offering emotes or raffle entries are mined too.
+        /// </summary>
+        public bool MineAnything { get; set; }
+        /// <summary>
         /// Gets or sets a value indicating whether the inventory page hides campaigns whose rewards have all been claimed.
         /// </summary>
         public bool HideCompletedCampaigns { get; set; } = true;

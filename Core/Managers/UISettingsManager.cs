@@ -53,6 +53,11 @@ namespace Core.Managers
         public event Action<bool>? PrioritizeBadgesChanged;
 
         /// <summary>
+        /// Occurs when <see cref="MineAnything"/> changes after settings have finished loading.
+        /// </summary>
+        public event Action<bool>? MineAnythingChanged;
+
+        /// <summary>
         /// Occurs when <see cref="HeadOnlyMining"/> changes after settings have finished loading.
         /// </summary>
         public event Action<bool>? HeadOnlyMiningChanged;
@@ -99,6 +104,7 @@ namespace Core.Managers
         private bool _kickLevelFarming;
         private bool _kickDailyClaim;
         private bool _prioritizeBadges;
+        private bool _mineAnything;
         private bool _headOnlyMining;
         private bool _hideCompletedCampaigns = true;
         private bool _isLoadingSettings;
@@ -276,6 +282,19 @@ namespace Core.Managers
             {
                 if (SetField(ref _prioritizeBadges, value) && !_isLoadingSettings)
                     PrioritizeBadgesChanged?.Invoke(value);
+            }
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether campaigns offering emotes or raffle entries are mined too.
+        /// </summary>
+        /// <remarks>When off, any campaign with an emote or raffle-entry reward is skipped.</remarks>
+        public bool MineAnything
+        {
+            get => _mineAnything;
+            set
+            {
+                if (SetField(ref _mineAnything, value) && !_isLoadingSettings)
+                    MineAnythingChanged?.Invoke(value);
             }
         }
         /// <summary>
@@ -674,6 +693,7 @@ namespace Core.Managers
                     KickLevelFarming = settings.KickLevelFarming;
                     KickDailyClaim = settings.KickDailyClaim;
                     PrioritizeBadges = settings.PrioritizeBadges;
+                    MineAnything = settings.MineAnything;
                     HeadOnlyMining = settings.HeadOnlyMining;
                     HideCompletedCampaigns = settings.HideCompletedCampaigns;
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
@@ -737,6 +757,7 @@ namespace Core.Managers
                     KickLevelFarming = KickLevelFarming,
                     KickDailyClaim = KickDailyClaim,
                     PrioritizeBadges = PrioritizeBadges,
+                    MineAnything = MineAnything,
                     HeadOnlyMining = HeadOnlyMining,
                     HideCompletedCampaigns = HideCompletedCampaigns,
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,

@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using System.Text.RegularExpressions;
 using Core.Interfaces;
 using Core.Logging;
 using Core.Models;
@@ -17,6 +18,13 @@ namespace Core.Services
         /// Gets the streaming platform associated with this instance.
         /// </summary>
         public override Platform Platform => Platform.Kick;
+
+        private static readonly Regex EmoteRewardName = new(@"\bemotes?\b|^x\d+\s+entr(y|ies)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Determines whether a Kick reward is an emote or raffle entry. Kick exposes no reward type, so the name is the only signal.
+        /// </summary>
+        internal static bool IsEmoteRewardName(string? name) => name != null && EmoteRewardName.IsMatch(name.Trim());
         /// <summary>
         /// Asynchronously retrieves the list of currently active drops campaigns from Kick, including associated
         /// channels, rewards, and the user's progress and claim status for each reward.
@@ -87,7 +95,8 @@ namespace Core.Services
                             Id: r.GetProperty("id").GetString()!,
                             Name: r.GetProperty("name").GetString()!,
                             ImageUrl: "https://ext.cdn.kick.com/" + r.GetProperty("image_url").GetString(),
-                            RequiredMinutes: r.GetProperty("required_units").GetInt32()
+                            RequiredMinutes: r.GetProperty("required_units").GetInt32(),
+                            IsEmote: IsEmoteRewardName(r.GetProperty("name").GetString())
                         ))];
 
                     if (rewards.Length == 0)

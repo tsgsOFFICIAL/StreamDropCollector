@@ -116,6 +116,12 @@
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Prioritize badge drops over other campaigns"
                                   Margin="0,0,0,12"/>
+                        <CheckBox IsChecked="{Binding MineAnything, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Mine anything (include campaigns that give emotes or raffle entries)"
+                                  Margin="0,0,0,4"/>
+                        <TextBlock Text="Off by default: campaigns with an emote or raffle-entry reward are skipped, as those only work on the streaming site itself."
+                                   TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="24,0,0,12"/>
                         <CheckBox IsChecked="{Binding HeadOnlyMining, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Near-zero bandwidth mining: HEAD requests only, no video (experimental)"

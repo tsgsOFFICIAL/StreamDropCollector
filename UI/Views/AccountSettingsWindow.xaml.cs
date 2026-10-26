@@ -46,6 +46,9 @@ namespace UI.Views
             UseGlobalBadges.IsChecked = overrides.PrioritizeBadges is null;
             PrioritizeBadgesBox.IsChecked = overrides.PrioritizeBadges ?? Core.Managers.UISettingsManager.Instance.PrioritizeBadges;
 
+            UseGlobalMineAnything.IsChecked = overrides.MineAnything is null;
+            MineAnythingBox.IsChecked = overrides.MineAnything ?? Core.Managers.UISettingsManager.Instance.MineAnything;
+
             UseGlobalFilter.IsChecked = overrides.GameWhitelistSlugs is null;
             BlacklistBox.IsChecked = overrides.GameFilterBlacklistMode;
 
@@ -94,6 +97,7 @@ namespace UI.Views
 
             overrides.HeadOnlyMining = UseGlobalHeadOnly.IsChecked == true ? null : HeadOnlyBox.IsChecked == true;
             overrides.PrioritizeBadges = UseGlobalBadges.IsChecked == true ? null : PrioritizeBadgesBox.IsChecked == true;
+            overrides.MineAnything = UseGlobalMineAnything.IsChecked == true ? null : MineAnythingBox.IsChecked == true;
 
             if (UseGlobalFilter.IsChecked == true)
             {

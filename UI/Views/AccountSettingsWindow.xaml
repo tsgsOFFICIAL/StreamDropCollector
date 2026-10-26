@@ -91,6 +91,17 @@
 
                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
                     <StackPanel>
+                        <TextBlock Text="Emotes and raffle entries" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="UseGlobalMineAnything" Content="Use global setting"
+                                  Style="{StaticResource ModernCheckBoxStyle}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="MineAnythingBox" Content="Mine anything (include campaigns that give emotes or raffle entries)"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  IsEnabled="{Binding IsChecked, ElementName=UseGlobalMineAnything, Converter={StaticResource InverseBooleanConverter}}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+                    <StackPanel>
                         <TextBlock Text="Near-zero bandwidth (experimental)" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
                         <CheckBox x:Name="UseGlobalHeadOnly" Content="Use global setting"
                                   Style="{StaticResource ModernCheckBoxStyle}" Margin="0,0,0,8"/>

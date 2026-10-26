@@ -53,6 +53,11 @@ namespace Core.Managers
         public bool EffectivePrioritizeBadges => Account.Overrides.PrioritizeBadges ?? UISettingsManager.Instance.PrioritizeBadges;
 
         /// <summary>
+        /// Gets whether emote and raffle-entry campaigns are mined for this account (account override, else global setting).
+        /// </summary>
+        public bool EffectiveMineAnything => Account.Overrides.MineAnything ?? UISettingsManager.Instance.MineAnything;
+
+        /// <summary>
         /// Gets whether near-zero bandwidth (HEAD-only) mining is on for this account (account override, else global setting).
         /// </summary>
         public bool EffectiveHeadOnly => Account.Overrides.HeadOnlyMining ?? UISettingsManager.Instance.HeadOnlyMining;
@@ -74,9 +79,10 @@ namespace Core.Managers
         /// Applies this account's game filter, or the global filter when the account has no override.
         /// </summary>
         private bool IsCampaignAllowed(DropsCampaign campaign) =>
-            Account.Overrides.GameWhitelistSlugs is { } slugs
+            (EffectiveMineAnything || !campaign.HasEmote) &&
+            (Account.Overrides.GameWhitelistSlugs is { } slugs
                 ? UISettingsManager.IsAllowedByGameFilter(campaign, slugs, Account.Overrides.GameFilterBlacklistMode)
-                : UISettingsManager.Instance.IsCampaignAllowedByWhitelist(campaign);
+                : UISettingsManager.Instance.IsCampaignAllowedByWhitelist(campaign));
 
         /// <summary>
         /// Lists the games (slug and display name) seen in this account's most recent campaign load, before any game filter.
@@ -403,6 +409,7 @@ namespace Core.Managers
             UISettingsManager.Instance.GameWhitelistChanged += OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged += OnPrioritizeBadgesChanged;
+            UISettingsManager.Instance.MineAnythingChanged += OnMineAnythingChanged;
             UISettingsManager.Instance.HeadOnlyMiningChanged += OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated += OnTwitchHelixAuthenticated;
 
@@ -472,6 +479,37 @@ namespace Core.Managers
                 return;
 
             _ = StartMiningStreams(true);
+        }
+        /// <summary>
+        /// Re-filters the campaign list and re-evaluates mining when the "mine anything" toggle changes.
+        /// </summary>
+        private void OnMineAnythingChanged(bool enabled)
+        {
+            if (Account.Overrides.MineAnything.HasValue)
+                return;
+
+            _ = ApplyMineAnythingChangeAsync(enabled);
+        }
+        /// <summary>
+        /// Refreshes the active campaigns after the "mine anything" setting changes and restarts stream selection.
+        /// </summary>
+        private async Task ApplyMineAnythingChangeAsync(bool enabled)
+        {
+            try
+            {
+                AppLogger.Info("Miner", $"Mine anything {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
+
+                RefreshActiveCampaignsFromLatestSnapshot();
+
+                if (_isPaused || (TwitchWebView == null && KickWebView == null))
+                    return;
+
+                await StartMiningStreams(true);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Miner", "Failed to apply mine anything change immediately.", ex);
+            }
         }
         /// <summary>
         /// Re-evaluates mining when the near-zero bandwidth (HEAD-only) toggle changes.
@@ -1195,6 +1233,7 @@ namespace Core.Managers
             UISettingsManager.Instance.GameWhitelistChanged -= OnGameWhitelistChanged;
             UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged -= OnPrioritizeBadgesChanged;
+            UISettingsManager.Instance.MineAnythingChanged -= OnMineAnythingChanged;
             UISettingsManager.Instance.HeadOnlyMiningChanged -= OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated -= OnTwitchHelixAuthenticated;
             _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;

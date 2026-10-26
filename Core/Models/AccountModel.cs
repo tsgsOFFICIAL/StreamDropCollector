@@ -23,6 +23,9 @@ namespace Core.Models
         /// <summary>Overrides badge prioritization; <see langword="null"/> uses the global setting.</summary>
         public bool? PrioritizeBadges { get; set; }
 
+        /// <summary>Overrides mining emote and raffle-entry campaigns; <see langword="null"/> uses the global setting.</summary>
+        public bool? MineAnything { get; set; }
+
         /// <summary>Overrides near-zero bandwidth (HEAD-only) mining; <see langword="null"/> uses the global setting.</summary>
         public bool? HeadOnlyMining { get; set; }
 
@@ -38,7 +41,7 @@ namespace Core.Models
         /// <summary>Gets a value indicating whether any setting is overridden.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
         public bool HasAny => AutoClaimRewards.HasValue || KickLevelFarming.HasValue || KickDailyClaim.HasValue
-            || MiningPriorityMode.HasValue || PrioritizeBadges.HasValue || HeadOnlyMining.HasValue || GameWhitelistSlugs != null;
+            || MiningPriorityMode.HasValue || PrioritizeBadges.HasValue || MineAnything.HasValue || HeadOnlyMining.HasValue || GameWhitelistSlugs != null;
     }
 
     /// <summary>

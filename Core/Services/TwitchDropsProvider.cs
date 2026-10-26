@@ -550,7 +550,8 @@ namespace Core.Services
                                 ProgressMinutes: currentMinutes,
                                 IsClaimed: isClaimed,
                                 DropInstanceId: benefitId,
-                                IsBadge: benefit["distributionType"]?.GetValue<string>() == "BADGE"
+                                IsBadge: benefit["distributionType"]?.GetValue<string>() == "BADGE",
+                                IsEmote: benefit["distributionType"]?.GetValue<string>() == "EMOTE"
                             ));
                     }
                 }
