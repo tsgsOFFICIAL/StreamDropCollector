@@ -19,7 +19,7 @@ namespace Core.Services
         /// </summary>
         public override Platform Platform => Platform.Kick;
 
-        private static readonly Regex EmoteRewardName = new(@"\bemotes?\b|^x\d+\s+entr(y|ies)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex EmoteRewardName = new(@"\bemotes?\b|\braffles?\b|\btickets?\b|^x\d+\s+entr(y|ies)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
         /// Determines whether a Kick reward is an emote or raffle entry. Kick exposes no reward type, so the name is the only signal.
