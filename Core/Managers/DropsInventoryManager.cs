@@ -1403,6 +1403,7 @@ namespace Core.Managers
                     () => _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection),
                     EffectiveKickLevelFarming,
                     EffectiveAutoClaim,
+                    Account,
                     token);
 
                 // A platform that was streaming but has nothing selected now must stop playing (and earning watch time).

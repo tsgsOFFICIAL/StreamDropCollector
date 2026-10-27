@@ -215,7 +215,7 @@ namespace UI
                             }
                         });
 
-                        NotificationManager.ShowNotification("Stream Drop Collector", "Application updated successfully!", NotificationType.AppUpdated);
+                        NotificationManager.ShowNotification("Stream Drop Collector", "Application updated successfully!", NotificationType.AppUpdated, details: [("Now running", Utility.GetDisplayVersion())]);
                         break;
                     case "--minimize":
                         EnterTrayMode();

@@ -39,6 +39,7 @@ namespace Core.Mining
         /// <param name="markRewardClaimed">Marks a reward claimed in the active inventory.</param>
         /// <param name="updateSelectionFlags">Refreshes current-campaign highlight flags in the inventory.</param>
         /// <param name="autoClaimRewards">Whether ready rewards are claimed automatically for this account.</param>
+        /// <param name="account">The account this cycle runs for, named in webhook notifications.</param>
         /// <param name="kickLevelFarming">When true, watches a top-viewed Kick channel if no Kick campaign has progress to make.</param>
         /// <param name="cancellationToken">Cancellation token for the mining cycle.</param>
         /// <returns>Selection results, miner status, and the next scheduled re-evaluation time.</returns>
@@ -63,6 +64,7 @@ namespace Core.Mining
             Action updateSelectionFlags,
             bool kickLevelFarming,
             bool autoClaimRewards,
+            AccountModel? account,
             CancellationToken cancellationToken)
         {
             AppLogger.Debug(
@@ -99,6 +101,7 @@ namespace Core.Mining
                 kickWebView,
                 markRewardClaimed,
                 autoClaimRewards,
+                account,
                 cancellationToken);
 
             List<DropsCampaign> readyToClaimOnlyCampaigns = campaignSnapshot

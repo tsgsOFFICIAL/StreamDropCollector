@@ -23,7 +23,8 @@ namespace Core.Managers
         /// <param name="message">The body text shown in the notification.</param>
         /// <param name="type">The kind of notification; decides whether the webhook is allowed to receive it.</param>
         /// <param name="timeoutSeconds">The number of seconds before the toast expires. Defaults to 1 second.</param>
-        public static void ShowNotification(string title, string message, NotificationType type, double timeoutSeconds = 1)
+        /// <param name="details">Extra label/value pairs (account, platform, versions...) sent with the webhook only; the toast stays short.</param>
+        public static void ShowNotification(string title, string message, NotificationType type, double timeoutSeconds = 1, IReadOnlyList<(string Name, string Value)>? details = null)
         {
             UISettingsManager settings = UISettingsManager.Instance;
 
@@ -31,7 +32,7 @@ namespace Core.Managers
                 ShowToast(title, message, timeoutSeconds);
 
             if (settings.WebhookEnabled && !string.IsNullOrWhiteSpace(settings.WebhookUrl) && settings.IsWebhookEventEnabled(type))
-                _ = SendWebhookAsync(settings.WebhookUrl, title, message);
+                _ = SendWebhookAsync(settings.WebhookUrl, title, message, details);
         }
 
         /// <summary>
@@ -55,8 +56,10 @@ namespace Core.Managers
                 });
         }
 
-        private static async Task<string?> SendWebhookAsync(string url, string title, string message)
+        private static async Task<string?> SendWebhookAsync(string url, string title, string message, IReadOnlyList<(string Name, string Value)>? details = null)
         {
+            details ??= [];
+
             if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
                 return "Invalid URL";
 
@@ -65,11 +68,38 @@ namespace Core.Managers
                 string host = uri.Host;
                 object payload;
                 if (host.Contains("discord", StringComparison.OrdinalIgnoreCase))
-                    payload = new { username = BotName, avatar_url = BotAvatarUrl, content = $"**{title}**\n{message}" };
+                {
+                    payload = new
+                    {
+                        username = BotName,
+                        avatar_url = BotAvatarUrl,
+                        embeds = new[]
+                        {
+                            new
+                            {
+                                title,
+                                description = message,
+                                timestamp = DateTime.UtcNow,
+                                fields = details.Select(d => new { name = d.Name, value = d.Value, inline = true }).ToArray()
+                            }
+                        }
+                    };
+                }
                 else if (host.Contains("slack", StringComparison.OrdinalIgnoreCase))
-                    payload = new { username = BotName, icon_url = BotAvatarUrl, text = $"*{title}*\n{message}" };
+                {
+                    string lines = string.Concat(details.Select(d => $"\n*{d.Name}:* {d.Value}"));
+                    payload = new { username = BotName, icon_url = BotAvatarUrl, text = $"*{title}*\n{message}{lines}" };
+                }
                 else
-                    payload = new { title, message, timestamp = DateTime.UtcNow };
+                {
+                    payload = new
+                    {
+                        title,
+                        message,
+                        timestamp = DateTime.UtcNow,
+                        details = details.ToDictionary(d => d.Name, d => d.Value)
+                    };
+                }
 
                 using HttpResponseMessage response = await _httpClient.PostAsJsonAsync(uri, payload);
                 if (response.IsSuccessStatusCode)

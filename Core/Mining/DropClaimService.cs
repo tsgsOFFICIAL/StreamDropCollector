@@ -20,6 +20,8 @@ namespace Core.Mining
         /// <param name="twitchGqlService">Twitch claim service, if available.</param>
         /// <param name="kickWebView">Kick WebView host for in-page claims.</param>
         /// <param name="markRewardClaimed">Callback that marks a reward claimed in active inventory.</param>
+        /// <param name="autoClaimRewards">Whether ready rewards are claimed automatically for this account.</param>
+        /// <param name="account">The account being processed, named in webhook notifications.</param>
         /// <param name="cancellationToken">Cancellation token for the mining cycle.</param>
         /// <returns>Updated <paramref name="nextCheckAt"/> after any failed claims.</returns>
         public async Task<DateTime> ProcessAutoClaimsAsync(
@@ -29,6 +31,7 @@ namespace Core.Mining
             IWebViewHost? kickWebView,
             Func<string, string, bool> markRewardClaimed,
             bool autoClaimRewards,
+            AccountModel? account = null,
             CancellationToken cancellationToken = default)
         {
             List<DropsReward> readyToClaimRewards = [.. campaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
@@ -92,25 +95,57 @@ namespace Core.Mining
                             AppLogger.Debug("Miner", $"Applied immediate claimed-state update. campaignId={parentCampaign.Id}, rewardId={item.Id}");
 
                         if (UISettingsManager.Instance.NotifyOnAutoClaimed)
-                            NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}", NotificationType.DropClaimed);
+                            NotificationManager.ShowNotification("Drop Claimed", $"Successfully claimed drop reward: {item.Name}", NotificationType.DropClaimed, details: BuildDetails(account, parentCampaign, item, "Claimed automatically"));
                     }
                     else if (parentCampaign.Platform == Platform.Kick && KickUnlinkedClaims.IsBlocked(kickWebView?.AccountId ?? string.Empty, parentCampaign.Id, item.Id))
                     {
-                        NotificationManager.ShowNotification("Account Not Linked", $"Link your game account on Kick, then claim manually: {item.Name}", NotificationType.AccountNotLinked);
+                        NotificationManager.ShowNotification("Account Not Linked", $"Link your game account on Kick, then claim manually: {item.Name}", NotificationType.AccountNotLinked, details: BuildDetails(account, parentCampaign, item, "Cannot claim - game account not linked"));
                     }
                     else
                     {
                         nextCheckAt = DateTime.Now.AddMinutes(1);
-                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward, re-trying in a minute: {item.Name}", NotificationType.DropClaimFailed);
+                        NotificationManager.ShowNotification("Drop Claim Failed", $"Failed to claim drop reward, re-trying in a minute: {item.Name}", NotificationType.DropClaimFailed, details: BuildDetails(account, parentCampaign, item, "Claim failed - retrying in 1 minute"));
                     }
                 }
             }
             else if (UISettingsManager.Instance.NotifyOnReadyToClaim && readyToClaimRewards.Count > 0)
             {
-                NotificationManager.ShowNotification("Drop Ready to Claim", $"You have {readyToClaimRewards.Count} drops rewards ready to claim. Please claim them manually.", NotificationType.DropReadyToClaim);
+                List<(string Name, string Value)> details = AccountDetails(account);
+                details.Add(("Auto-claim", "Off - claim manually"));
+                details.Add(("Ready to claim", string.Join("\n", campaigns.SelectMany(c => c.Rewards
+                    .Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes)
+                    .Select(r => $"{r.Name} ({c.GameName}, {c.Platform})")))));
+
+                NotificationManager.ShowNotification("Drop Ready to Claim", $"You have {readyToClaimRewards.Count} drops rewards ready to claim. Please claim them manually.", NotificationType.DropReadyToClaim, details: details);
             }
 
             return nextCheckAt;
+        }
+
+        private static List<(string Name, string Value)> AccountDetails(AccountModel? account)
+        {
+            List<(string Name, string Value)> details = [];
+            if (account != null)
+            {
+                details.Add(("Account", string.IsNullOrWhiteSpace(account.DisplayName) ? account.Id : account.DisplayName));
+                details.Add(("Platform", account.Platform.ToString()));
+            }
+
+            return details;
+        }
+
+        private static List<(string Name, string Value)> BuildDetails(AccountModel? account, DropsCampaign campaign, DropsReward reward, string status)
+        {
+            List<(string Name, string Value)> details = AccountDetails(account);
+            if (account == null)
+                details.Add(("Platform", campaign.Platform.ToString()));
+
+            details.Add(("Status", status));
+            details.Add(("Game", campaign.GameName));
+            details.Add(("Campaign", campaign.Name));
+            details.Add(("Reward", reward.Name));
+            details.Add(("Progress", $"{DurationFormatter.Format(reward.ProgressMinutes)} / {DurationFormatter.Format(reward.RequiredMinutes)}"));
+            return details;
         }
     }
 }

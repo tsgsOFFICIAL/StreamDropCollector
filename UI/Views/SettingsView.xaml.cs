@@ -137,22 +137,32 @@ namespace UI.Views
             button.IsEnabled = false;
 
             // Mirrors every ShowNotification call site; spaced out to stay under Discord's webhook rate limit.
-            (string Title, string Message, NotificationType Type)[] samples =
+            (string Name, string Value)[] sampleReward =
             [
-                ("Drop Claimed", "Successfully claimed drop reward: Sample Reward", NotificationType.DropClaimed),
-                ("Drop Ready to Claim", "You have 2 drops rewards ready to claim. Please claim them manually.", NotificationType.DropReadyToClaim),
-                ("Drop Claim Failed", "Failed to claim drop reward, re-trying in a minute: Sample Reward", NotificationType.DropClaimFailed),
-                ("Account Not Linked", "Link your game account on Kick, then claim manually: Sample Reward", NotificationType.AccountNotLinked),
-                ("Update Available", "A new version is available.", NotificationType.UpdateAvailable),
-                ("Stream Drop Collector", "Application updated successfully!", NotificationType.AppUpdated),
-                ("Stream Drop Collector", "Minimized to tray - drops still farming!", NotificationType.MinimizedToTray),
+                ("Account", "SampleViewer"),
+                ("Platform", "Kick"),
+                ("Game", "Sample Game"),
+                ("Campaign", "Sample Campaign"),
+                ("Reward", "Sample Reward"),
+                ("Progress", "2h / 2h"),
+            ];
+            string current = Core.Utility.GetDisplayVersion();
+            (string Title, string Message, NotificationType Type, (string Name, string Value)[] Details)[] samples =
+            [
+                ("Drop Claimed", "Successfully claimed drop reward: Sample Reward", NotificationType.DropClaimed, [.. sampleReward, ("Status", "Claimed automatically")]),
+                ("Drop Ready to Claim", "You have 2 drops rewards ready to claim. Please claim them manually.", NotificationType.DropReadyToClaim, [sampleReward[0], sampleReward[1], ("Auto-claim", "Off - claim manually"), ("Ready to claim", "Sample Reward (Sample Game, Kick)\nOther Reward (Sample Game, Kick)")]),
+                ("Drop Claim Failed", "Failed to claim drop reward, re-trying in a minute: Sample Reward", NotificationType.DropClaimFailed, [.. sampleReward, ("Status", "Claim failed - retrying in 1 minute")]),
+                ("Account Not Linked", "Link your game account on Kick, then claim manually: Sample Reward", NotificationType.AccountNotLinked, [.. sampleReward, ("Status", "Cannot claim - game account not linked")]),
+                ("Update Available", $"A new version is available: 9.9.9 (current {current}).", NotificationType.UpdateAvailable, [("Current version", current), ("Available version", "9.9.9"), ("Channel", "Stable")]),
+                ("Stream Drop Collector", "Application updated successfully!", NotificationType.AppUpdated, [("Now running", current)]),
+                ("Stream Drop Collector", "Minimized to tray - drops still farming!", NotificationType.MinimizedToTray, []),
             ];
 
             try
             {
-                foreach ((string title, string message, NotificationType type) in samples)
+                foreach ((string title, string message, NotificationType type, (string Name, string Value)[] details) in samples)
                 {
-                    NotificationManager.ShowNotification(title, message, type);
+                    NotificationManager.ShowNotification(title, message, type, details: details);
                     await Task.Delay(1500);
                 }
             }

@@ -475,9 +475,20 @@ namespace Core.Managers
                 SetField(ref _updateAvailable, value);
 
                 if (value && NotifyOnNewUpdateAvailable)
-                    NotificationManager.ShowNotification("Update Available", "A new version is available.", NotificationType.UpdateAvailable);
+                {
+                    List<(string Name, string Value)> details = [("Current version", Utility.GetDisplayVersion())];
+                    if (!string.IsNullOrWhiteSpace(_availableVersion))
+                    {
+                        details.Add(("Available version", _availableVersion));
+                        details.Add(("Channel", _availableVersionIsBeta ? "Beta (nightly)" : "Stable"));
+                    }
+
+                    NotificationManager.ShowNotification("Update Available", $"A new version is available: {_availableVersion ?? "unknown"} (current {Utility.GetDisplayVersion()}).", NotificationType.UpdateAvailable, details: details);
+                }
             }
         }
+        private string? _availableVersion;
+        private bool _availableVersionIsBeta;
         /// <summary>
         /// Gets or sets a value indicating whether the application should notify the user when a new update is
         /// available.
@@ -648,6 +659,8 @@ namespace Core.Managers
                     // A nightly build ("1.3.0-nightly.<sha>") shares its FileVersion with the stable release of the same
                     // number, so it must still be offered that release; otherwise nightly users never move to stable.
                     bool isNightly = localVersionInfo.ProductVersion?.Contains("-nightly", StringComparison.OrdinalIgnoreCase) == true;
+                    _availableVersion = serverUpdateInfo.Version;
+                    _availableVersionIsBeta = false;
                     UpdateAvailable = serverVersion > localVersion || (isNightly && serverVersion == localVersion);
                 }
                 else
@@ -656,6 +669,8 @@ namespace Core.Managers
                 if (IncludeBetaUpdates && !UpdateAvailable)
                 {
                     string? betaVersion = await UpdateManager.GetBetaVersionAsync();
+                    _availableVersion = betaVersion;
+                    _availableVersionIsBeta = true;
                     UpdateAvailable = UpdateManager.IsBetaNewer(betaVersion, localVersionInfo.ProductVersion, localVersionInfo.FileVersion);
                 }
 
