@@ -21,6 +21,17 @@ namespace UI
         /// </summary>
         public static bool IsDebugMode { get; private set; }
 
+        /// <summary>
+        /// Gets a value indicating whether debug-only UI and diagnostics are enabled: always in DEBUG builds, and in any
+        /// build launched with <c>--debug</c>.
+        /// </summary>
+        public static bool ShowDebugTools =>
+#if DEBUG
+            true;
+#else
+            IsDebugMode;
+#endif
+
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
         private const string RegistryValueName = "AppsUseLightTheme";
 

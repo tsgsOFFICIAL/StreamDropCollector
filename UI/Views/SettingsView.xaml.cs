@@ -126,9 +126,8 @@ namespace UI.Views
 
         private void OnSendAllSamplesLoaded(object sender, RoutedEventArgs e)
         {
-#if DEBUG
-            ((System.Windows.Controls.Button)sender).Visibility = Visibility.Visible;
-#endif
+            if (App.ShowDebugTools)
+                ((System.Windows.Controls.Button)sender).Visibility = Visibility.Visible;
         }
 
         private async void OnSendAllSamplesClick(object sender, RoutedEventArgs e)
