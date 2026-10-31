@@ -1063,6 +1063,9 @@ namespace UI.Views
         public Task NavigateAsync(string url) =>
             RunExclusiveUiAsync(async () =>
             {
+                // CoreWebView2 is null until the control is initialized (e.g. first use by the
+                // Kick directory discovery), and WaitForNavigationCoreAsync dereferences it.
+                await EnsureInitializedCoreAsync();
                 string forcedUrl = $"{url}{(url.Contains('?') ? "&" : "?")}forceReload={DateTimeOffset.Now.ToUnixTimeMilliseconds()}";
                 WebView.Source = new Uri(forcedUrl);
                 await WaitForNavigationCoreAsync();
@@ -1247,18 +1250,21 @@ namespace UI.Views
         public Task WaitForNavigationAsync() =>
             RunOnUiAsync(WaitForNavigationCoreAsync);
 
-        private Task WaitForNavigationCoreAsync()
+        private async Task WaitForNavigationCoreAsync()
         {
+            await EnsureInitializedCoreAsync();
+
+            CoreWebView2 core = WebView.CoreWebView2;
             TaskCompletionSource<bool> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             void handler(object? s, CoreWebView2NavigationCompletedEventArgs e)
             {
-                WebView.CoreWebView2.NavigationCompleted -= handler;
+                core.NavigationCompleted -= handler;
                 tcs.TrySetResult(true);
             }
 
-            WebView.CoreWebView2.NavigationCompleted += handler;
-            return tcs.Task;
+            core.NavigationCompleted += handler;
+            await tcs.Task;
         }
         /// <summary>
         /// Asynchronously waits until the web view's DOM is fully loaded and ready for interaction.
