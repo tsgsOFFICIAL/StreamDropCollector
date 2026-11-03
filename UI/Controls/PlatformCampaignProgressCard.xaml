@@ -61,8 +61,6 @@
 
             <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                         Visibility="{Binding GameName, Converter={StaticResource StringToVisibilityConverter}}">
-                <TextBlock Text="Category:" VerticalAlignment="Center" Margin="0,0,6,0"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <Border CornerRadius="10" Padding="10,2"
                         Background="{DynamicResource CardBackgroundBrush}"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
