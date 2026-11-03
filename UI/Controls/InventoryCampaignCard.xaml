@@ -51,10 +51,14 @@
                         <Run Text="{Binding EndsAt, Mode=OneWay, StringFormat=MMM dd • HH:mm}"/>
                     </TextBlock>
 
-                    <TextBlock Margin="15,0,0,0"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               Text="{Binding TimeToCompleteText, Mode=OneWay}"
-                               ToolTip="Estimated watch time needed to finish this campaign"/>
+                    <StackPanel Margin="15,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Text="{Binding TimeUntilEndText, Mode=OneWay}"
+                                   ToolTip="Time left until this campaign ends"/>
+                        <TextBlock Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Text="{Binding TimeToCompleteText, Mode=OneWay}"
+                                   ToolTip="Estimated watch time needed to finish this campaign"/>
+                    </StackPanel>
 
                     <controls:StatusBadge BadgeText="MINING"
                                           Variant="{x:Static models:StatusBadgeVariant.Mining}"

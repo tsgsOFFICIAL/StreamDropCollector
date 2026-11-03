@@ -158,5 +158,19 @@ namespace Core.Models
         public string TimeToCompleteText => AllRewardsClaimed
             ? "Completed"
             : DurationFormatter.FormatRemaining(RemainingMinutes).Replace("left", "to complete");
+
+        /// <summary>
+        /// Gets a short label for how long is left until the campaign ends, such as "2d 5h until it ends".
+        /// </summary>
+        public string TimeUntilEndText
+        {
+            get
+            {
+                var remaining = EndsAt - DateTimeOffset.UtcNow;
+                return remaining <= TimeSpan.Zero
+                    ? "Ended"
+                    : $"{DurationFormatter.Format(Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes)))} until it ends";
+            }
+        }
     }
 }
