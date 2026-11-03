@@ -42,7 +42,7 @@ namespace Core.Services
             return await ExecuteFetchAsync(host, url, ct);
         }
 
-        private static async Task<bool> IsOnOriginAsync(IWebViewHost host, string originUrl, CancellationToken ct)
+        internal static async Task<bool> IsOnOriginAsync(IWebViewHost host, string originUrl, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
 

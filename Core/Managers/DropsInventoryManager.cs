@@ -1539,6 +1539,13 @@ namespace Core.Managers
         }
 
         /// <summary>
+        /// Fetches the channels this Kick account follows.
+        /// </summary>
+        /// <returns>The followed logins, or <see langword="null"/> when the account is not signed in or the request failed.</returns>
+        public async Task<IReadOnlyList<string>?> FetchKickFollowedChannelsAsync() =>
+            KickWebView is { } host ? await KickFollowedChannelsClient.FetchAsync(host) : null;
+
+        /// <summary>
         /// Refreshes the Kick viewer level on the UI dispatcher, skipping when a refresh is already in flight.
         /// </summary>
         private void ScheduleKickLevelRefresh()

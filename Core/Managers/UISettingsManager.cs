@@ -338,6 +338,25 @@ namespace Core.Managers
         public IReadOnlyList<string> GetPriorityStreamers(Platform platform) =>
             platform == Platform.Twitch ? _twitchPriorityStreamers : _kickPriorityStreamers;
 
+        /// <summary>
+        /// Appends logins to a platform's priority list, skipping ones already in it.
+        /// </summary>
+        /// <returns>The number of logins that were new.</returns>
+        public int AddPriorityStreamers(Platform platform, IEnumerable<string> logins)
+        {
+            IReadOnlyList<string> existing = GetPriorityStreamers(platform);
+            List<string> added = logins
+                .Select(x => x.Trim().ToLowerInvariant())
+                .Where(x => x.Length > 0 && !existing.Contains(x))
+                .Distinct()
+                .ToList();
+
+            if (added.Count > 0)
+                SetPriorityStreamers(platform, string.Join(",", existing.Concat(added)));
+
+            return added.Count;
+        }
+
         private void SetPriorityStreamers(Platform platform, string? text)
         {
             // Accept logins or pasted channel URLs, separated by commas, semicolons, spaces or new lines.

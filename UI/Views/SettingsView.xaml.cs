@@ -5,6 +5,7 @@ using System.Windows;
 using Core.Managers;
 using Core.Logging;
 using Core.Enums;
+using UI.Accounts;
 using System.IO;
 
 namespace UI.Views
@@ -164,6 +165,46 @@ namespace UI.Views
                     NotificationManager.ShowNotification(title, message, type, details: details);
                     await Task.Delay(1500);
                 }
+            }
+            finally
+            {
+                button.IsEnabled = true;
+            }
+        }
+
+        private async void OnImportKickFollowsClick(object sender, RoutedEventArgs e)
+        {
+            // The button and its status text sit in the same row; they are not named because the card is a separate name scope.
+            System.Windows.Controls.Button button = (System.Windows.Controls.Button)sender;
+            System.Windows.Controls.TextBlock status = ((System.Windows.Controls.Panel)button.Parent).Children
+                .OfType<System.Windows.Controls.TextBlock>().First();
+
+            List<AccountSession> kickAccounts = [.. AccountManager.Instance.Sessions.Where(s => !s.IsTwitch && s.IsConnected)];
+            if (kickAccounts.Count == 0)
+            {
+                status.Text = "Connect a Kick account first.";
+                return;
+            }
+
+            button.IsEnabled = false;
+            status.Text = "Importing...";
+
+            try
+            {
+                int added = 0;
+                int failed = 0;
+                foreach (AccountSession account in kickAccounts)
+                {
+                    IReadOnlyList<string>? follows = await account.Engine.FetchKickFollowedChannelsAsync();
+                    if (follows is null)
+                        failed++;
+                    else
+                        added += UISettingsManager.Instance.AddPriorityStreamers(Platform.Kick, follows);
+                }
+
+                status.Text = failed == kickAccounts.Count
+                    ? "Could not read the follow list. Try again in a moment."
+                    : $"Added {added} followed channel(s).{(failed > 0 ? $" {failed} account(s) failed." : string.Empty)}";
             }
             finally
             {
