@@ -76,6 +76,12 @@ namespace Core.Managers
         public MiningPriorityMode EffectiveMiningPriority => Account.Overrides.MiningPriorityMode ?? UISettingsManager.Instance.MiningPriorityMode;
 
         /// <summary>
+        /// Gets the streamers watched first on this account's platform (account override, else global list).
+        /// </summary>
+        public IReadOnlyList<string> EffectivePriorityStreamers =>
+            Account.Overrides.PriorityStreamers ?? UISettingsManager.Instance.GetPriorityStreamers(Account.Platform);
+
+        /// <summary>
         /// Applies this account's game filter, or the global filter when the account has no override.
         /// </summary>
         private bool IsCampaignAllowed(DropsCampaign campaign) =>
@@ -1085,8 +1091,8 @@ namespace Core.Managers
         {
             _kickLiveChannelApi = new KickLiveChannelApi(() => KickWebView, _kickGeneralDropCache);
             _twitchLiveChannelApi = new TwitchLiveChannelApi(_twitchHelixService, () => TwitchWebView, _twitchGeneralDropCache);
-            _kickStreamerSelector = new KickStreamerSelector(_kickLiveChannelApi, _lastMinedStreamers);
-            _twitchStreamerSelector = new TwitchStreamerSelector(_twitchLiveChannelApi, _lastMinedStreamers);
+            _kickStreamerSelector = new KickStreamerSelector(_kickLiveChannelApi, _lastMinedStreamers, () => EffectivePriorityStreamers);
+            _twitchStreamerSelector = new TwitchStreamerSelector(_twitchLiveChannelApi, _lastMinedStreamers, () => EffectivePriorityStreamers);
             _twitchPageReader = new TwitchStreamPageReader(TwitchWebView, _webViewUiRunner, () => EffectiveTwitchLoopMode);
             _kickPageReader = new KickStreamPageReader(KickWebView, _webViewUiRunner, () => EffectiveKickLoopMode);
         }

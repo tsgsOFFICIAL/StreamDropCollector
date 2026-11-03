@@ -49,6 +49,10 @@ namespace UI.Views
             UseGlobalMineAnything.IsChecked = overrides.MineAnything is null;
             MineAnythingBox.IsChecked = overrides.MineAnything ?? Core.Managers.UISettingsManager.Instance.MineAnything;
 
+            UseGlobalStreamers.IsChecked = overrides.PriorityStreamers is null;
+            StreamersBox.Text = string.Join(", ", overrides.PriorityStreamers ?? Core.Managers.UISettingsManager.Instance.GetPriorityStreamers(session.Model.Platform));
+            ImportFollowsRow.Visibility = session.Model.Platform == Platform.Kick ? Visibility.Visible : Visibility.Collapsed;
+
             UseGlobalFilter.IsChecked = overrides.GameWhitelistSlugs is null;
             BlacklistBox.IsChecked = overrides.GameFilterBlacklistMode;
 
@@ -99,6 +103,10 @@ namespace UI.Views
             overrides.PrioritizeBadges = UseGlobalBadges.IsChecked == true ? null : PrioritizeBadgesBox.IsChecked == true;
             overrides.MineAnything = UseGlobalMineAnything.IsChecked == true ? null : MineAnythingBox.IsChecked == true;
 
+            overrides.PriorityStreamers = UseGlobalStreamers.IsChecked == true
+                ? null
+                : Core.Managers.UISettingsManager.ParseStreamerList(StreamersBox.Text);
+
             if (UseGlobalFilter.IsChecked == true)
             {
                 overrides.GameWhitelistSlugs = null;
@@ -112,6 +120,36 @@ namespace UI.Views
 
             _session.ApplyOverridesChanged();
             DialogResult = true;
+        }
+
+        private async void OnImportFollowsClick(object sender, RoutedEventArgs e)
+        {
+            System.Windows.Controls.Button button = (System.Windows.Controls.Button)sender;
+            button.IsEnabled = false;
+            ImportFollowsStatus.Text = "Importing...";
+
+            try
+            {
+                IReadOnlyList<string>? follows = await _session.Engine.FetchKickFollowedChannelsAsync();
+                if (follows is null)
+                {
+                    ImportFollowsStatus.Text = _session.IsConnected
+                        ? "Could not read the follow list. Try again in a moment."
+                        : "Connect this account first.";
+                    return;
+                }
+
+                // Append to what is in the box (not yet saved), keeping the order and skipping duplicates.
+                List<string> merged = Core.Managers.UISettingsManager.ParseStreamerList(StreamersBox.Text);
+                int before = merged.Count;
+                merged.AddRange(follows.Where(f => !merged.Contains(f)));
+                StreamersBox.Text = string.Join(", ", merged);
+                ImportFollowsStatus.Text = $"Added {merged.Count - before} followed channel(s). Press Save to keep them.";
+            }
+            finally
+            {
+                button.IsEnabled = true;
+            }
         }
 
         private void OnCancelClick(object sender, RoutedEventArgs e) => DialogResult = false;

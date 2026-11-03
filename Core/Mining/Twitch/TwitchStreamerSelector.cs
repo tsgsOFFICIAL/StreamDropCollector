@@ -14,16 +14,22 @@ namespace Core.Mining.Twitch
     {
         private readonly ITwitchLiveChannelApi _liveChannelApi;
         private readonly LastMinedStreamersStore _lastMinedStreamers;
+        private readonly Func<IReadOnlyList<string>> _priorityStreamers;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TwitchStreamerSelector"/> class.
         /// </summary>
         /// <param name="liveChannelApi">Twitch live-channel API used to resolve eligible streamers.</param>
         /// <param name="lastMinedStreamers">Store of last-mined streamer URLs per campaign slug.</param>
-        public TwitchStreamerSelector(ITwitchLiveChannelApi liveChannelApi, LastMinedStreamersStore lastMinedStreamers)
+        /// <param name="priorityStreamers">Provides the account's priority streamer logins, highest priority first.</param>
+        public TwitchStreamerSelector(
+            ITwitchLiveChannelApi liveChannelApi,
+            LastMinedStreamersStore lastMinedStreamers,
+            Func<IReadOnlyList<string>> priorityStreamers)
         {
             _liveChannelApi = liveChannelApi;
             _lastMinedStreamers = lastMinedStreamers;
+            _priorityStreamers = priorityStreamers;
         }
 
         /// <summary>
@@ -43,7 +49,7 @@ namespace Core.Mining.Twitch
                 $"SelectUrlAsync campaign='{campaign.Name}' slug='{campaign.Slug}' rememberedUrl={rememberedUrl ?? "(none)"} preferredLogin={preferredLogin ?? "(none)"}");
 
             string? login = await PriorityStreamerPicker.PickAsync(
-                Platform.Twitch,
+                _priorityStreamers(),
                 campaign,
                 candidate => _liveChannelApi.IsChannelEligibleAsync(candidate, campaign))
                 ?? await _liveChannelApi.SelectBestLiveLoginAsync(campaign, preferredLogin);

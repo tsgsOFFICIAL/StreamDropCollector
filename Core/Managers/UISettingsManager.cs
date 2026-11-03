@@ -357,17 +357,21 @@ namespace Core.Managers
             return added.Count;
         }
 
+        /// <summary>
+        /// Parses streamer logins or pasted channel URLs, separated by commas, semicolons, spaces or new lines.
+        /// </summary>
+        public static List<string> ParseStreamerList(string? text) => (text ?? string.Empty)
+            .Split([',', ';', ' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim().TrimEnd('/'))
+            .Select(x => x.Contains('/') ? x[(x.LastIndexOf('/') + 1)..] : x)
+            .Select(x => x.TrimStart('@').ToLowerInvariant())
+            .Where(x => x.Length > 0)
+            .Distinct()
+            .ToList();
+
         private void SetPriorityStreamers(Platform platform, string? text)
         {
-            // Accept logins or pasted channel URLs, separated by commas, semicolons, spaces or new lines.
-            List<string> parsed = (text ?? string.Empty)
-                .Split([',', ';', ' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim().TrimEnd('/'))
-                .Select(x => x.Contains('/') ? x[(x.LastIndexOf('/') + 1)..] : x)
-                .Select(x => x.TrimStart('@').ToLowerInvariant())
-                .Where(x => x.Length > 0)
-                .Distinct()
-                .ToList();
+            List<string> parsed = ParseStreamerList(text);
 
             // Lists compare by reference, so this always saves and refreshes the box with the normalized text.
             if (platform == Platform.Twitch)

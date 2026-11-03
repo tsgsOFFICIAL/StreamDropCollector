@@ -1,7 +1,5 @@
-using Core.Enums;
 using Core.Helpers;
 using Core.Logging;
-using Core.Managers;
 using Core.Models;
 
 namespace Core.Mining
@@ -15,15 +13,14 @@ namespace Core.Mining
         /// Returns the first priority streamer that is live and eligible for the campaign, or <see langword="null"/>
         /// so the caller falls back to its normal selection.
         /// </summary>
-        /// <param name="platform">Platform whose priority list is used.</param>
+        /// <param name="priority">The account's priority logins, highest priority first.</param>
         /// <param name="campaign">Campaign about to be mined.</param>
         /// <param name="isEligibleAsync">Checks that a login is live and streaming the campaign's category.</param>
         public static async Task<string?> PickAsync(
-            Platform platform,
+            IReadOnlyList<string> priority,
             DropsCampaign campaign,
             Func<string, Task<bool>> isEligibleAsync)
         {
-            IReadOnlyList<string> priority = UISettingsManager.Instance.GetPriorityStreamers(platform);
             if (priority.Count == 0)
                 return null;
 

@@ -14,16 +14,22 @@ namespace Core.Mining.Kick
     {
         private readonly IKickLiveChannelApi _liveChannelApi;
         private readonly LastMinedStreamersStore _lastMinedStreamers;
+        private readonly Func<IReadOnlyList<string>> _priorityStreamers;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="KickStreamerSelector"/> class.
         /// </summary>
         /// <param name="liveChannelApi">Kick live-channel API used to resolve eligible streamers.</param>
         /// <param name="lastMinedStreamers">Store of last-mined streamer URLs per campaign slug.</param>
-        public KickStreamerSelector(IKickLiveChannelApi liveChannelApi, LastMinedStreamersStore lastMinedStreamers)
+        /// <param name="priorityStreamers">Provides the account's priority streamer logins, highest priority first.</param>
+        public KickStreamerSelector(
+            IKickLiveChannelApi liveChannelApi,
+            LastMinedStreamersStore lastMinedStreamers,
+            Func<IReadOnlyList<string>> priorityStreamers)
         {
             _liveChannelApi = liveChannelApi;
             _lastMinedStreamers = lastMinedStreamers;
+            _priorityStreamers = priorityStreamers;
         }
 
         /// <summary>
@@ -39,7 +45,7 @@ namespace Core.Mining.Kick
                 : StreamerUrlParser.GetLoginFromUrl(rememberedUrl);
 
             string? login = await PriorityStreamerPicker.PickAsync(
-                Platform.Kick,
+                _priorityStreamers(),
                 campaign,
                 candidate => _liveChannelApi.IsChannelEligibleAsync(candidate, campaign))
                 ?? await _liveChannelApi.SelectBestLiveLoginAsync(campaign, preferredLogin);

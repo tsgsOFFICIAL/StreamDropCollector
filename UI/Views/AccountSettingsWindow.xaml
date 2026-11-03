@@ -111,6 +111,27 @@
                     </StackPanel>
                 </Border>
 
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Priority streamers" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="UseGlobalStreamers" Content="Use global setting"
+                                  Style="{StaticResource ModernCheckBoxStyle}" Margin="0,0,0,8"/>
+                        <StackPanel IsEnabled="{Binding IsChecked, ElementName=UseGlobalStreamers, Converter={StaticResource InverseBooleanConverter}}">
+                            <TextBlock Text="Streamers to watch first, highest priority first (comma separated logins or channel links). Falls back to any eligible streamer when none is live."
+                                       TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,0,8"/>
+                            <TextBox x:Name="StreamersBox"
+                                     Style="{StaticResource PlaceholderSearchTextBoxStyle}"
+                                     Tag="streamer1, streamer2"/>
+                            <StackPanel x:Name="ImportFollowsRow" Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button Content="Import Kick follows" Style="{StaticResource AccentButtonStyle}"
+                                        Click="OnImportFollowsClick"/>
+                                <TextBlock x:Name="ImportFollowsStatus" VerticalAlignment="Center" Margin="12,0,0,0"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <Border Style="{StaticResource CardBorder}">
                     <StackPanel>
                         <TextBlock Text="Game filtering" Style="{StaticResource SettingsSectionTitle}" Margin="0,0,0,8"/>

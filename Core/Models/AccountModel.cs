@@ -38,10 +38,17 @@ namespace Core.Models
         /// <summary>When the game filter is overridden, mine everything except the listed games.</summary>
         public bool GameFilterBlacklistMode { get; set; }
 
+        /// <summary>
+        /// Overrides the priority streamers (logins, highest priority first). <see langword="null"/> uses the global list;
+        /// an empty list means this account has no priority streamers.
+        /// </summary>
+        public List<string>? PriorityStreamers { get; set; }
+
         /// <summary>Gets a value indicating whether any setting is overridden.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
         public bool HasAny => AutoClaimRewards.HasValue || KickLevelFarming.HasValue || KickDailyClaim.HasValue
-            || MiningPriorityMode.HasValue || PrioritizeBadges.HasValue || MineAnything.HasValue || HeadOnlyMining.HasValue || GameWhitelistSlugs != null;
+            || MiningPriorityMode.HasValue || PrioritizeBadges.HasValue || MineAnything.HasValue || HeadOnlyMining.HasValue || GameWhitelistSlugs != null
+            || PriorityStreamers != null;
     }
 
     /// <summary>
