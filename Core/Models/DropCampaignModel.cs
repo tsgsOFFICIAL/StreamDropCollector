@@ -120,6 +120,12 @@ namespace Core.Models
         bool IsRewardCampaign = false)
     {
         /// <summary>
+        /// Gets a value indicating whether the campaign's game can be added to or removed from the game filter,
+        /// which needs a game slug and a campaign that is actually mined.
+        /// </summary>
+        public bool CanFilterByGame => !IsRewardCampaign && !string.IsNullOrWhiteSpace(Slug);
+
+        /// <summary>
         /// Gets a value indicating whether every reward in the campaign has been claimed.
         /// </summary>
         public bool AllRewardsClaimed => Rewards.All(r => r.IsClaimed);

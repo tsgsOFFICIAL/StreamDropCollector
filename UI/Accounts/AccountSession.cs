@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
 using Core.Enums;
+using Core.Helpers;
 using Core.Interfaces;
 using Core.Logging;
 using Core.Managers;
@@ -391,6 +392,60 @@ namespace UI.Accounts
             OnPropertyChanged(nameof(CustomSettingsLabel));
             ModelChanged?.Invoke(this);
             Engine.NotifyAccountSettingsChanged();
+        }
+
+        /// <summary>Raised after the game filter was edited through the inventory shortcuts.</summary>
+        public event Action? GameFilterEdited;
+
+        /// <summary>
+        /// Gets the game filter this account mines with: its own override when it has one, otherwise the global filter.
+        /// </summary>
+        private (IReadOnlyList<string> Slugs, bool Blacklist) EffectiveGameFilter =>
+            Model.Overrides.GameWhitelistSlugs is { } slugs
+                ? (slugs, Model.Overrides.GameFilterBlacklistMode)
+                : UISettingsManager.Instance.GetGameFilter(Model.Platform);
+
+        /// <summary>Gets text saying whose game filter the inventory shortcuts change.</summary>
+        public string GameFilterScopeText => Model.Overrides.GameWhitelistSlugs is null
+            ? $"all {PlatformName} accounts without their own game filter"
+            : "this account only";
+
+        /// <summary>Stops a game from being mined by editing this account's effective game filter.</summary>
+        public void IgnoreGame(string slug) => EditGameFilter((slugs, blacklist) => GameFilterEditor.Ignore(slugs, blacklist, slug));
+
+        /// <summary>Lets an ignored game be mined again by editing this account's effective game filter.</summary>
+        public void UnignoreGame(string slug) => EditGameFilter((slugs, blacklist) => GameFilterEditor.Unignore(slugs, blacklist, slug));
+
+        /// <summary>Moves a game to the top of the mining priority order.</summary>
+        public void MoveGameToTop(string slug) => EditGameFilter((slugs, blacklist) => GameFilterEditor.MoveToTop(slugs, blacklist, slug));
+
+        /// <summary>Gets a value indicating whether a game can be moved up the mining priority order.</summary>
+        public bool CanMoveGameToTop(string slug) => EffectiveGameFilter is var (slugs, blacklist)
+            && GameFilterEditor.CanMoveToTop(slugs, blacklist, slug);
+
+        /// <summary>Lists the games this account knows about that its game filter currently excludes.</summary>
+        public IReadOnlyList<IgnoredGame> GetIgnoredGames()
+        {
+            (IReadOnlyList<string> slugs, bool blacklist) = EffectiveGameFilter;
+            return [.. Engine.GetKnownGames()
+                .Where(g => !UISettingsManager.IsSlugAllowed(g.Slug, slugs, blacklist))
+                .Select(g => new IgnoredGame(g.Slug, g.Name))];
+        }
+
+        private void EditGameFilter(Func<IReadOnlyList<string>, bool, (List<string> Slugs, bool Blacklist)> change)
+        {
+            AccountSettingsOverrides overrides = Model.Overrides;
+            if (overrides.GameWhitelistSlugs is { } slugs)
+            {
+                (overrides.GameWhitelistSlugs, overrides.GameFilterBlacklistMode) = change(slugs, overrides.GameFilterBlacklistMode);
+                ApplyOverridesChanged();
+            }
+            else
+            {
+                UISettingsManager.Instance.EditGameFilter(Model.Platform, change);
+            }
+
+            GameFilterEdited?.Invoke();
         }
 
         /// <summary>Gets a value indicating whether the engine is actively mining.</summary>

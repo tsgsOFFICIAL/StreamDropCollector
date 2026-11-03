@@ -1136,16 +1136,69 @@ namespace Core.Managers
         /// <param name="excludeMode">When true the selected games are excluded instead of being the only ones allowed.</param>
         public static bool IsAllowedByGameFilter(DropsCampaign campaign, IReadOnlyCollection<string> whitelist, bool excludeMode)
         {
+            return IsSlugAllowed(campaign.Slug, whitelist, excludeMode);
+        }
+
+        /// <summary>
+        /// Evaluates a game slug against an explicit game list.
+        /// </summary>
+        /// <param name="gameSlug">The game slug to evaluate.</param>
+        /// <param name="whitelist">Selected game slugs; empty allows everything.</param>
+        /// <param name="excludeMode">When true the selected games are excluded instead of being the only ones allowed.</param>
+        public static bool IsSlugAllowed(string? gameSlug, IReadOnlyCollection<string> whitelist, bool excludeMode)
+        {
             // No games selected => allow everything (regardless of mode).
             if (whitelist.Count == 0)
                 return true;
 
-            string slug = campaign.Slug?.Trim().ToLowerInvariant() ?? string.Empty;
+            string slug = gameSlug?.Trim().ToLowerInvariant() ?? string.Empty;
             bool inList = whitelist.Contains(slug, StringComparer.OrdinalIgnoreCase);
 
             // Exclude mode: allow everything EXCEPT the selected games.
             // Allow mode: allow ONLY the selected games.
             return excludeMode ? !inList : inList;
+        }
+
+        /// <summary>
+        /// Gets a platform's global game filter: the selected slugs in order, and whether they are excluded instead of allowed.
+        /// </summary>
+        public (IReadOnlyList<string> Slugs, bool Blacklist) GetGameFilter(Platform platform) =>
+            platform == Platform.Twitch
+                ? (_twitchGameWhitelistSlugs, _twitchGameFilterBlacklistMode)
+                : (_kickGameWhitelistSlugs, _kickGameFilterBlacklistMode);
+
+        /// <summary>
+        /// Edits a platform's global game filter in one step: updates the list and mode, refreshes the settings page and
+        /// re-evaluates mining once.
+        /// </summary>
+        /// <param name="platform">The platform whose filter changes.</param>
+        /// <param name="change">Computes the new list and mode from the current ones.</param>
+        public void EditGameFilter(
+            Platform platform,
+            Func<IReadOnlyList<string>, bool, (List<string> Slugs, bool Blacklist)> change)
+        {
+            bool twitch = platform == Platform.Twitch;
+            (List<string> slugs, bool blacklist) = change(
+                twitch ? _twitchGameWhitelistSlugs : _kickGameWhitelistSlugs,
+                twitch ? _twitchGameFilterBlacklistMode : _kickGameFilterBlacklistMode);
+
+            slugs = NormalizeWhitelist(slugs);
+            if (twitch)
+            {
+                _twitchGameWhitelistSlugs = slugs;
+                _twitchGameFilterBlacklistMode = blacklist;
+            }
+            else
+            {
+                _kickGameWhitelistSlugs = slugs;
+                _kickGameFilterBlacklistMode = blacklist;
+            }
+
+            // Rebuilds the option checkboxes, the priority list and the summaries from the new list.
+            UpdateAvailableGameFilterOptions([]);
+            OnPropertyChanged(twitch ? nameof(TwitchGameFilterBlacklistMode) : nameof(KickGameFilterBlacklistMode));
+            Task.Run(SaveSettings);
+            GameWhitelistChanged?.Invoke(platform);
         }
 
         private void RebuildOptionsCollection(

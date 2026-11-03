@@ -22,10 +22,21 @@
                                    ImageWidth="100" ImageHeight="100" CornerRadius="10" VerticalAlignment="Top"/>
 
             <StackPanel Grid.Column="1" Margin="20,0,24,0" VerticalAlignment="Top">
-                <TextBlock Text="{Binding GameName}"
-                           FontSize="22"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding GameName}"
+                               FontSize="22"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <Button x:Name="MoveTopButton" Content="▲ Mine first" Visibility="Collapsed"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Margin="14,0,0,0" Padding="10,2" VerticalAlignment="Center"
+                            Click="OnMoveGameToTopClick"/>
+                    <Button x:Name="IgnoreButton" Content="Ignore game" Visibility="Collapsed"
+                            Style="{StaticResource DangerButtonStyle}"
+                            Margin="8,0,0,0" Padding="10,2" VerticalAlignment="Center"
+                            Click="OnIgnoreGameClick"/>
+                </StackPanel>
 
                 <TextBlock Text="{Binding Name}"
                            FontSize="14"
