@@ -59,12 +59,18 @@
                 </TextBlock>
             </StackPanel>
 
-            <TextBlock Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
-                       Visibility="{Binding GameName, Converter={StaticResource StringToVisibilityConverter}}">
-                <Run Text="Category: " Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <Run Text="{Binding GameName, Mode=OneWay}" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TextPrimaryBrush}"/>
-            </TextBlock>
+            <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                        Visibility="{Binding GameName, Converter={StaticResource StringToVisibilityConverter}}">
+                <TextBlock Text="Category:" VerticalAlignment="Center" Margin="0,0,6,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Border CornerRadius="10" Padding="10,2"
+                        Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <TextBlock Text="{Binding GameName, Mode=OneWay}" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </Border>
+            </StackPanel>
 
             <ProgressBar Margin="0,10,0,5" Minimum="0" Maximum="100"
                          Value="{Binding DisplayCampaignProgress, Mode=OneWay}"/>
