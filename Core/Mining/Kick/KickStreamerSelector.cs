@@ -38,7 +38,11 @@ namespace Core.Mining.Kick
                 ? null
                 : StreamerUrlParser.GetLoginFromUrl(rememberedUrl);
 
-            string? login = await _liveChannelApi.SelectBestLiveLoginAsync(campaign, preferredLogin);
+            string? login = await PriorityStreamerPicker.PickAsync(
+                Platform.Kick,
+                campaign,
+                candidate => _liveChannelApi.IsChannelEligibleAsync(candidate, campaign))
+                ?? await _liveChannelApi.SelectBestLiveLoginAsync(campaign, preferredLogin);
             if (string.IsNullOrWhiteSpace(login))
             {
                 AppLogger.Warn("KickSelection", $"No Kick streamer resolved for campaign '{campaign.Name}'.");

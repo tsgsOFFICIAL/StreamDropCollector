@@ -1,6 +1,8 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using Core.Enums;
 using Core.Managers;
 using Core.Models;
 using UI.Accounts;
@@ -36,6 +38,7 @@ namespace UI.Views
             AccountManager.Instance.EnabledAccountsChanged += () => _enabledAccounts.Refresh();
             AccountPicker.SelectedItem = AccountManager.Instance.SelectedSession;
             HideCompletedBox.IsChecked = UISettingsManager.Instance.HideCompletedCampaigns;
+            SortPicker.SelectedValue = UISettingsManager.Instance.InventorySortMode;
             BindCampaigns(AccountManager.Instance.SelectedSession);
 
             AccountManager.Instance.SelectedSessionChanged += session =>
@@ -53,12 +56,50 @@ namespace UI.Views
             _campaignView = session?.Engine is { } engine
                 ? new ListCollectionView(engine.ActiveCampaigns) { Filter = IsVisibleCampaign }
                 : null;
+            ApplySort(_campaignView);
             CampaignList.ItemsSource = _campaignView;
 
             _rewardCampaignView = session?.Engine is { } rewardEngine
                 ? new ListCollectionView(rewardEngine.RewardCampaigns) { Filter = IsVisibleCampaign }
                 : null;
+            ApplySort(_rewardCampaignView);
             RewardCampaignList.ItemsSource = _rewardCampaignView;
+        }
+
+        private static void ApplySort(ListCollectionView? view)
+        {
+            if (view is null)
+                return;
+
+            using (view.DeferRefresh())
+            {
+                view.SortDescriptions.Clear();
+                switch (UISettingsManager.Instance.InventorySortMode)
+                {
+                    case InventorySortMode.EndingSoonest:
+                        view.SortDescriptions.Add(new SortDescription(nameof(DropsCampaign.EndsAt), ListSortDirection.Ascending));
+                        break;
+                    case InventorySortMode.GameName:
+                        view.SortDescriptions.Add(new SortDescription(nameof(DropsCampaign.GameName), ListSortDirection.Ascending));
+                        view.SortDescriptions.Add(new SortDescription(nameof(DropsCampaign.EndsAt), ListSortDirection.Ascending));
+                        break;
+                    case InventorySortMode.LeastTimeRemaining:
+                        // Finished campaigns have 0 minutes left, so keep them below the ones still in progress.
+                        view.SortDescriptions.Add(new SortDescription(nameof(DropsCampaign.AllRewardsClaimed), ListSortDirection.Ascending));
+                        view.SortDescriptions.Add(new SortDescription(nameof(DropsCampaign.RemainingMinutes), ListSortDirection.Ascending));
+                        break;
+                }
+            }
+        }
+
+        private void OnSortPickerSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (SortPicker.SelectedValue is not InventorySortMode mode)
+                return;
+
+            UISettingsManager.Instance.InventorySortMode = mode;
+            ApplySort(_campaignView);
+            ApplySort(_rewardCampaignView);
         }
 
         private static bool IsVisibleCampaign(object item) =>

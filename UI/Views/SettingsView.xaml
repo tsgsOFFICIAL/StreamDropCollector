@@ -167,6 +167,24 @@
                     </StackPanel>
                 </controls:SettingsSectionCard>
 
+                <controls:SettingsSectionCard Title="Priority Streamers">
+                    <StackPanel>
+                        <TextBlock Text="Streamers to watch first, highest priority first (comma separated logins or channel links). When none of them is live and eligible for the campaign, the miner falls back to any eligible streamer."
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,12"/>
+                        <TextBlock Text="Twitch" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                        <TextBox Style="{StaticResource PlaceholderSearchTextBoxStyle}"
+                                 Tag="streamer1, streamer2"
+                                 Text="{Binding TwitchPriorityStreamersText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                 Margin="0,0,0,12"/>
+                        <TextBlock Text="Kick" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                        <TextBox Style="{StaticResource PlaceholderSearchTextBoxStyle}"
+                                 Tag="streamer1, streamer2"
+                                 Text="{Binding KickPriorityStreamersText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                    </StackPanel>
+                </controls:SettingsSectionCard>
+
                 <controls:SettingsSectionCard Title="Notifications">
                     <StackPanel>
                         <CheckBox IsChecked="{Binding NotifyOnReadyToClaim, Mode=TwoWay}"

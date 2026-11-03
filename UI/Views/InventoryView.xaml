@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:controls="clr-namespace:UI.Controls"
+             xmlns:enums="clr-namespace:Core.Enums;assembly=Core"
              mc:Ignorable="d"
              d:DesignHeight="900" d:DesignWidth="1200"
              Background="{DynamicResource MainBackgroundBrush}">
@@ -22,6 +23,15 @@
             <ComboBox x:Name="AccountPicker" DockPanel.Dock="Right" MinWidth="240" VerticalAlignment="Center"
                       Style="{StaticResource NeonFlatComboBoxStyle}"
                       SelectionChanged="OnAccountPickerSelectionChanged"/>
+            <ComboBox x:Name="SortPicker" DockPanel.Dock="Right" MinWidth="190" VerticalAlignment="Center" Margin="0,0,20,0"
+                      Style="{StaticResource NeonFlatComboBoxStyle}"
+                      SelectedValuePath="Tag"
+                      SelectionChanged="OnSortPickerSelectionChanged">
+                <ComboBoxItem Content="Sort: Default" Tag="{x:Static enums:InventorySortMode.Default}"/>
+                <ComboBoxItem Content="Sort: Ending soonest" Tag="{x:Static enums:InventorySortMode.EndingSoonest}"/>
+                <ComboBoxItem Content="Sort: Game (A-Z)" Tag="{x:Static enums:InventorySortMode.GameName}"/>
+                <ComboBoxItem Content="Sort: Least time left" Tag="{x:Static enums:InventorySortMode.LeastTimeRemaining}"/>
+            </ComboBox>
             <TextBlock Text="Inventory" Style="{StaticResource PageHeader}"/>
         </DockPanel>
 

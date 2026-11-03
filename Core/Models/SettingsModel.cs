@@ -144,5 +144,17 @@ namespace Core.Models
         /// Gets or sets a value indicating whether the Kick game filter operates as a blacklist instead of a whitelist.
         /// </summary>
         public bool KickGameFilterBlacklistMode { get; set; }
+        /// <summary>
+        /// Gets or sets the Twitch streamer logins to watch first, in priority order.
+        /// </summary>
+        public List<string> TwitchPriorityStreamers { get; set; } = new List<string>();
+        /// <summary>
+        /// Gets or sets the Kick streamer logins to watch first, in priority order.
+        /// </summary>
+        public List<string> KickPriorityStreamers { get; set; } = new List<string>();
+        /// <summary>
+        /// Gets or sets how campaigns are ordered on the inventory page.
+        /// </summary>
+        public InventorySortMode InventorySortMode { get; set; }
     }
 }

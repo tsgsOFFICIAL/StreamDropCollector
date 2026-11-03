@@ -107,6 +107,9 @@ namespace Core.Managers
         private bool _mineAnything;
         private bool _headOnlyMining;
         private bool _hideCompletedCampaigns = true;
+        private InventorySortMode _inventorySortMode;
+        private List<string> _twitchPriorityStreamers = new List<string>();
+        private List<string> _kickPriorityStreamers = new List<string>();
         private bool _isLoadingSettings;
 
         /// <summary>
@@ -304,6 +307,54 @@ namespace Core.Managers
         {
             get => _hideCompletedCampaigns;
             set => SetField(ref _hideCompletedCampaigns, value);
+        }
+        /// <summary>
+        /// Gets or sets how campaigns are ordered on the inventory page.
+        /// </summary>
+        public InventorySortMode InventorySortMode
+        {
+            get => _inventorySortMode;
+            set => SetField(ref _inventorySortMode, value);
+        }
+        /// <summary>
+        /// Gets or sets the Twitch priority streamers as comma separated text, highest priority first.
+        /// </summary>
+        public string TwitchPriorityStreamersText
+        {
+            get => string.Join(", ", _twitchPriorityStreamers);
+            set => SetPriorityStreamers(Platform.Twitch, value);
+        }
+        /// <summary>
+        /// Gets or sets the Kick priority streamers as comma separated text, highest priority first.
+        /// </summary>
+        public string KickPriorityStreamersText
+        {
+            get => string.Join(", ", _kickPriorityStreamers);
+            set => SetPriorityStreamers(Platform.Kick, value);
+        }
+        /// <summary>
+        /// Gets the streamer logins of a platform that are watched first when live and eligible, highest priority first.
+        /// </summary>
+        public IReadOnlyList<string> GetPriorityStreamers(Platform platform) =>
+            platform == Platform.Twitch ? _twitchPriorityStreamers : _kickPriorityStreamers;
+
+        private void SetPriorityStreamers(Platform platform, string? text)
+        {
+            // Accept logins or pasted channel URLs, separated by commas, semicolons, spaces or new lines.
+            List<string> parsed = (text ?? string.Empty)
+                .Split([',', ';', ' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim().TrimEnd('/'))
+                .Select(x => x.Contains('/') ? x[(x.LastIndexOf('/') + 1)..] : x)
+                .Select(x => x.TrimStart('@').ToLowerInvariant())
+                .Where(x => x.Length > 0)
+                .Distinct()
+                .ToList();
+
+            // Lists compare by reference, so this always saves and refreshes the box with the normalized text.
+            if (platform == Platform.Twitch)
+                SetField(ref _twitchPriorityStreamers, parsed, nameof(TwitchPriorityStreamersText));
+            else
+                SetField(ref _kickPriorityStreamers, parsed, nameof(KickPriorityStreamersText));
         }
         /// <summary>
         /// Gets or sets a value indicating whether a notification should be sent when rewards are ready to be claimed.
@@ -711,6 +762,9 @@ namespace Core.Managers
                     MineAnything = settings.MineAnything;
                     HeadOnlyMining = settings.HeadOnlyMining;
                     HideCompletedCampaigns = settings.HideCompletedCampaigns;
+                    InventorySortMode = settings.InventorySortMode;
+                    TwitchPriorityStreamersText = string.Join(",", settings.TwitchPriorityStreamers ?? []);
+                    KickPriorityStreamersText = string.Join(",", settings.KickPriorityStreamers ?? []);
                     NotifyOnReadyToClaim = settings.NotifyOnReadyToClaim;
                     NotifyOnAutoClaimed = settings.NotifyOnAutoClaimed;
                     QuietMode = settings.QuietMode;
@@ -775,6 +829,9 @@ namespace Core.Managers
                     MineAnything = MineAnything,
                     HeadOnlyMining = HeadOnlyMining,
                     HideCompletedCampaigns = HideCompletedCampaigns,
+                    InventorySortMode = InventorySortMode,
+                    TwitchPriorityStreamers = [.. _twitchPriorityStreamers],
+                    KickPriorityStreamers = [.. _kickPriorityStreamers],
                     NotifyOnReadyToClaim = NotifyOnReadyToClaim,
                     NotifyOnAutoClaimed = NotifyOnAutoClaimed,
                     QuietMode = QuietMode,

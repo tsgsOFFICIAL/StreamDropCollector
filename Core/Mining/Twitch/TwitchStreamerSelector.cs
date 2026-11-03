@@ -42,7 +42,11 @@ namespace Core.Mining.Twitch
                 "TwitchMining",
                 $"SelectUrlAsync campaign='{campaign.Name}' slug='{campaign.Slug}' rememberedUrl={rememberedUrl ?? "(none)"} preferredLogin={preferredLogin ?? "(none)"}");
 
-            string? login = await _liveChannelApi.SelectBestLiveLoginAsync(campaign, preferredLogin);
+            string? login = await PriorityStreamerPicker.PickAsync(
+                Platform.Twitch,
+                campaign,
+                candidate => _liveChannelApi.IsChannelEligibleAsync(candidate, campaign))
+                ?? await _liveChannelApi.SelectBestLiveLoginAsync(campaign, preferredLogin);
             if (string.IsNullOrWhiteSpace(login))
             {
                 AppLogger.Warn("TwitchMining", $"SelectUrlAsync EMPTY - no streamer for campaign '{campaign.Name}' slug='{campaign.Slug}'.");
