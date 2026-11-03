@@ -158,9 +158,31 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </Border>
+                            <StackPanel x:Name="GamePriorityPanel" Margin="0,0,0,8">
+                                <TextBlock Text="Mining priority: top game is mined first, later games only when it has nothing to mine."
+                                           Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource InsetPanelBorder}">
+                                        <ListBox x:Name="GamePriorityList" BorderThickness="0" Background="Transparent"
+                                                 MaxHeight="120" DisplayMemberPath="DisplayName"
+                                                 Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Top">
+                                        <Button Content="▲" ToolTip="Raise priority" Click="OnGameMoveUpClick"
+                                                Style="{StaticResource AccentButtonStyle}" Margin="0,0,0,4"/>
+                                        <Button Content="▼" ToolTip="Lower priority" Click="OnGameMoveDownClick"
+                                                Style="{StaticResource AccentButtonStyle}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
                             <CheckBox x:Name="BlacklistBox"
                                       Content="Blacklist selected games (mine everything except these)"
-                                      Style="{StaticResource ModernCheckBoxStyle}"/>
+                                      Style="{StaticResource ModernCheckBoxStyle}"
+                                      Checked="OnBlacklistChanged" Unchecked="OnBlacklistChanged"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

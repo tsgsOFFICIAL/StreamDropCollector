@@ -76,6 +76,14 @@ namespace Core.Managers
         public MiningPriorityMode EffectiveMiningPriority => Account.Overrides.MiningPriorityMode ?? UISettingsManager.Instance.MiningPriorityMode;
 
         /// <summary>
+        /// Gets the game slugs in mining priority order (account game filter, else global filter); empty for an exclude list.
+        /// </summary>
+        public IReadOnlyList<string> EffectiveGamePriority =>
+            Account.Overrides.GameWhitelistSlugs is { } slugs
+                ? (Account.Overrides.GameFilterBlacklistMode ? [] : slugs)
+                : UISettingsManager.Instance.GetGamePriority(Account.Platform);
+
+        /// <summary>
         /// Gets the streamers watched first on this account's platform (account override, else global list).
         /// </summary>
         public IReadOnlyList<string> EffectivePriorityStreamers =>
@@ -1856,7 +1864,7 @@ namespace Core.Managers
                 _pinnedCampaignStore.CampaignId,
                 EffectiveMiningPriority,
                 EffectivePrioritizeBadges,
-                Account.Overrides.GameWhitelistSlugs is null ? UISettingsManager.Instance.GetGamePriority(Account.Platform) : null);
+                EffectiveGamePriority);
 
             // The pin is shared across platforms, and a platform's candidate list (or a retry after a failed stream
             // check) may legitimately omit it, so only release it once the campaign has nothing left to mine.

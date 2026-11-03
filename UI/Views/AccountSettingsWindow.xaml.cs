@@ -67,6 +67,20 @@ namespace UI.Views
             foreach (string slug in selected)
                 _games.Add(new GameFilterOption(session.Model.Platform, slug, $"{slug} (inactive)", true));
 
+            // The saved list order is the mining priority: start from the stored order, then follow later ticks and unticks.
+            foreach (string slug in overrides.GameWhitelistSlugs ?? [])
+            {
+                if (_games.FirstOrDefault(g => string.Equals(g.Slug, slug, StringComparison.OrdinalIgnoreCase)) is { } option)
+                    _priority.Add(option);
+            }
+
+            foreach (GameFilterOption option in _games)
+                option.PropertyChanged += OnGameOptionPropertyChanged;
+
+            _priority.CollectionChanged += (_, _) => UpdateGamePriorityVisibility();
+            GamePriorityList.ItemsSource = _priority;
+            UpdateGamePriorityVisibility();
+
             // Filter through a view so hidden games stay in _games and are still saved with their selection.
             _gamesView = new CollectionViewSource { Source = _games }.View;
             _gamesView.Filter = item => item is not GameFilterOption option
@@ -81,6 +95,43 @@ namespace UI.Views
         }
 
         private readonly ICollectionView _gamesView;
+        private readonly ObservableCollection<GameFilterOption> _priority = [];
+
+        private void OnGameOptionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(GameFilterOption.IsSelected) || sender is not GameFilterOption option)
+                return;
+
+            if (option.IsSelected && !_priority.Contains(option))
+                _priority.Add(option);
+            else if (!option.IsSelected)
+                _priority.Remove(option);
+        }
+
+        private void OnBlacklistChanged(object sender, RoutedEventArgs e) => UpdateGamePriorityVisibility();
+
+        private void UpdateGamePriorityVisibility() =>
+            GamePriorityPanel.Visibility = BlacklistBox.IsChecked != true && _priority.Count > 1
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        private void OnGameMoveUpClick(object sender, RoutedEventArgs e) => MoveSelectedGame(-1);
+
+        private void OnGameMoveDownClick(object sender, RoutedEventArgs e) => MoveSelectedGame(1);
+
+        private void MoveSelectedGame(int offset)
+        {
+            if (GamePriorityList.SelectedItem is not GameFilterOption option)
+                return;
+
+            int index = _priority.IndexOf(option);
+            int target = index + offset;
+            if (target < 0 || target >= _priority.Count)
+                return;
+
+            _priority.Move(index, target);
+            GamePriorityList.SelectedItem = option;
+        }
 
         private void OnGameSearchTextChanged(object sender, TextChangedEventArgs e) => _gamesView?.Refresh();
 
@@ -114,7 +165,7 @@ namespace UI.Views
             }
             else
             {
-                overrides.GameWhitelistSlugs = _games.Where(g => g.IsSelected).Select(g => g.Slug).ToList();
+                overrides.GameWhitelistSlugs = _priority.Select(g => g.Slug).ToList();
                 overrides.GameFilterBlacklistMode = BlacklistBox.IsChecked == true;
             }
 
