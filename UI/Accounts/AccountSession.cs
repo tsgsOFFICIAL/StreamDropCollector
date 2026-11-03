@@ -612,7 +612,12 @@ namespace UI.Accounts
                 Engine.TwitchProgressChanged += (camp, drop) => OnUi(() => { Progress.CampaignProgress = camp; Progress.DropProgress = drop; });
                 Engine.TwitchTimeRemainingChanged += (camp, drop) => OnUi(() => Progress.SetTimeRemaining(camp, drop));
                 Engine.TwitchChannelChanged += channel => OnUi(() => Progress.MinedChannel = channel);
-                Engine.TwitchCampaignChanged += (name, image) => OnUi(() => { Progress.CampaignName = name; Progress.CampaignImageUrl = image ?? string.Empty; });
+                Engine.TwitchCampaignChanged += (name, image, game) => OnUi(() =>
+                {
+                    Progress.CampaignName = name;
+                    Progress.CampaignImageUrl = image ?? string.Empty;
+                    Progress.GameName = game ?? string.Empty;
+                });
                 Engine.TwitchDropChanged += (name, image) => OnUi(() => { Progress.DropName = name; Progress.DropImageUrl = image ?? string.Empty; });
             }
             else
@@ -620,9 +625,10 @@ namespace UI.Accounts
                 Engine.KickProgressChanged += (camp, drop) => OnUi(() => { Progress.CampaignProgress = camp; Progress.DropProgress = drop; });
                 Engine.KickTimeRemainingChanged += (camp, drop) => OnUi(() => Progress.SetTimeRemaining(camp, drop));
                 Engine.KickChannelChanged += channel => OnUi(() => Progress.MinedChannel = channel);
-                Engine.KickCampaignChanged += (name, image) => OnUi(() =>
+                Engine.KickCampaignChanged += (name, image, game) => OnUi(() =>
                 {
                     Progress.CampaignName = name;
+                    Progress.GameName = game ?? string.Empty;
                     Progress.IsLevelFarming = name == Core.Mining.Kick.KickLevelFarmingCampaign.DisplayName;
                     Progress.CampaignImageUrl = image ?? string.Empty;
                 });

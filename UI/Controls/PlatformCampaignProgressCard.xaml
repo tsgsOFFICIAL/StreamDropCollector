@@ -59,6 +59,13 @@
                 </TextBlock>
             </StackPanel>
 
+            <TextBlock Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                       Visibility="{Binding GameName, Converter={StaticResource StringToVisibilityConverter}}">
+                <Run Text="Category: " Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Run Text="{Binding GameName, Mode=OneWay}" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextPrimaryBrush}"/>
+            </TextBlock>
+
             <ProgressBar Margin="0,10,0,5" Minimum="0" Maximum="100"
                          Value="{Binding DisplayCampaignProgress, Mode=OneWay}"/>
 

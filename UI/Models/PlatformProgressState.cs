@@ -86,6 +86,15 @@ namespace UI.Models
             set { _campaignName = value; OnPropertyChanged(); }
         }
 
+        private string _gameName = string.Empty;
+
+        /// <summary>Game or category of the active campaign.</summary>
+        public string GameName
+        {
+            get => _gameName;
+            set { _gameName = value; OnPropertyChanged(); }
+        }
+
         private string _campaignImageUrl = string.Empty;
 
         /// <summary>Image URL for the active campaign.</summary>
@@ -207,6 +216,7 @@ namespace UI.Models
             DropProgress = 0;
             SetTimeRemaining(0, 0);
             CampaignName = string.Empty;
+            GameName = string.Empty;
             CampaignImageUrl = string.Empty;
             DropName = string.Empty;
             DropImageUrl = string.Empty;

@@ -276,14 +276,14 @@ namespace Core.Managers
         /// <summary>
         /// Occurs when the Twitch campaign being mined changes.
         /// </summary>
-        /// <remarks>Arguments are the campaign display name and game image URL. An empty name with a null URL means the selection was cleared.</remarks>
-        public event Action<string, string?>? TwitchCampaignChanged;
+        /// <remarks>Arguments are the campaign display name, game image URL and game name. An empty name with a null URL means the selection was cleared.</remarks>
+        public event Action<string, string?, string?>? TwitchCampaignChanged;
 
         /// <summary>
         /// Occurs when the Kick campaign being mined changes.
         /// </summary>
-        /// <remarks>Arguments are the campaign display name and game image URL. An empty name with a null URL means the selection was cleared.</remarks>
-        public event Action<string, string?>? KickCampaignChanged;
+        /// <remarks>Arguments are the campaign display name, game image URL and game name. An empty name with a null URL means the selection was cleared.</remarks>
+        public event Action<string, string?, string?>? KickCampaignChanged;
 
         /// <summary>
         /// Occurs when the current Twitch reward being progressed changes.
@@ -1318,12 +1318,12 @@ namespace Core.Managers
 
                 // Reset current selections and progress
                 TwitchChannelChanged?.Invoke(string.Empty);
-                TwitchCampaignChanged?.Invoke(string.Empty, null);
+                TwitchCampaignChanged?.Invoke(string.Empty, null, null);
                 _twitchProgress.LastReportedDropId = null;
                 TwitchDropChanged?.Invoke(string.Empty, null);
                 RaiseProgress(Platform.Twitch, null, 0, 0);
                 KickChannelChanged?.Invoke(string.Empty);
-                KickCampaignChanged?.Invoke(string.Empty, null);
+                KickCampaignChanged?.Invoke(string.Empty, null, null);
                 _kickProgress.LastReportedDropId = null;
                 KickDropChanged?.Invoke(string.Empty, null);
                 RaiseProgress(Platform.Kick, null, 0, 0);
@@ -1392,12 +1392,12 @@ namespace Core.Managers
                     (campaign, login) =>
                     {
                         TwitchChannelChanged?.Invoke(login);
-                        TwitchCampaignChanged?.Invoke(campaign.Name, campaign.GameImageUrl);
+                        TwitchCampaignChanged?.Invoke(campaign.Name, campaign.GameImageUrl, campaign.GameName);
                     },
                     (campaign, login) =>
                     {
                         KickChannelChanged?.Invoke(login);
-                        KickCampaignChanged?.Invoke(campaign.Name, campaign.GameImageUrl);
+                        KickCampaignChanged?.Invoke(campaign.Name, campaign.GameImageUrl, campaign.GameName);
                     },
                     (campaignId, rewardId) => _campaignUpdater.MarkRewardClaimed(ActiveCampaigns, _selection, campaignId, rewardId),
                     () => _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection),
