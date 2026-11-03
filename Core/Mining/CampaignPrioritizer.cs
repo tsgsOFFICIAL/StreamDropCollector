@@ -81,9 +81,9 @@ namespace Core.Mining
 
             List<DropsCampaign> prioritizedCampaigns = mode switch
             {
+                // General drops are not ranked last here: the user asked for whatever ends first.
                 MiningPriorityMode.EndingSoonest => [.. campaigns
-                    .OrderBy(c => c.IsGeneralDrop)
-                    .ThenBy(c => c.EndsAt)
+                    .OrderBy(c => c.EndsAt)
                     .ThenBy(c => c.Rewards
                         .Where(r => !r.IsClaimed)
                         .Min(r => r.RequiredMinutes - r.ProgressMinutes))],
