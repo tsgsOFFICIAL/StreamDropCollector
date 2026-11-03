@@ -32,6 +32,10 @@ namespace Core.Models
         /// </summary>
         public bool IncludeBetaUpdates { get; set; }
         /// <summary>
+        /// Gets or sets a value indicating whether a detected update is downloaded and installed automatically.
+        /// </summary>
+        public bool AutoUpdate { get; set; }
+        /// <summary>
         /// Gets or sets a value indicating whether rewards are automatically claimed when they become available.
         /// </summary>
         public bool AutoClaimRewards { get; set; }

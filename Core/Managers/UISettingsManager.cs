@@ -88,6 +88,7 @@ namespace Core.Managers
         private bool _verboseDebugLogging;
         private bool _updateAvailable = false;
         private bool _includeBetaUpdates = false;
+        private bool _autoUpdate = false;
         private bool _notifyOnNewUpdateAvailable = true;
         private DateTime? _lastUpdateCheck = null;
         private MiningPriorityMode _miningPriorityMode = MiningPriorityMode.AvailabilityThenProgress;
@@ -539,6 +540,33 @@ namespace Core.Managers
         }
 
         /// <summary>
+        /// Gets or sets a value indicating whether a detected update is downloaded and installed without asking.
+        /// </summary>
+        public bool AutoUpdate
+        {
+            get => _autoUpdate;
+            set
+            {
+                if (_autoUpdate == value)
+                    return;
+
+                SetField(ref _autoUpdate, value);
+
+                if (value && !_isLoadingSettings && UpdateAvailable)
+                    StartAutoUpdate();
+            }
+        }
+
+        private void StartAutoUpdate()
+        {
+            if (UpdateManager.Instance.IsUpdating)
+                return;
+
+            AppLogger.Info("UISettings", "Auto update is enabled. Installing the available update.");
+            _ = Task.Run(() => UpdateManager.Instance.DownloadUpdate());
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether a software update is available.
         /// </summary>
         public bool UpdateAvailable
@@ -559,6 +587,9 @@ namespace Core.Managers
 
                     NotificationManager.ShowNotification("Update Available", $"A new version is available: {_availableVersion ?? "unknown"} (current {Utility.GetDisplayVersion()}).", NotificationType.UpdateAvailable, details: details);
                 }
+
+                if (value && AutoUpdate && !_isLoadingSettings)
+                    StartAutoUpdate();
             }
         }
         private string? _availableVersion;
@@ -777,6 +808,7 @@ namespace Core.Managers
                     Theme = settings.Theme ?? "System";
                     UpdateFrequency = settings.UpdateFrequency;
                     IncludeBetaUpdates = settings.IncludeBetaUpdates;
+                    AutoUpdate = settings.AutoUpdate;
                     AutoClaimRewards = settings.AutoClaimRewards;
                     MiningPriorityMode = settings.MiningPriorityMode;
                     KickLevelFarming = settings.KickLevelFarming;
@@ -844,6 +876,7 @@ namespace Core.Managers
                     Theme = Theme,
                     UpdateFrequency = UpdateFrequency,
                     IncludeBetaUpdates = IncludeBetaUpdates,
+                    AutoUpdate = AutoUpdate,
                     AutoClaimRewards = AutoClaimRewards,
                     MiningPriorityMode = MiningPriorityMode,
                     KickLevelFarming = KickLevelFarming,
