@@ -702,7 +702,14 @@ namespace Core.Managers
                                 {
                                     timer.Stop();
                                     timer.Dispose();
-                                    await CheckForUpdatesAsync();
+                                    try
+                                    {
+                                        await CheckForUpdatesAsync();
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        AppLogger.Warn("UISettings", $"[Update Check] Scheduled check failed: {ex.Message}");
+                                    }
                                 };
 
                                 timer.Start();
@@ -724,7 +731,14 @@ namespace Core.Managers
                                 {
                                     timer.Stop();
                                     timer.Dispose();
-                                    await CheckForUpdatesAsync();
+                                    try
+                                    {
+                                        await CheckForUpdatesAsync();
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        AppLogger.Warn("UISettings", $"[Update Check] Scheduled check failed: {ex.Message}");
+                                    }
                                 };
 
                                 timer.Start();

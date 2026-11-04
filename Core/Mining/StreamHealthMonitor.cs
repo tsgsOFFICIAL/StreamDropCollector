@@ -71,6 +71,8 @@ namespace Core.Mining
             _timer = new System.Timers.Timer(30 * 1000);
             _timer.Elapsed += async (_, _) =>
             {
+                try
+                {
                 await await Application.Current.Dispatcher.InvokeAsync(async () =>
                 {
                     if (host.IsEvaluationInProgress?.Invoke() == true)
@@ -163,6 +165,15 @@ namespace Core.Mining
                     Stop();
                     await host.RequestReevaluationAsync();
                 });
+                }
+                catch (OperationCanceledException ex)
+                {
+                    AppLogger.Warn("HealthCheck", $"Health tick canceled (network timeout or shutdown): {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("HealthCheck", "Health tick failed.", ex);
+                }
             };
 
             _timer.AutoReset = true;

@@ -1481,7 +1481,18 @@ namespace Core.Managers
                     _recheckTimer?.Stop();
                     AppLogger.Debug("Miner", "[DropsInventoryManager] Re-evaluating streams for active campaigns.");
                     AppLogger.Debug("Miner", "Scheduled re-evaluation triggered.");
-                    await StartMiningStreams(true);
+                    try
+                    {
+                        await StartMiningStreams(true);
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        AppLogger.Warn("Miner", $"Scheduled re-evaluation canceled (network timeout or superseded): {ex.Message}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Error("Miner", "Scheduled re-evaluation failed.", ex);
+                    }
                 };
                 _recheckTimer.AutoReset = false;
                 _recheckTimer.Start();

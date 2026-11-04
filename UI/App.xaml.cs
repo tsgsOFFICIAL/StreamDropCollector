@@ -50,6 +50,13 @@ namespace UI
 
             // Handle background thread exceptions
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
+            // Log fire-and-forget task failures instead of losing them silently.
+            TaskScheduler.UnobservedTaskException += (_, args) =>
+            {
+                AppLogger.Warn("App", $"Unobserved task exception: {args.Exception.GetBaseException()}");
+                args.SetObserved();
+            };
         }
 
         /// <summary>
