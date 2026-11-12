@@ -26,6 +26,9 @@ namespace Core.Services
         private string? _accessToken;
         private string? _userId;
         private DateTimeOffset? _headersCapturedAtUtc;
+
+        // "campaignId#rewardId" of every claim Twitch accepted this session.
+        private readonly HashSet<string> _acceptedClaims = new(StringComparer.Ordinal);
         private readonly object _hashCacheSync = new();
         private readonly Dictionary<string, GqlHashCacheEntry> _gqlHashCache = new(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan _gqlHashCacheFreshnessThreshold = TimeSpan.FromHours(24);
@@ -363,14 +366,14 @@ namespace Core.Services
         /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
         /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the drop
         /// reward was successfully claimed; otherwise, <see langword="false"/>.</returns>
-        public async Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default)
+        public async Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default, string? dropInstanceId = null)
         {
-            AppLogger.Debug("TwitchGql", $"ClaimDrop started. campaignId={campaignId}, rewardId={rewardId}");
+            AppLogger.Debug("TwitchGql", $"ClaimDrop started. campaignId={campaignId}, rewardId={rewardId}, serverInstanceId={!string.IsNullOrEmpty(dropInstanceId)}");
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () => await RefreshHeadersAsync(ct));
 
             // Step 1. Construct the payload
             string operationName = "DropsPage_ClaimDropRewards";
-            string dropInstanceID = $"{_userId}#{campaignId}#{rewardId}";
+            string dropInstanceID = string.IsNullOrEmpty(dropInstanceId) ? $"{_userId}#{campaignId}#{rewardId}" : dropInstanceId;
             string hash = "a455deea71bdc9015b78eb49f4acfbce8baa7ccbedd28e549bb025bd0f751930";
             SetCachedHash(operationName, hash);
 
@@ -437,6 +440,20 @@ namespace Core.Services
                 AppLogger.Warn("TwitchGql", $"ClaimDrop was not accepted. status={status ?? "n/a"}, body={jsonText}");
 
             return claimed;
+        }
+
+        /// <inheritdoc/>
+        public void RecordAcceptedClaim(string campaignId, string rewardId)
+        {
+            lock (_acceptedClaims)
+                _acceptedClaims.Add($"{campaignId}#{rewardId}");
+        }
+
+        /// <inheritdoc/>
+        public bool WasClaimAccepted(string campaignId, string rewardId)
+        {
+            lock (_acceptedClaims)
+                return _acceptedClaims.Contains($"{campaignId}#{rewardId}");
         }
         /// <summary>
         /// Queries the Twitch Drops dashboard and returns the full dashboard data as a JSON object.
@@ -541,9 +558,28 @@ namespace Core.Services
 
             try
             {
-                JsonObject? connection = dashboard[0]?["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?.AsObject();
-                JsonArray? edges = connection?["edges"]?.AsArray();
-                if (connection == null || edges == null)
+                JsonObject? inventory = dashboard[0]?["data"]?["currentUser"]?["inventory"] as JsonObject;
+                if (inventory == null)
+                    return;
+
+                JsonObject? connection = inventory["gameEventDropsConnection"] as JsonObject;
+
+                // Twitch often answers this one field with a "service error" (null) while the rest of the Inventory
+                // result is fine. It is the only record of older claims, so ask again for just the first page.
+                if (connection?["edges"] == null)
+                {
+                    connection = (await FetchGameEventDropsPageAsync(inventoryHash, null, 1, MaxAttempts, ct))?.DeepClone().AsObject();
+                    if (connection == null)
+                    {
+                        AppLogger.Warn("TwitchGql", "Claimed drops history unavailable; drops claimed long ago may show as unclaimed until the next refresh.");
+                        return;
+                    }
+
+                    inventory["gameEventDropsConnection"] = connection;
+                }
+
+                JsonArray? edges = connection["edges"]?.AsArray();
+                if (edges == null)
                     return;
 
                 HashSet<string> seen = edges.OfType<JsonObject>()
@@ -558,61 +594,7 @@ namespace Core.Services
                     if (info?["hasNextPage"]?.GetValue<bool>() != true || string.IsNullOrEmpty(cursor))
                         return;
 
-                    JsonObject? next = null;
-
-                    for (int attempt = 1; attempt <= MaxAttempts && next == null; attempt++)
-                    {
-                        JsonArray payload = new JsonArray
-                        {
-                            new JsonObject
-                            {
-                                ["operationName"] = "Inventory",
-                                ["variables"] = new JsonObject
-                                {
-                                    ["fetchRewardCampaigns"] = true,
-                                    ["claimedAfter"] = cursor
-                                },
-                                ["extensions"] = new JsonObject
-                                {
-                                    ["persistedQuery"] = new JsonObject
-                                    {
-                                        ["version"] = 1,
-                                        ["sha256Hash"] = inventoryHash
-                                    }
-                                }
-                            }
-                        };
-
-                        using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql")
-                        {
-                            Content = JsonContent.Create(payload)
-                        };
-
-                        request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
-                        request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
-                        request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
-
-                        if (!string.IsNullOrEmpty(_deviceId))
-                            request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
-
-                        LogOutgoingRequest("Inventory claimedAfter page");
-                        HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
-                        string text = await response.Content.ReadAsStringAsync(ct);
-
-                        next = response.IsSuccessStatusCode
-                            ? JsonNode.Parse(text)?[0]?["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?.AsObject()
-                            : null;
-
-                        if (next?["edges"] == null)
-                        {
-                            AppLogger.Warn("TwitchGql", $"Claimed drops page {page + 2} attempt {attempt}/{MaxAttempts} failed. {DescribeGqlFailure(response, text)}");
-                            next = null;
-
-                            if (attempt < MaxAttempts)
-                                await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
-                        }
-                    }
-
+                    JsonObject? next = await FetchGameEventDropsPageAsync(inventoryHash, cursor, page + 2, MaxAttempts, ct);
                     if (next == null)
                         return;
 
@@ -640,6 +622,68 @@ namespace Core.Services
             {
                 AppLogger.Warn("TwitchGql", $"Fetching further claimed drops pages failed; continuing with the first page. {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Fetches one page of "gameEventDropsConnection" by re-sending the persisted Inventory operation, with
+        /// <paramref name="cursor"/> as <c>claimedAfter</c> (or none for the first page). Returns <see langword="null"/>
+        /// when every attempt fails.
+        /// </summary>
+        private async Task<JsonObject?> FetchGameEventDropsPageAsync(string inventoryHash, string? cursor, int pageNumber, int maxAttempts, CancellationToken ct)
+        {
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                JsonObject variables = new JsonObject { ["fetchRewardCampaigns"] = true };
+                if (cursor != null)
+                    variables["claimedAfter"] = cursor;
+
+                JsonArray payload = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["operationName"] = "Inventory",
+                        ["variables"] = variables,
+                        ["extensions"] = new JsonObject
+                        {
+                            ["persistedQuery"] = new JsonObject
+                            {
+                                ["version"] = 1,
+                                ["sha256Hash"] = inventoryHash
+                            }
+                        }
+                    }
+                };
+
+                using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql")
+                {
+                    Content = JsonContent.Create(payload)
+                };
+
+                request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+                request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+                if (!string.IsNullOrEmpty(_deviceId))
+                    request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+                LogOutgoingRequest("Inventory claimed drops page");
+                HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
+                string text = await response.Content.ReadAsStringAsync(ct);
+
+                JsonObject? connection = response.IsSuccessStatusCode
+                    ? JsonNode.Parse(text)?[0]?["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"] as JsonObject
+                    : null;
+
+                if (connection?["edges"] != null)
+                    return connection;
+
+                AppLogger.Warn("TwitchGql", $"Claimed drops page {pageNumber} attempt {attempt}/{maxAttempts} failed. {DescribeGqlFailure(response, text)}");
+
+                if (attempt < maxAttempts)
+                    await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
+            }
+
+            return null;
         }
 
         /// <summary>

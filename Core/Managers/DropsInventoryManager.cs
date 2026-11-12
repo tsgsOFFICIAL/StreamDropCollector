@@ -354,6 +354,15 @@ namespace Core.Managers
         private readonly SemaphoreSlim _progressVerifyLock = new(1, 1);
         private int _progressVerifyScheduled;
 
+        // Twitch campaigns whose locally counted minutes Twitch never credited, deprioritised until the given time.
+        private readonly Dictionary<string, (DateTime Until, int Strikes)> _twitchUntracked = new(StringComparer.Ordinal);
+        private string? _twitchAbsentCampaignId;
+        private int _twitchAbsentVerifies;
+
+        // Consecutive successful inventory checks (one every 2 minutes) that may find no record of the mined campaign
+        // before it counts as untracked. Twitch normally lists a campaign within a minute or two of watching.
+        private const int TwitchAbsentVerifyLimit = 8;
+
         private readonly SemaphoreSlim _startMiningLock = new(1, 1);
         private CancellationTokenSource? _startMiningCts;
         private bool _isPaused;
@@ -1418,6 +1427,10 @@ namespace Core.Managers
                     EffectiveKickLevelFarming,
                     EffectiveAutoClaim,
                     Account,
+                    MarkTwitchCampaignUntracked,
+                    ApplyTwitchServerProgress,
+                    IsTwitchCampaignCoolingDown,
+                    () => Application.Current.Dispatcher.Invoke(() => ActiveCampaigns.ToList()),
                     token);
 
                 // A platform that was streaming but has nothing selected now must stop playing (and earning watch time).
@@ -1712,11 +1725,11 @@ namespace Core.Managers
                     $"Verify START twitchCampaignId={twitchCampaign?.Id ?? "null"} kickCampaignId={kickCampaign?.Id ?? "null"} " +
                     $"twitchGqlAvailable={_twitchGqlService != null} kickWebViewAvailable={KickWebView != null}");
 
-                IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> twitchProgress = new Dictionary<string, IReadOnlyList<DropsReward>>();
+                TwitchServerProgress twitchServer = TwitchServerProgress.Unavailable;
                 IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> kickProgress = new Dictionary<string, IReadOnlyList<DropsReward>>();
 
                 if (twitchCampaign != null && _twitchGqlService != null)
-                    twitchProgress = await ServerProgressFetcher.FetchTwitchRewardProgressAsync(_twitchGqlService, [twitchCampaign]);
+                    twitchServer = await ServerProgressFetcher.FetchTwitchRewardProgressAsync(_twitchGqlService, [twitchCampaign]);
                 else if (twitchCampaign != null)
                     AppLogger.Debug("ProgressSync", "Twitch fetch SKIP - no Twitch GQL service available.");
 
@@ -1724,6 +1737,9 @@ namespace Core.Managers
                     kickProgress = await ServerProgressFetcher.FetchKickRewardProgressAsync(KickWebView, [kickCampaign]);
                 else if (kickCampaign != null)
                     AppLogger.Debug("ProgressSync", "Kick fetch SKIP - KickWebView is null.");
+
+                IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> twitchProgress = twitchServer.Campaigns;
+                bool twitchUntracked = false;
 
                 AppLogger.Debug(
                     "ProgressSync",
@@ -1736,6 +1752,8 @@ namespace Core.Managers
                 {
                     if (twitchProgress.TryGetValue(twitchCampaign.Id, out IReadOnlyList<DropsReward>? twitchRewards))
                     {
+                        ClearTwitchCampaignUntracked(twitchCampaign.Id);
+
                         if (MiningProgressReconciler.TryReconcile(twitchCampaign, twitchRewards, _twitchProgress, out DropsCampaign updatedTwitch))
                             twitchChanged = ApplyReconciledCampaign(updatedTwitch, Platform.Twitch);
                         else
@@ -1743,7 +1761,11 @@ namespace Core.Managers
                     }
                     else
                     {
-                        AppLogger.Debug("ProgressSync", $"Twitch campaignId={twitchCampaign.Id} not present in server response (entries={twitchProgress.Count}).");
+                        AppLogger.Debug("ProgressSync", $"Twitch campaignId={twitchCampaign.Id} not present in server response (entries={twitchProgress.Count}, serverAnswered={twitchServer.Succeeded}).");
+
+                        // Only an actual answer from Twitch counts; a failed or skipped query says nothing.
+                        if (twitchServer.Succeeded)
+                            twitchUntracked = NoteTwitchCampaignAbsent(twitchCampaign);
                     }
                 }
 
@@ -1766,6 +1788,10 @@ namespace Core.Managers
                     AppLogger.Info("ProgressSync", "Progress synced with server.");
                 else
                     AppLogger.Debug("ProgressSync", "Verify DONE - no changes applied.");
+
+                // Move on to a campaign that does earn (or back to this one if it is all there is).
+                if (twitchUntracked)
+                    _ = StartMiningStreams(true);
             }
             catch (Exception ex)
             {
@@ -1776,6 +1802,137 @@ namespace Core.Managers
                 Interlocked.Exchange(ref _progressVerifyScheduled, 0);
                 _progressVerifyLock.Release();
             }
+        }
+
+        /// <summary>
+        /// Whether a Twitch campaign is currently deprioritised because Twitch was found not to credit watch time for it.
+        /// </summary>
+        private bool IsTwitchCampaignCoolingDown(DropsCampaign campaign)
+        {
+            if (campaign.Platform != Platform.Twitch)
+                return false;
+
+            lock (_twitchUntracked)
+                return _twitchUntracked.TryGetValue(campaign.Id, out (DateTime Until, int Strikes) entry) && entry.Until > DateTime.Now;
+        }
+
+        /// <summary>
+        /// Forgets any untracked state for a campaign Twitch is (again) reporting progress for.
+        /// </summary>
+        private void ClearTwitchCampaignUntracked(string campaignId)
+        {
+            if (_twitchAbsentCampaignId == campaignId)
+            {
+                _twitchAbsentCampaignId = null;
+                _twitchAbsentVerifies = 0;
+            }
+
+            lock (_twitchUntracked)
+                _twitchUntracked.Remove(campaignId);
+        }
+
+        /// <summary>
+        /// Counts one successful inventory check that found no record of the mined Twitch campaign.
+        /// </summary>
+        /// <returns><see langword="true"/> when the campaign has now been marked untracked and mining should be re-evaluated.</returns>
+        private bool NoteTwitchCampaignAbsent(DropsCampaign campaign)
+        {
+            if (_twitchAbsentCampaignId != campaign.Id)
+            {
+                _twitchAbsentCampaignId = campaign.Id;
+                _twitchAbsentVerifies = 0;
+            }
+
+            _twitchAbsentVerifies++;
+            AppLogger.Debug("ProgressSync", $"Twitch campaignId={campaign.Id} absent from inventory {_twitchAbsentVerifies}/{TwitchAbsentVerifyLimit} consecutive checks.");
+
+            if (_twitchAbsentVerifies < TwitchAbsentVerifyLimit)
+                return false;
+
+            _twitchAbsentVerifies = 0;
+
+            // Already deprioritised and still being mined means it is the only thing left to watch; leave it running
+            // rather than restarting the stream every few minutes.
+            if (IsTwitchCampaignCoolingDown(campaign))
+            {
+                MarkTwitchCampaignUntracked(campaign.Id);
+                return false;
+            }
+
+            MarkTwitchCampaignUntracked(campaign.Id);
+            return true;
+        }
+
+        /// <summary>
+        /// Records that Twitch credits no watch time for a campaign: its uncredited local minutes are discarded and it is
+        /// deprioritised for a while (1h, doubling on each repeat up to 6h) so other campaigns get mined first.
+        /// </summary>
+        private void MarkTwitchCampaignUntracked(string campaignId)
+        {
+            DateTime until;
+            int strikes;
+
+            lock (_twitchUntracked)
+            {
+                strikes = (_twitchUntracked.TryGetValue(campaignId, out (DateTime Until, int Strikes) entry) ? entry.Strikes : 0) + 1;
+                until = DateTime.Now.AddHours(Math.Min(1 << Math.Min(strikes - 1, 3), 6));
+                _twitchUntracked[campaignId] = (until, strikes);
+            }
+
+            DropsCampaign? existing = Application.Current.Dispatcher.Invoke(() =>
+                ActiveCampaigns.FirstOrDefault(c => c.Platform == Platform.Twitch && c.Id == campaignId));
+
+            AppLogger.Warn(
+                "Miner",
+                $"Twitch is not tracking any progress for campaign '{existing?.Name ?? campaignId}' ({campaignId}). " +
+                $"Discarding locally counted minutes and deprioritising it until {until:HH:mm} (occurrence {strikes}).");
+
+            if (existing == null)
+                return;
+
+            List<DropsReward> rewards = [.. existing.Rewards.Select(r => r.IsClaimed ? r : r with { ProgressMinutes = 0 })];
+            DropsCampaign rolledBack = existing with { Rewards = rewards.AsReadOnly() };
+            ReplaceTwitchCampaign(rolledBack);
+
+            // Still being watched (nothing else to mine): restart the live counters from the corrected minutes.
+            if (_selection.CurrentTwitchCampaign?.Id == campaignId)
+                _twitchProgress.ApplyBaseline(MiningBaselineInitializer.Create(rolledBack));
+        }
+
+        /// <summary>
+        /// Replaces a Twitch campaign's local reward progress with what Twitch itself reports.
+        /// </summary>
+        private void ApplyTwitchServerProgress(string campaignId, IReadOnlyList<DropsReward> serverRewards)
+        {
+            DropsCampaign? existing = Application.Current.Dispatcher.Invoke(() =>
+                ActiveCampaigns.FirstOrDefault(c => c.Platform == Platform.Twitch && c.Id == campaignId));
+
+            if (existing == null)
+                return;
+
+            if (MiningProgressReconciler.TryReconcile(existing, serverRewards, _twitchProgress, out DropsCampaign updated))
+                ReplaceTwitchCampaign(updated);
+        }
+
+        /// <summary>
+        /// Swaps a Twitch campaign in <see cref="ActiveCampaigns"/> for an updated copy, keeping the selection in sync.
+        /// </summary>
+        private void ReplaceTwitchCampaign(DropsCampaign updatedCampaign)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                DropsCampaign? existing = ActiveCampaigns.FirstOrDefault(c => c.Platform == Platform.Twitch && c.Id == updatedCampaign.Id);
+                int index = existing == null ? -1 : ActiveCampaigns.IndexOf(existing);
+                if (index < 0)
+                    return;
+
+                ActiveCampaigns[index] = updatedCampaign;
+
+                if (_selection.CurrentTwitchCampaign?.Id == updatedCampaign.Id)
+                    _selection.CurrentTwitchCampaign = updatedCampaign;
+
+                _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
+            });
         }
 
         /// <summary>

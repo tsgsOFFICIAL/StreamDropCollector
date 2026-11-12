@@ -24,16 +24,16 @@ namespace Core.Mining
         /// <param name="campaigns">Locally tracked campaigns to match against server inventory entries.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
-        /// A map of campaign id to server-reported rewards. Returns an empty dictionary when the query is
-        /// skipped, fails, or no matching campaigns are in progress on Twitch.
+        /// The server-reported rewards per campaign id, and whether Twitch actually answered: an empty map from a
+        /// failed or skipped query must not be read as "Twitch tracks none of these campaigns".
         /// </returns>
-        public static async Task<IReadOnlyDictionary<string, IReadOnlyList<DropsReward>>> FetchTwitchRewardProgressAsync(
+        public static async Task<TwitchServerProgress> FetchTwitchRewardProgressAsync(
             IGqlService gql,
             IReadOnlyCollection<DropsCampaign> campaigns,
             CancellationToken ct = default)
         {
             if (campaigns.Count == 0)
-                return new Dictionary<string, IReadOnlyList<DropsReward>>();
+                return TwitchServerProgress.Unavailable;
 
             try
             {
@@ -41,10 +41,16 @@ namespace Core.Mining
                 if (inventoryResponse == null)
                 {
                     AppLogger.Warn("ProgressSync", "Twitch inventory query returned null response.");
-                    return new Dictionary<string, IReadOnlyList<DropsReward>>();
+                    return TwitchServerProgress.Unavailable;
                 }
 
-                JsonArray dropCampaignsInProgress = inventoryResponse["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
+                // A campaign missing from this list only means "Twitch tracks no progress for it" when the list itself
+                // was returned; a null field (partial GraphQL error) says nothing about any campaign.
+                if (inventoryResponse["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"] is not JsonArray dropCampaignsInProgress)
+                {
+                    AppLogger.Warn("ProgressSync", "Twitch inventory response carried no dropCampaignsInProgress list; treating progress as unavailable.");
+                    return TwitchServerProgress.Unavailable;
+                }
 
                 // "gameEventDropsConnection" permanently errors on Twitch's backend - see the matching
                 // comment in TwitchDropsProvider.cs. Already-claimed rewards with no in-progress record
@@ -53,6 +59,7 @@ namespace Core.Mining
 
                 Dictionary<string, DropsCampaign> localById = campaigns.ToDictionary(c => c.Id, StringComparer.Ordinal);
                 Dictionary<string, IReadOnlyList<DropsReward>> result = new(StringComparer.Ordinal);
+                Dictionary<string, string?> dropInstanceIds = new(StringComparer.Ordinal);
 
                 foreach (JsonObject? matchingProgress in dropCampaignsInProgress.OfType<JsonObject>())
                 {
@@ -62,7 +69,11 @@ namespace Core.Mining
 
                     JsonArray? timeBasedDropsProgress = matchingProgress["timeBasedDrops"]?.AsArray();
                     if (timeBasedDropsProgress == null)
+                    {
+                        // Listed but without drop records: the campaign is tracked, so it must not look absent.
+                        result[campaignId] = localCampaign.Rewards;
                         continue;
+                    }
 
                     List<DropsReward> rewards = new();
                     foreach (DropsReward localReward in localCampaign.Rewards)
@@ -77,6 +88,9 @@ namespace Core.Mining
                         {
                             progressMinutes = matchingDropProgress["self"]?["currentMinutesWatched"]?.GetValue<int>() ?? progressMinutes;
                             isClaimed = matchingDropProgress["self"]?["isClaimed"]?.GetValue<bool>() ?? isClaimed;
+
+                            if (matchingDropProgress["self"] is JsonObject)
+                                dropInstanceIds[TwitchServerProgress.DropKey(campaignId, localReward.Id)] = matchingDropProgress["self"]?["dropInstanceID"]?.GetValue<string>();
                         }
 
                         // Completed earned drops override in-progress minutes for claim state.
@@ -116,12 +130,12 @@ namespace Core.Mining
                         result[campaignId] = rewards.AsReadOnly();
                 }
 
-                return result;
+                return new TwitchServerProgress(true, result, dropInstanceIds);
             }
             catch (Exception ex)
             {
                 AppLogger.Warn("ProgressSync", $"Twitch progress fetch failed: {ex.Message}");
-                return new Dictionary<string, IReadOnlyList<DropsReward>>();
+                return TwitchServerProgress.Unavailable;
             }
         }
 

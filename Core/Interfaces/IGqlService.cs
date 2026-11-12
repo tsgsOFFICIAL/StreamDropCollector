@@ -15,7 +15,17 @@ namespace Core.Interfaces
         /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation.</param>
         /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the drop was
         /// successfully claimed; otherwise, <see langword="false"/>.</returns>
-        Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default);
+        /// <param name="dropInstanceId">Twitch's own claim id for the drop when the inventory supplied one; otherwise it is
+        /// built from the user, campaign and reward ids.</param>
+        Task<bool> ClaimDropAsync(string campaignId, string rewardId, CancellationToken ct = default, string? dropInstanceId = null);
+        /// <summary>
+        /// Remembers, for this session, that Twitch accepted a claim for a drop its inventory had confirmed as earned.
+        /// </summary>
+        void RecordAcceptedClaim(string campaignId, string rewardId);
+        /// <summary>
+        /// Whether <see cref="RecordAcceptedClaim"/> was called for this drop during the current session.
+        /// </summary>
+        bool WasClaimAccepted(string campaignId, string rewardId);
         /// <summary>
         /// Asynchronously retrieves the complete data set for the drops dashboard.
         /// </summary>

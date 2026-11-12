@@ -41,6 +41,10 @@ namespace Core.Mining
         /// <param name="autoClaimRewards">Whether ready rewards are claimed automatically for this account.</param>
         /// <param name="account">The account this cycle runs for, named in webhook notifications.</param>
         /// <param name="kickLevelFarming">When true, watches a top-viewed Kick channel if no Kick campaign has progress to make.</param>
+        /// <param name="onTwitchCampaignUntracked">Reports a Twitch campaign whose locally counted minutes Twitch never credited.</param>
+        /// <param name="applyTwitchServerProgress">Applies Twitch's own reward progress to a campaign whose local counter ran ahead.</param>
+        /// <param name="isCoolingDown">Whether a campaign is temporarily deprioritised because Twitch is not crediting it.</param>
+        /// <param name="getCurrentCampaigns">Returns the active inventory as it stands now.</param>
         /// <param name="cancellationToken">Cancellation token for the mining cycle.</param>
         /// <returns>Selection results, miner status, and the next scheduled re-evaluation time.</returns>
         public async Task<MiningOrchestratorResult> RunAsync(
@@ -65,6 +69,10 @@ namespace Core.Mining
             bool kickLevelFarming,
             bool autoClaimRewards,
             AccountModel? account,
+            Action<string> onTwitchCampaignUntracked,
+            Action<string, IReadOnlyList<DropsReward>> applyTwitchServerProgress,
+            Func<DropsCampaign, bool> isCoolingDown,
+            Func<IReadOnlyList<DropsCampaign>> getCurrentCampaigns,
             CancellationToken cancellationToken)
         {
             AppLogger.Debug(
@@ -102,7 +110,13 @@ namespace Core.Mining
                 markRewardClaimed,
                 autoClaimRewards,
                 account,
-                cancellationToken);
+                cancellationToken,
+                onTwitchCampaignUntracked,
+                applyTwitchServerProgress);
+
+            // The claim pass may have marked rewards claimed or replaced local progress with Twitch's own numbers;
+            // select from the inventory as it stands now rather than the copy taken before it ran.
+            campaignSnapshot = getCurrentCampaigns();
 
             List<DropsCampaign> readyToClaimOnlyCampaigns = campaignSnapshot
                 .Where(c => c.HasReadyToClaimRewards() && !c.HasProgressToMake(autoClaimRewards))
@@ -143,6 +157,20 @@ namespace Core.Mining
                 .Where(c => c.Platform == Platform.Twitch && c.HasProgressToMake(autoClaimRewards))
                 .ToList();
 
+            // Campaigns Twitch is not crediting step aside for ones that do earn. They are only deprioritised, never
+            // banned: with nothing else to watch they are mined anyway, in case Twitch was merely slow to report.
+            List<DropsCampaign> twitchCoolingDown = [.. twitchCampaigns.Where(isCoolingDown)];
+            int twitchCampaignCountBeforeCooldown = twitchCampaigns.Count;
+            if (twitchCoolingDown.Count > 0 && twitchCoolingDown.Count < twitchCampaigns.Count)
+            {
+                AppLogger.Info("Miner", $"Deprioritising {twitchCoolingDown.Count} Twitch campaign(s) with no tracked progress: {string.Join(", ", twitchCoolingDown.Select(c => $"'{c.Name}'"))}.");
+                twitchCampaigns = [.. twitchCampaigns.Except(twitchCoolingDown)];
+            }
+            else if (twitchCoolingDown.Count > 0)
+            {
+                AppLogger.Info("Miner", "Every remaining Twitch campaign has no tracked progress; mining them anyway.");
+            }
+
             List<DropsCampaign> kickCampaigns = campaignSnapshot
                 .Where(c => c.Platform == Platform.Kick && c.HasProgressToMake(autoClaimRewards))
                 .ToList();
@@ -167,6 +195,24 @@ namespace Core.Mining
                     Platform.Twitch,
                     "TwitchSelection",
                     twitchCampaigns,
+                    selectBestCampaignAsync,
+                    selectTwitchUrlAsync,
+                    isTwitchEligibleAsync,
+                    navigateTwitchAsync,
+                    prepareTwitchStreamPageAsync,
+                    lastMinedStreamers,
+                    onTwitchSelectionPreview,
+                    cancellationToken);
+            }
+
+            // Nothing watchable among the campaigns Twitch does credit: fall back to the deprioritised ones.
+            if (twitchResult is null && twitchWebView != null && twitchCoolingDown.Count > 0 && twitchCoolingDown.Count < twitchCampaignCountBeforeCooldown)
+            {
+                AppLogger.Info("Miner", "No live streamer for any other Twitch campaign; falling back to the deprioritised one(s).");
+                twitchResult = await PlatformMiningSession.TrySelectAsync(
+                    Platform.Twitch,
+                    "TwitchSelection",
+                    twitchCoolingDown,
                     selectBestCampaignAsync,
                     selectTwitchUrlAsync,
                     isTwitchEligibleAsync,

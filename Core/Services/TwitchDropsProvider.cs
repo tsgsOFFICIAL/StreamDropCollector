@@ -116,19 +116,40 @@ namespace Core.Services
 
                 JsonArray dropCampaignsInProgress = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["dropCampaignsInProgress"]?.AsArray() ?? new JsonArray();
 
-                // Already finished/claimed drops. "gameEventDropsConnection" now permanently returns a GQL
+                // Already finished/claimed drops. "gameEventDropsConnection" often returns a GQL
                 // "service error" (null) on Twitch's backend, so already-claimed rewards with no in-progress
                 // record (e.g. lower tiers auto-claimed alongside a higher one) must come from
                 // "earnedDropRewards" instead - its edge nodes carry item.id (== the reward's benefit id,
                 // i.e. DropInstanceId) and a "CLAIMED" status.
                 JsonArray earnedDropRewardEdges = ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["earnedDropRewards"]?["edges"]?.AsArray() ?? new JsonArray();
 
-                // Benefit ids of everything ever claimed ("gameEventDropsConnection", paged by the GQL service). Only
-                // used for badges, which are one-per-account, so a past claim under another campaign still counts.
-                HashSet<string> claimedBenefitIds = (ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?["edges"]?.AsArray() ?? [])
-                    .Select(edge => edge?["node"]?["benefit"]?["id"]?.GetValue<string>())
-                    .OfType<string>()
-                    .ToHashSet();
+                // Everything ever claimed, by benefit id, with when it was last awarded ("gameEventDropsConnection",
+                // paged by the GQL service). Badges are one-per-account, so any past claim counts for them. Other
+                // benefits only count when awarded during the campaign itself (see EarnedRewardMatcher.IsClaimedByAwardHistory).
+                Dictionary<string, DateTimeOffset> lastAwardedByBenefitId = [];
+                foreach (JsonNode? edge in ongoingCampaigns["data"]?["currentUser"]?["inventory"]?["gameEventDropsConnection"]?["edges"]?.AsArray() ?? [])
+                {
+                    string? benefitId = edge?["node"]?["benefit"]?["id"]?.GetValue<string>();
+                    if (benefitId == null)
+                        continue;
+
+                    DateTimeOffset.TryParse(edge?["node"]?["lastAwardedAt"]?.GetValue<string>(), out DateTimeOffset awardedAt);
+                    if (!lastAwardedByBenefitId.TryGetValue(benefitId, out DateTimeOffset known) || awardedAt > known)
+                        lastAwardedByBenefitId[benefitId] = awardedAt;
+                }
+
+                HashSet<string> claimedBenefitIds = [.. lastAwardedByBenefitId.Keys];
+
+                // How far back "earnedDropRewards" reaches; older awards are only known from the history above.
+                DateTimeOffset? oldestEarnedAt = null;
+                foreach (JsonNode? edge in earnedDropRewardEdges)
+                {
+                    if (DateTimeOffset.TryParse(edge?["node"]?["earnedAt"]?.GetValue<string>(), out DateTimeOffset earnedAt) &&
+                        (oldestEarnedAt == null || earnedAt < oldestEarnedAt))
+                        oldestEarnedAt = earnedAt;
+                }
+
+                AppLogger.Debug("TwitchDrops", $"Claim sources: earnedEntries={earnedDropRewardEdges.Count} oldestEarnedAt={oldestEarnedAt?.ToString("u") ?? "n/a"} historyBenefits={lastAwardedByBenefitId.Count}");
 
                 // Create a new list with updated campaigns
                 List<DropsCampaign> updatedResult = new List<DropsCampaign>();
@@ -207,6 +228,40 @@ namespace Core.Services
 
                         if (reward.IsBadge && !updatedReward.IsClaimed && claimedBenefitIds.Contains(reward.DropInstanceId))
                         {
+                            updatedReward = updatedReward with
+                            {
+                                IsClaimed = true,
+                                ProgressMinutes = reward.RequiredMinutes
+                            };
+                        }
+
+                        // 3. A fully claimed campaign leaves "dropCampaignsInProgress", and its claims fall off
+                        // "earnedDropRewards" once ~150 newer ones exist. Twitch then tracks no progress for it, so
+                        // without this the drop looks brand new and gets mined and "claimed" over and over.
+                        if (!updatedReward.IsClaimed &&
+                            EarnedRewardMatcher.IsClaimedByAwardHistory(reward, dropCampaign, lastAwardedByBenefitId, hasInProgressRecord, oldestEarnedAt))
+                        {
+                            AppLogger.Debug(
+                                "TwitchDrops",
+                                $"Reward already awarded during this campaign per claim history. campaignId={dropCampaign.Id} " +
+                                $"campaign='{dropCampaign.Name}' dropId={reward.Id} benefitId={reward.DropInstanceId}");
+
+                            updatedReward = updatedReward with
+                            {
+                                IsClaimed = true,
+                                ProgressMinutes = reward.RequiredMinutes
+                            };
+                        }
+
+                        // 4. Twitch's inventory confirmed this drop as earned and then accepted its claim earlier in this
+                        // session; keep it claimed even if the inventory is slow to show it.
+                        if (!updatedReward.IsClaimed && gql.WasClaimAccepted(dropCampaign.Id, reward.Id))
+                        {
+                            AppLogger.Warn(
+                                "TwitchDrops",
+                                $"Reward was claimed this session but Twitch's inventory does not report it; keeping it claimed. " +
+                                $"campaignId={dropCampaign.Id} campaign='{dropCampaign.Name}' dropId={reward.Id} benefitId={reward.DropInstanceId}");
+
                             updatedReward = updatedReward with
                             {
                                 IsClaimed = true,
