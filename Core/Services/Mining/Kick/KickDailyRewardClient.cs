@@ -32,14 +32,20 @@ namespace Core.Services.Mining.Kick
         /// </summary>
         /// <param name="host">Kick WebView host currently on a kick.com origin.</param>
         /// <param name="ct">Cancellation token.</param>
-        public static async Task<KickChallenge?> FetchDailyAsync(IWebViewHost host, CancellationToken ct = default)
+        public static async Task<KickChallenge?> FetchDailyAsync(IWebViewHost host, CancellationToken ct = default) =>
+            (await FetchAllAsync(host, ct))?.FirstOrDefault(c => c.IsDaily);
+
+        /// <summary>
+        /// Fetches every active challenge (daily reward plus seasonal/event crates), or <see langword="null"/> when unavailable.
+        /// </summary>
+        public static async Task<IReadOnlyList<KickChallenge>?> FetchAllAsync(IWebViewHost host, CancellationToken ct = default)
         {
             string? body = await SendAsync(host, "GET", ChallengesUrl, requestBody: null, ct);
             if (body is null)
                 return null;
 
             AppLogger.Debug("KickDaily", $"challenges body={body}");
-            return ParseDaily(body);
+            return ParseAll(body);
         }
 
         /// <summary>
@@ -131,26 +137,31 @@ namespace Core.Services.Mining.Kick
         /// <summary>
         /// Parses a challenges payload and returns the daily challenge, or <see langword="null"/> when there is none.
         /// </summary>
-        public static KickChallenge? ParseDaily(string json)
+        public static KickChallenge? ParseDaily(string json) => ParseAll(json).FirstOrDefault(c => c.IsDaily);
+
+        /// <summary>
+        /// Parses a challenges payload into every challenge it contains (empty when malformed).
+        /// </summary>
+        public static IReadOnlyList<KickChallenge> ParseAll(string json)
         {
+            List<KickChallenge> result = new();
             try
             {
                 using JsonDocument doc = JsonDocument.Parse(json);
                 if (!doc.RootElement.TryGetProperty("data", out JsonElement data) || data.ValueKind != JsonValueKind.Array)
-                    return null;
+                    return result;
 
                 foreach (JsonElement item in data.EnumerateArray())
                 {
-                    KickChallenge? challenge = ParseChallenge(item);
-                    if (challenge is { IsDaily: true })
-                        return challenge;
+                    if (ParseChallenge(item) is { } challenge)
+                        result.Add(challenge);
                 }
             }
             catch (JsonException)
             {
             }
 
-            return null;
+            return result;
         }
 
         private static KickChallenge? ParseChallenge(JsonElement item)

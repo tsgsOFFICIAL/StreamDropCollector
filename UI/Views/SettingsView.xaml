@@ -117,9 +117,9 @@
                                   Margin="0,0,0,12"/>
                         <CheckBox IsChecked="{Binding KickDailyClaim, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
-                                  Content="Claim the Kick daily reward when ready"
+                                  Content="Claim the Kick daily reward and seasonal crates when ready"
                                   Margin="0,0,0,4"/>
-                        <TextBlock Text="Needs 60 minutes of Kick watch time a day. Kick level farming is recommended ON so the miner keeps watching when no drops are available."
+                        <TextBlock Text="Daily reward needs 60 minutes of Kick watch time a day; seasonal crates need their own watch time. Kick level farming is recommended ON so the miner keeps watching when no drops are available."
                                    TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="24,0,0,12"/>
                         <CheckBox IsChecked="{Binding PrioritizeBadges, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
