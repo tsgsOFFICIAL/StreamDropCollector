@@ -345,8 +345,7 @@ namespace Core.Managers
         private int _kickLevelRefreshing;
         private int _kickDailyChecking;
         private DateTime _lastKickDailyCheck = DateTime.MinValue;
-        private string? _kickDailyAttemptChallengeId;
-        private int _kickDailyAttempts;
+        private readonly Dictionary<string, int> _kickClaimAttempts = new();
         // About once a minute. Slightly under 60s because the 30s timer ticks jitter, and an exact minute would often wait for the tick after.
         private static readonly TimeSpan KickDailyCheckInterval = TimeSpan.FromSeconds(55);
         private const int KickDailyMaxClaimAttempts = 3;
@@ -1631,38 +1630,45 @@ namespace Core.Managers
                 try
                 {
                     int? streakDays = await KickDailyRewardClient.FetchStreakDaysAsync(host);
-                    KickChallenge? daily = await KickDailyRewardClient.FetchDailyAsync(host);
+                    IReadOnlyList<KickChallenge>? challenges = await KickDailyRewardClient.FetchAllAsync(host);
+                    KickChallenge? daily = challenges?.FirstOrDefault(c => c.IsDaily);
                     KickDailyChanged?.Invoke(streakDays, daily);
 
-                    if (daily == null)
+                    if (challenges == null || challenges.Count == 0)
                     {
-                        AppLogger.Debug("KickDaily", "No daily challenge returned.");
+                        AppLogger.Debug("KickDaily", "No challenges returned.");
                         return;
                     }
 
-                    AppLogger.Debug("KickDaily", $"Daily '{daily.Name}' status={daily.Status} progress={daily.Progress}/{daily.Threshold} streak={streakDays?.ToString() ?? "?"}.");
+                    foreach (KickChallenge c in challenges)
+                        AppLogger.Debug("KickDaily", $"Challenge '{c.Name}' id={c.Id} recurrence={c.Recurrence} status={c.Status} progress={c.Progress}/{c.Threshold} streak={streakDays?.ToString() ?? "?"}.");
 
-                    if (!EffectiveKickDailyClaim || !daily.IsClaimable)
+                    if (!EffectiveKickDailyClaim)
                         return;
 
-                    if (_kickDailyAttemptChallengeId != daily.Id)
+                    // Claims the daily reward and any seasonal/event crate (e.g. "Sunset Reward Case") that is ready.
+                    bool claimedAny = false;
+                    foreach (KickChallenge challenge in challenges.Where(c => c.IsClaimable))
                     {
-                        _kickDailyAttemptChallengeId = daily.Id;
-                        _kickDailyAttempts = 0;
+                        int attempts = _kickClaimAttempts.GetValueOrDefault(challenge.Id);
+                        if (attempts >= KickDailyMaxClaimAttempts)
+                            continue;
+
+                        _kickClaimAttempts[challenge.Id] = attempts + 1;
+                        if (await KickDailyRewardClient.ClaimAsync(host, challenge))
+                        {
+                            AppLogger.Info("KickDaily", $"Claimed Kick reward '{challenge.Name}'.");
+                            claimedAny = true;
+                        }
                     }
 
-                    if (_kickDailyAttempts >= KickDailyMaxClaimAttempts)
-                        return;
-
-                    _kickDailyAttempts++;
-                    if (await KickDailyRewardClient.ClaimAsync(host, daily))
+                    if (claimedAny)
                     {
-                        AppLogger.Info("KickDaily", "Claimed Kick daily reward.");
                         KickDailyChanged?.Invoke(
                             await KickDailyRewardClient.FetchStreakDaysAsync(host),
                             await KickDailyRewardClient.FetchDailyAsync(host));
                     }
-                    else
+                    else if (challenges.Any(c => c.IsClaimable && _kickClaimAttempts.GetValueOrDefault(c.Id) < KickDailyMaxClaimAttempts))
                         _lastKickDailyCheck = DateTime.MinValue;
                 }
                 catch (Exception ex)

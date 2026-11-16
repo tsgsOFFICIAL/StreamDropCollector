@@ -20,6 +20,7 @@ namespace Core.Models
         public bool IsClaimed => string.Equals(Status, "claimed", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Gets a value indicating whether the watch-time threshold has been reached and the reward not yet claimed.</summary>
-        public bool IsClaimable => !IsClaimed && Threshold > 0 && Progress >= Threshold;
+        public bool IsClaimable => !IsClaimed && Threshold > 0 && Progress >= Threshold
+            && (WindowEndsAt is null || WindowEndsAt > DateTimeOffset.UtcNow);
     }
 }
