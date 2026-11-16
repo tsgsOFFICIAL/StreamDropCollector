@@ -58,10 +58,12 @@ namespace Core.Services
                     }
 
                     // Remove if not connected (campaigns that link to Twitch itself, e.g. chat badges, need no external account)
-                    if (!campaignObj.TryGetPropertyValue("self", out JsonNode? selfNode) ||
-                        selfNode is not JsonObject selfObj ||
-                        !selfObj.TryGetPropertyValue("isAccountConnected", out JsonNode? connectedNode) ||
-                        (connectedNode?.GetValue<bool>() != true && !LinksToTwitchItself(campaignObj)))
+                    bool isConnected = campaignObj.TryGetPropertyValue("self", out JsonNode? selfNode)
+                        && selfNode is JsonObject selfObj
+                        && selfObj.TryGetPropertyValue("isAccountConnected", out JsonNode? connectedNode)
+                        && connectedNode?.GetValue<bool>() == true;
+
+                    if (!isConnected && !LinksToTwitchItself(campaignObj))
                     {
                         AppLogger.Debug("TwitchDrops", $"Filtered out '{campaignLabel}': self={selfNode?.ToJsonString() ?? "null"}");
                         return true; // Remove
@@ -453,17 +455,20 @@ namespace Core.Services
         }
 
         /// <summary>
-        /// True when the campaign's account link points at twitch.tv itself, meaning no external game account is needed.
+        /// True when the campaign needs no external game account: its account link is missing or points at twitch.tv
+        /// itself. Event and badge campaigns (e.g. The Streamer Awards in Special Events / IRL / Just Chatting) link to a
+        /// twitch.tv page, not a game's own site, and never report an account as connected.
         /// </summary>
         private static bool LinksToTwitchItself(JsonObject campaign)
         {
             string? linkUrl = campaign["accountLinkURL"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(linkUrl))
+                return true;
 
-            // Only the bare site counts; subdomains such as id.twitch.tv are OAuth sign-ins for a game's own site.
+            // Only twitch.tv and www.twitch.tv count (any path); subdomains such as id.twitch.tv are OAuth sign-ins for a game's own site.
             return Uri.TryCreate(linkUrl, UriKind.Absolute, out Uri? uri) &&
                    (uri.Host.Equals("twitch.tv", StringComparison.OrdinalIgnoreCase) ||
-                    uri.Host.Equals("www.twitch.tv", StringComparison.OrdinalIgnoreCase)) &&
-                   uri.AbsolutePath.Trim('/').Length == 0;
+                    uri.Host.Equals("www.twitch.tv", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
