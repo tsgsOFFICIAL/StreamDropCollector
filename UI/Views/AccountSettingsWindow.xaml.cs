@@ -156,7 +156,7 @@ namespace UI.Views
 
             overrides.PriorityStreamers = UseGlobalStreamers.IsChecked == true
                 ? null
-                : Core.Managers.UISettingsManager.ParseStreamerList(StreamersBox.Text);
+                : Core.Managers.UISettingsManager.ParseStreamerList(StreamersBox.Text, _session.Model.Platform);
 
             if (UseGlobalFilter.IsChecked == true)
             {
@@ -191,7 +191,7 @@ namespace UI.Views
                 }
 
                 // Append to what is in the box (not yet saved), keeping the order and skipping duplicates.
-                List<string> merged = Core.Managers.UISettingsManager.ParseStreamerList(StreamersBox.Text);
+                List<string> merged = Core.Managers.UISettingsManager.ParseStreamerList(StreamersBox.Text, _session.Model.Platform);
                 int before = merged.Count;
                 merged.AddRange(follows.Where(f => !merged.Contains(f)));
                 StreamersBox.Text = string.Join(", ", merged);

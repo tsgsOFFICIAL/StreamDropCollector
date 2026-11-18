@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Net.Http;
+using Core.Helpers;
 using Core.Logging;
 using Core.Models;
 using Core.Enums;
@@ -361,18 +362,43 @@ namespace Core.Managers
         /// <summary>
         /// Parses streamer logins or pasted channel URLs, separated by commas, semicolons, spaces or new lines.
         /// </summary>
-        public static List<string> ParseStreamerList(string? text) => (text ?? string.Empty)
-            .Split([',', ';', ' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim().TrimEnd('/'))
-            .Select(x => x.Contains('/') ? x[(x.LastIndexOf('/') + 1)..] : x)
-            .Select(x => x.TrimStart('@').ToLowerInvariant())
-            .Where(x => x.Length > 0)
-            .Distinct()
-            .ToList();
+        /// <remarks>
+        /// Stray punctuation around a login (such as a trailing period) is trimmed, and entries that still are not
+        /// a valid login for <paramref name="platform"/> are dropped. One invalid Twitch login makes Helix reject
+        /// the lookup with 400, which used to abort stream selection.
+        /// </remarks>
+        public static List<string> ParseStreamerList(string? text, Platform platform)
+        {
+            List<string> logins = [];
+
+            foreach (string entry in (text ?? string.Empty).Split([',', ';', ' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                string candidate = entry.Trim();
+                int queryStart = candidate.IndexOfAny(['?', '#']);
+                if (queryStart >= 0)
+                    candidate = candidate[..queryStart];
+
+                candidate = candidate.TrimEnd('/');
+                if (candidate.Contains('/'))
+                    candidate = candidate[(candidate.LastIndexOf('/') + 1)..];
+
+                string? login = StreamerLogin.Clean(candidate, platform);
+                if (login is null)
+                {
+                    AppLogger.Warn("StreamSelection", $"Ignoring invalid {platform} priority streamer '{entry}'.");
+                    continue;
+                }
+
+                if (!logins.Contains(login))
+                    logins.Add(login);
+            }
+
+            return logins;
+        }
 
         private void SetPriorityStreamers(Platform platform, string? text)
         {
-            List<string> parsed = ParseStreamerList(text);
+            List<string> parsed = ParseStreamerList(text, platform);
 
             // Lists compare by reference, so this always saves and refreshes the box with the normalized text.
             if (platform == Platform.Twitch)

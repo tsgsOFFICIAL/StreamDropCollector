@@ -86,8 +86,18 @@ namespace Core.Managers
         /// <summary>
         /// Gets the streamers watched first on this account's platform (account override, else global list).
         /// </summary>
+        /// <remarks>
+        /// Account overrides saved before logins were validated can still hold entries like "perzzon.", so they are
+        /// cleaned here too (the global list is cleaned when settings load).
+        /// </remarks>
         public IReadOnlyList<string> EffectivePriorityStreamers =>
-            Account.Overrides.PriorityStreamers ?? UISettingsManager.Instance.GetPriorityStreamers(Account.Platform);
+            Account.Overrides.PriorityStreamers is { } overrides
+                ? overrides
+                    .Select(login => StreamerLogin.Clean(login, Account.Platform))
+                    .OfType<string>()
+                    .Distinct()
+                    .ToList()
+                : UISettingsManager.Instance.GetPriorityStreamers(Account.Platform);
 
         /// <summary>
         /// Applies this account's game filter, or the global filter when the account has no override.
@@ -1315,6 +1325,7 @@ namespace Core.Managers
         public async Task StartMiningStreams(bool restartedInternally = false)
         {
             await _startMiningLock.WaitAsync();
+            CancellationToken token = CancellationToken.None;
             try
             {
                 VerboseLog("StartMining",
@@ -1332,7 +1343,7 @@ namespace Core.Managers
 
                 _startMiningCts?.Cancel();
                 _startMiningCts = new CancellationTokenSource();
-                CancellationToken token = _startMiningCts.Token;
+                token = _startMiningCts.Token;
 
                 // Immediately stop the live progress timer to prevent ticks during unstable state
                 _liveProgressTimer?.Stop();
@@ -1487,37 +1498,59 @@ namespace Core.Managers
 
                 DateTime nextCheckAt = result.NextCheckAt;
                 double delayMs = Math.Max((nextCheckAt - DateTime.Now).TotalMilliseconds, 60000);
-                _recheckTimer = new System.Timers.Timer(delayMs);
-                _recheckTimer.Elapsed += async (_, _) =>
-                {
-                    _recheckTimer?.Stop();
-                    AppLogger.Debug("Miner", "[DropsInventoryManager] Re-evaluating streams for active campaigns.");
-                    AppLogger.Debug("Miner", "Scheduled re-evaluation triggered.");
-                    try
-                    {
-                        await StartMiningStreams(true);
-                    }
-                    catch (OperationCanceledException ex)
-                    {
-                        AppLogger.Warn("Miner", $"Scheduled re-evaluation canceled (network timeout or superseded): {ex.Message}");
-                    }
-                    catch (Exception ex)
-                    {
-                        AppLogger.Error("Miner", "Scheduled re-evaluation failed.", ex);
-                    }
-                };
-                _recheckTimer.AutoReset = false;
-                _recheckTimer.Start();
+                ScheduleRecheck(delayMs);
 
                 AppLogger.Debug("Miner", $"[DropsInventoryManager] Next stream re-evaluation in ~{delayMs / 60000:F1} minutes at {nextCheckAt:u}");
                 AppLogger.Debug("Miner", $"Next re-evaluation in {delayMs / 1000:F0}s at {nextCheckAt:u}. twitchSelected={_selection.CurrentTwitchCampaign != null}, kickSelected={_selection.CurrentKickCampaign != null}");
 
                 MinerStatusChanged?.Invoke(result.MinerStatus);
             }
+            catch (Exception ex) when (!(ex is OperationCanceledException && token.IsCancellationRequested))
+            {
+                // Anything that escapes selection (a Helix 400, a network timeout, a WebView error) used to leave the
+                // status on "Starting" with the recheck timer already stopped, so mining never tried again.
+                // A cancel of this run's own token means a newer run or a pause took over, so that still propagates.
+                AppLogger.Error("Miner", $"StartMiningStreams failed; retrying in {FailedStartRetryDelayMs / 60000:F0} minutes.", ex);
+                MinerStatusChanged?.Invoke("Retrying");
+                ScheduleRecheck(FailedStartRetryDelayMs);
+            }
             finally
             {
                 _startMiningLock.Release();
             }
+        }
+
+        private const double FailedStartRetryDelayMs = 5 * 60 * 1000;
+
+        /// <summary>
+        /// Replaces the stream re-evaluation timer so <see cref="StartMiningStreams"/> runs again after <paramref name="delayMs"/>.
+        /// </summary>
+        private void ScheduleRecheck(double delayMs)
+        {
+            _recheckTimer?.Stop();
+            _recheckTimer?.Dispose();
+
+            _recheckTimer = new System.Timers.Timer(delayMs);
+            _recheckTimer.Elapsed += async (_, _) =>
+            {
+                _recheckTimer?.Stop();
+                AppLogger.Debug("Miner", "[DropsInventoryManager] Re-evaluating streams for active campaigns.");
+                AppLogger.Debug("Miner", "Scheduled re-evaluation triggered.");
+                try
+                {
+                    await StartMiningStreams(true);
+                }
+                catch (OperationCanceledException ex)
+                {
+                    AppLogger.Warn("Miner", $"Scheduled re-evaluation canceled (network timeout or superseded): {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("Miner", "Scheduled re-evaluation failed.", ex);
+                }
+            };
+            _recheckTimer.AutoReset = false;
+            _recheckTimer.Start();
         }
         /// <summary>
         /// Applies a platform mining result to current selection state and raises initial progress events.

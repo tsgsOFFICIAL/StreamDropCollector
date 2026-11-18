@@ -1,6 +1,8 @@
 using System.Net.Http;
 using System.Text.Json;
 using Core.Constants;
+using Core.Enums;
+using Core.Helpers;
 using Core.Interfaces;
 using Core.Logging;
 using Core.Models;
@@ -213,6 +215,15 @@ namespace Core.Services.Twitch.Helix
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // Helix answers 400 for the whole batch when any login holds characters Twitch never allows,
+            // so drop those here instead of letting one bad entry fail every lookup in the batch.
+            List<string> invalid = normalized.Where(login => !StreamerLogin.IsValid(login, Platform.Twitch)).ToList();
+            if (invalid.Count > 0)
+            {
+                AppLogger.Warn("TwitchHelix", $"RefreshChannelsAsync ignoring invalid Twitch logins=[{string.Join(", ", invalid)}]");
+                normalized.RemoveAll(invalid.Contains);
+            }
+
             if (normalized.Count == 0)
             {
                 AppLogger.Debug("TwitchHelix", "RefreshChannelsAsync SKIPPED - empty login list.");
@@ -290,6 +301,12 @@ namespace Core.Services.Twitch.Helix
                 return null;
 
             string login = channelLogin.Trim().ToLowerInvariant();
+
+            if (!StreamerLogin.IsValid(login, Platform.Twitch))
+            {
+                AppLogger.Warn("TwitchHelix", $"GetChannelAsync SKIPPED login={login} - not a valid Twitch login.");
+                return null;
+            }
 
             if (_cache.TryGet(login, out LiveChannelSnapshot? cached) && cached is not null)
             {

@@ -654,7 +654,21 @@ namespace UI.Accounts
                 _loadSemaphore.Release();
 
                 if (Enabled && IsConnected && !_disposed)
-                    await Engine.ResumeMiningAsync();
+                {
+                    // This runs in a finally on a fire-and-forget load, so anything thrown here was never observed.
+                    try
+                    {
+                        await Engine.ResumeMiningAsync();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        AppLogger.Debug("Accounts", $"Resume mining superseded for {Model.DisplayName}.");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Error("Accounts", $"Resume mining failed for {Model.DisplayName}.", ex);
+                    }
+                }
             }
         }
 
@@ -715,6 +729,7 @@ namespace UI.Accounts
                     case "Starting": StatusText = "Starting"; StatusDetails = "Finding streams to mine"; break;
                     case "Evaluating": StatusText = "Evaluating"; StatusDetails = "Checking streams for drops eligibility"; break;
                     case "Mining": StatusText = "Mining"; StatusDetails = "Mining streams to earn drops"; break;
+                    case "Retrying": StatusText = "Retrying"; StatusDetails = "Finding a stream failed, trying again in a few minutes"; break;
                 }
             });
         }
