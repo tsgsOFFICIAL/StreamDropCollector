@@ -62,11 +62,18 @@ namespace Core.Interfaces
         /// </summary>
         Task<JsonObject?> QueryRewardCampaignProgressAsync(CancellationToken ct = default);
         /// <summary>
-        /// Captures Twitch's own <c>DailyViewDropCollection</c> request from the drops campaigns page, replays it, and
-        /// returns the response <c>data</c> object (<c>campaign0</c>, <c>campaign1</c>, ...). It carries each reward
-        /// group's repeat rules even for campaigns the viewer has not started. Returns <see langword="null"/> on failure.
+        /// Re-asks only for the dashboard's <c>rewardCampaignsAvailableToUser</c>, which Twitch intermittently answers
+        /// with a "service timeout" (null) while the rest of the dashboard is fine. Returns <see langword="null"/>
+        /// when it is still unavailable.
         /// </summary>
-        Task<JsonObject?> QueryRewardCampaignRulesAsync(CancellationToken ct = default);
+        Task<JsonArray?> QueryAvailableRewardCampaignsAsync(CancellationToken ct = default);
+        /// <summary>
+        /// Captures the per-campaign operations (such as <c>Gta6Collection</c>) the drops campaigns page sends for the
+        /// given reward campaigns, replays them, and returns the campaign objects keyed by campaign id. They carry each
+        /// reward group's repeat rules and the rewards inside its pools, even for campaigns the viewer has not started.
+        /// Returns <see langword="null"/> on failure.
+        /// </summary>
+        Task<JsonObject?> QueryRewardCampaignRulesAsync(IReadOnlyCollection<string> campaignIds, CancellationToken ct = default);
         string UserId { set; }
     }
 }

@@ -792,6 +792,52 @@ namespace Core.Services
             return responseArray?[0]?.AsObject();
         }
 
+        /// <inheritdoc/>
+        public async Task<JsonArray?> QueryAvailableRewardCampaignsAsync(CancellationToken ct = default)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_integrityToken) || string.IsNullOrEmpty(_accessToken))
+                    return null;
+
+                string hash = await GetPersistedQueryHashAsync("ViewerDropsDashboard", ct);
+
+                JsonArray payload =
+                [
+                    new JsonObject
+                    {
+                        ["operationName"] = "ViewerDropsDashboard",
+                        ["variables"] = new JsonObject { ["fetchRewardCampaigns"] = true },
+                        ["extensions"] = new JsonObject
+                        {
+                            ["persistedQuery"] = new JsonObject { ["version"] = 1, ["sha256Hash"] = hash }
+                        }
+                    }
+                ];
+
+                using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql") { Content = JsonContent.Create(payload) };
+                request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
+                request.Headers.TryAddWithoutValidation("Client-Integrity", _integrityToken);
+                request.Headers.TryAddWithoutValidation("Authorization", _accessToken);
+
+                if (!string.IsNullOrEmpty(_deviceId))
+                    request.Headers.TryAddWithoutValidation("X-Device-Id", _deviceId);
+
+                LogOutgoingRequest("QueryAvailableRewardCampaigns");
+                HttpResponseMessage response = await _httpClient.SendAsync(request, ct);
+                string jsonText = await response.Content.ReadAsStringAsync(ct);
+
+                return response.IsSuccessStatusCode
+                    ? JsonNode.Parse(jsonText)?[0]?["data"]?["rewardCampaignsAvailableToUser"] as JsonArray
+                    : null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("TwitchGql", $"QueryAvailableRewardCampaigns failed: {ex.Message}");
+                return null;
+            }
+        }
+
         /// <summary>
         /// Queries <c>ViewerRewardDropInventory</c>, which carries the viewer's progress (watched minutes, claimed state)
         /// for reward campaigns. Never throws for Twitch-side failures; reward campaigns are optional extras and must not
@@ -854,32 +900,62 @@ namespace Core.Services
         }
 
         /// <summary>
-        /// Captures the page's own <c>DailyViewDropCollection</c> request and replays it as captured. The persisted query
-        /// is tied to the exact number of campaign ids the page sends, so the request is never rebuilt, only resent.
-        /// Never throws for Twitch-side failures.
+        /// Captures the request batch the drops campaigns page itself sends, picks out the operations that ask for one of
+        /// the given reward campaigns (the page uses a per-campaign operation such as <c>Gta6Collection</c> or
+        /// <c>PokemonCampaignSections</c>, with the campaign ids as variables), and replays just those as captured. The
+        /// persisted queries are tied to the exact variables the page sends, so a request is never rebuilt, only resent.
+        /// The result maps campaign id to the campaign object, which carries each reward group's repeat rules and
+        /// the rewards inside its pools even for campaigns the viewer has not started. Never throws for Twitch-side failures.
         /// </summary>
-        public async Task<JsonObject?> QueryRewardCampaignRulesAsync(CancellationToken ct = default)
+        public async Task<JsonObject?> QueryRewardCampaignRulesAsync(IReadOnlyCollection<string> campaignIds, CancellationToken ct = default)
         {
-            const string operationName = "DailyViewDropCollection";
-
             try
             {
-                if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_integrityToken) || string.IsNullOrEmpty(_accessToken))
+                if (campaignIds.Count == 0 || string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_integrityToken) || string.IsNullOrEmpty(_accessToken))
                     return null;
 
-                await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
-                string captured = await _host.CaptureGqlRequestBodyContainingAsyncWithRetry(operationName, 6000, 2, ct: ct);
+                // The page sends each per-campaign operation as its own request (and several campaigns can share one), so
+                // capture by campaign id, one page load per operation, skipping ids an earlier operation already covered.
+                JsonArray payload = [];
+                HashSet<string> covered = [];
+                foreach (string campaignId in campaignIds)
+                {
+                    if (covered.Contains(campaignId))
+                        continue;
 
-                JsonNode? parsed = JsonNode.Parse(captured);
-                IEnumerable<JsonNode?> operations = parsed is JsonArray array ? array : [parsed];
-                JsonObject? operation = operations
-                    .OfType<JsonObject>()
-                    .FirstOrDefault(op => op["operationName"]?.GetValue<string>() == operationName);
+                    string captured;
+                    try
+                    {
+                        // The capture reloads whatever page is open, so be on the drops campaigns page first.
+                        await _host.NavigateAsync($"https://www.twitch.tv/drops/campaigns?t={DateTimeOffset.Now.ToUnixTimeMilliseconds()}");
+                        captured = await _host.CaptureGqlRequestBodyContainingAsyncWithRetry(campaignId, 10000, 1, ct: ct);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        AppLogger.Debug("TwitchGql", $"QueryRewardCampaignRules: no per-campaign operation captured for {campaignId}. {ex.Message}");
+                        continue;
+                    }
 
-                if (operation == null)
+                    JsonNode? parsed = JsonNode.Parse(captured);
+                    IEnumerable<JsonNode?> operations = parsed is JsonArray array ? array : [parsed];
+                    foreach (JsonObject operation in operations.OfType<JsonObject>())
+                    {
+                        if (operation["variables"] is not JsonNode variables || !ContainsAnyString(variables, campaignIds))
+                            continue;
+
+                        payload.Add(JsonNode.Parse(operation.ToJsonString()));
+                        foreach (string id in campaignIds.Where(id => ContainsAnyString(variables, [id])))
+                            covered.Add(id);
+                    }
+
+                    covered.Add(campaignId);
+                }
+
+                if (payload.Count == 0)
+                {
+                    AppLogger.Debug("TwitchGql", "QueryRewardCampaignRules: the drops page sent no per-campaign operations.");
                     return null;
-
-                JsonArray payload = [JsonNode.Parse(operation.ToJsonString())];
+                }
 
                 using HttpRequestMessage request = new(HttpMethod.Post, "https://gql.twitch.tv/gql") { Content = JsonContent.Create(payload) };
                 request.Headers.TryAddWithoutValidation("Client-ID", _clientId);
@@ -894,11 +970,27 @@ namespace Core.Services
                 string jsonText = await response.Content.ReadAsStringAsync(ct);
                 AppLogger.Debug("TwitchGql", $"[QueryRewardCampaignRules] Response body: {jsonText}");
 
-                JsonObject? data = response.IsSuccessStatusCode ? JsonNode.Parse(jsonText)?[0]?["data"]?.AsObject() : null;
-                if (data == null)
+                if (!response.IsSuccessStatusCode || JsonNode.Parse(jsonText) is not JsonArray responses)
+                {
                     AppLogger.Warn("TwitchGql", $"QueryRewardCampaignRules returned no data. {DescribeGqlFailure(response, jsonText)}");
+                    return null;
+                }
 
-                return data;
+                JsonObject campaigns = [];
+                foreach (JsonObject? data in responses.Select(r => r?["data"] as JsonObject))
+                {
+                    if (data == null)
+                        continue;
+
+                    foreach (JsonObject campaign in data.Select(p => p.Value).OfType<JsonObject>())
+                    {
+                        string? id = campaign["id"]?.GetValue<string>();
+                        if (id != null && campaign["rewardGroups"] is JsonArray && campaignIds.Contains(id))
+                            campaigns[id] = campaign.DeepClone();
+                    }
+                }
+
+                return campaigns;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -906,6 +998,14 @@ namespace Core.Services
                 return null;
             }
         }
+
+        private static bool ContainsAnyString(JsonNode? node, IReadOnlyCollection<string> values) => node switch
+        {
+            JsonValue v => v.TryGetValue(out string? text) && text != null && values.Contains(text),
+            JsonObject o => o.Any(p => ContainsAnyString(p.Value, values)),
+            JsonArray a => a.Any(i => ContainsAnyString(i, values)),
+            _ => false
+        };
 
         /// <summary>
         /// Retrieves detailed information for multiple Twitch drop campaigns in a single batch operation.

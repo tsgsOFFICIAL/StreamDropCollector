@@ -300,6 +300,11 @@ namespace Core.Services
         private readonly Dictionary<string, int> _repeatTimesByGroupId = [];
         private bool _repeatRulesAttempted;
 
+        // The rewards inside each reward group's pool (e.g. the six GTA VI chain badges behind "GTA DVD Chest"), learned with the repeat counts.
+        private readonly Dictionary<string, List<PoolReward>> _poolRewardsByGroupId = [];
+
+        private sealed record PoolReward(string Id, string Name, string? ImageUrl, bool IsBadge, bool IsEmote);
+
         /// <summary>
         /// Builds the viewer's open reward campaigns from the dashboard's <c>rewardCampaignsAvailableToUser</c> and the
         /// <c>ViewerRewardDropInventory</c> progress. Only watch-time reward groups are listed; groups that need a paid
@@ -310,13 +315,23 @@ namespace Core.Services
             try
             {
                 JsonArray? available = dashboardResponse["data"]?["rewardCampaignsAvailableToUser"]?.AsArray();
+
+                // Twitch often times this field out (null, with a "service timeout" error) while the rest of the dashboard
+                // is fine; an empty list is a real answer, null is not, so ask again a few times before giving up.
+                for (int attempt = 1; available == null && attempt <= 3; attempt++)
+                {
+                    AppLogger.Warn("TwitchDrops", $"Reward campaigns missing from the dashboard (Twitch timed out); retrying {attempt}/3.");
+                    await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+                    available = await gql.QueryAvailableRewardCampaignsAsync(ct);
+                }
+
                 if (available == null || available.Count == 0)
                     return [];
 
                 JsonObject? progress = await gql.QueryRewardCampaignProgressAsync(ct);
                 JsonArray inProgress = progress?["data"]?["currentUser"]?["inventory"]?["viewerRewardDropCampaignsInProgress"]?.AsArray() ?? [];
 
-                await LearnRepeatRulesAsync(available, inProgress, ct);
+                await LearnRepeatRulesAsync(available, ct);
 
                 List<DropsCampaign> result = [];
                 foreach (JsonObject campaign in available.OfType<JsonObject>())
@@ -324,7 +339,8 @@ namespace Core.Services
                     DropsCampaign? parsed = ParseRewardCampaign(
                         campaign,
                         inProgress.OfType<JsonObject>().FirstOrDefault(c => c["id"]?.GetValue<string>() == campaign["id"]?.GetValue<string>()),
-                        _repeatTimesByGroupId);
+                        _repeatTimesByGroupId,
+                        _poolRewardsByGroupId);
 
                     if (parsed != null)
                         result.Add(parsed);
@@ -341,17 +357,16 @@ namespace Core.Services
         }
 
         /// <summary>
-        /// A campaign the viewer has not started carries no repeat rules (a "20 minutes on 3 days" reward would look like
-        /// a plain 20 minute one), so Twitch's own rules lookup is replayed once per session when a watch-time group lacks them.
+        /// The dashboard names a reward group's chest only (e.g. "GTA DVD Chest"), and a campaign the viewer has not started
+        /// carries no repeat rules (a "60 minutes on 6 days" reward would look like a plain 60 minute one). Twitch's own
+        /// per-campaign operations hold both, so they are replayed once per session when a watch-time group exists.
         /// </summary>
-        private async Task LearnRepeatRulesAsync(JsonArray available, JsonArray inProgress, CancellationToken ct)
+        private async Task LearnRepeatRulesAsync(JsonArray available, CancellationToken ct)
         {
             if (_repeatRulesAttempted)
                 return;
 
-            HashSet<string?> startedCampaignIds = inProgress.OfType<JsonObject>().Select(c => c["id"]?.GetValue<string>()).ToHashSet();
             bool needsRules = available.OfType<JsonObject>().Any(c =>
-                !startedCampaignIds.Contains(c["id"]?.GetValue<string>()) &&
                 (c["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>().Any(g =>
                     (g["unlockRequirements"]?["minuteWatchedGoal"]?.GetValue<int>() ?? 0) > 0 &&
                     (g["unlockRequirements"]?["subsGoal"]?.GetValue<int>() ?? 0) == 0));
@@ -360,7 +375,13 @@ namespace Core.Services
                 return;
 
             _repeatRulesAttempted = true;
-            JsonObject? rules = await gql.QueryRewardCampaignRulesAsync(ct);
+            // Only campaigns with a watch-time group have a per-campaign operation worth capturing (each costs a page load).
+            List<string> campaignIds = available.OfType<JsonObject>()
+                .Where(c => (c["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>().Any(g =>
+                    (g["unlockRequirements"]?["minuteWatchedGoal"]?.GetValue<int>() ?? 0) > 0 &&
+                    (g["unlockRequirements"]?["subsGoal"]?.GetValue<int>() ?? 0) == 0))
+                .Select(c => c["id"]?.GetValue<string>()).OfType<string>().ToList();
+            JsonObject? rules = await gql.QueryRewardCampaignRulesAsync(campaignIds, ct);
             if (rules == null)
                 return;
 
@@ -369,16 +390,37 @@ namespace Core.Services
                 foreach (JsonObject group in (campaign["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>())
                 {
                     string? groupId = group["id"]?.GetValue<string>();
+                    if (groupId == null)
+                        continue;
+
                     int times = group["progressCriteria"]?["repeatableConfig"]?["repeatableTimes"]?.GetValue<int>() ?? 0;
-                    if (groupId != null && times > 1)
+                    if (times > 1)
                         _repeatTimesByGroupId[groupId] = times;
+
+                    List<PoolReward> pool = [];
+                    foreach (JsonObject reward in (group["rewards"]?.AsArray() ?? []).OfType<JsonObject>())
+                    {
+                        foreach (JsonObject item in (reward["pool"]?["rewards"]?.AsArray() ?? []).OfType<JsonObject>())
+                        {
+                            string? itemId = item["id"]?.GetValue<string>();
+                            string? itemName = item["name"]?.GetValue<string>();
+                            if (itemId == null || string.IsNullOrWhiteSpace(itemName))
+                                continue;
+
+                            string? type = item["distributionType"]?.GetValue<string>();
+                            pool.Add(new PoolReward(itemId, itemName, item["thumbnailURL"]?.GetValue<string>(), type == "BADGE", type == "EMOTE"));
+                        }
+                    }
+
+                    if (pool.Count > 0)
+                        _poolRewardsByGroupId[groupId] = pool;
                 }
             }
 
-            AppLogger.Debug("TwitchDrops", $"Learned repeat rules for {_repeatTimesByGroupId.Count} reward group(s).");
+            AppLogger.Debug("TwitchDrops", $"Learned repeat rules for {_repeatTimesByGroupId.Count} and pool rewards for {_poolRewardsByGroupId.Count} reward group(s).");
         }
 
-        private static DropsCampaign? ParseRewardCampaign(JsonObject campaign, JsonObject? progress, IReadOnlyDictionary<string, int> learnedRepeatTimes)
+        private static DropsCampaign? ParseRewardCampaign(JsonObject campaign, JsonObject? progress, IReadOnlyDictionary<string, int> learnedRepeatTimes, IReadOnlyDictionary<string, List<PoolReward>> learnedPools)
         {
             string id = campaign["id"]?.GetValue<string>() ?? "";
             string name = campaign["name"]?.GetValue<string>() ?? "Reward campaign";
@@ -414,18 +456,37 @@ namespace Core.Services
                 JsonObject? reward = group["rewards"]?.AsArray().OfType<JsonObject>().FirstOrDefault();
                 string rewardName = reward?["name"]?.GetValue<string>() ?? name;
                 int repeatTimes = repeat?["repeatableTimes"]?.GetValue<int>() ?? learnedRepeatTimes.GetValueOrDefault(groupId);
-                if (repeatTimes > 1)
-                    rewardName += $" (x{repeatTimes} days)";
+                string repeatSuffix = repeatTimes > 1 ? $" (x{repeatTimes} days)" : "";
 
                 bool claimed = self?["status"]?.GetValue<string>() == "CLAIMED";
                 int watched = self?["currentMinutesWatched"]?.GetValue<int>() ?? 0;
+                int progressMinutes = claimed ? minutes : Math.Min(watched, minutes);
+
+                // A chest is a pool of the actual rewards (e.g. six chain badges); list those instead of the chest.
+                if (learnedPools.TryGetValue(groupId, out List<PoolReward>? pool) && pool.Count > 0)
+                {
+                    foreach (PoolReward item in pool)
+                    {
+                        rewards.Add(new DropsReward(
+                            Id: $"{groupId}:{item.Id}",
+                            Name: item.Name + repeatSuffix,
+                            ImageUrl: item.ImageUrl,
+                            RequiredMinutes: minutes,
+                            ProgressMinutes: progressMinutes,
+                            IsClaimed: claimed,
+                            IsBadge: item.IsBadge,
+                            IsEmote: item.IsEmote));
+                    }
+
+                    continue;
+                }
 
                 rewards.Add(new DropsReward(
                     Id: groupId,
-                    Name: rewardName,
+                    Name: rewardName + repeatSuffix,
                     ImageUrl: reward?["thumbnailImage"]?["image1xURL"]?.GetValue<string>() ?? reward?["bannerImage"]?["image1xURL"]?.GetValue<string>(),
                     RequiredMinutes: minutes,
-                    ProgressMinutes: claimed ? minutes : Math.Min(watched, minutes),
+                    ProgressMinutes: progressMinutes,
                     IsClaimed: claimed));
             }
 

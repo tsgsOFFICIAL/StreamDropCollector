@@ -607,9 +607,12 @@ namespace UI.Views
                     ? doc.RootElement.EnumerateArray()
                     : Enumerable.Repeat(doc.RootElement, 1);
 
+                // The trigger is an operation name, or a value (such as a campaign id) inside an operation's variables.
                 return operations.Any(op =>
-                    op.TryGetProperty("operationName", out JsonElement name) &&
-                    string.Equals(name.GetString(), triggerText, StringComparison.Ordinal));
+                    (op.TryGetProperty("operationName", out JsonElement name) &&
+                     string.Equals(name.GetString(), triggerText, StringComparison.Ordinal)) ||
+                    (op.TryGetProperty("variables", out JsonElement variables) &&
+                     variables.GetRawText().Contains(triggerText, StringComparison.Ordinal)));
             }
 
             static bool IsTargetGqlPostRequest(JsonElement requestElement)
