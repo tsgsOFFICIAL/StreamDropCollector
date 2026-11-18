@@ -117,10 +117,17 @@ namespace Core.Managers
         {
             lock (_campaignSnapshotSync)
             {
-                return _lastKnownCampaigns
+                List<(string Slug, string Name)> live = [.. _lastKnownCampaigns
                     .Where(c => !c.IsRewardCampaign && !string.IsNullOrWhiteSpace(c.Slug))
-                    .Select(c => (Slug: c.Slug.Trim().ToLowerInvariant(), Name: c.GameName))
-                    .Concat(_extraKnownGames.Select(g => (g.Slug, g.Name)))
+                    .Select(c => (Slug: c.Slug.Trim().ToLowerInvariant(), Name: c.GameName))];
+
+                List<(string Slug, string Name)> all = [.. live.Concat(_extraKnownGames.Select(g => (g.Slug, g.Name)))];
+
+                // A game can be known under two slugs (Twitch's own and one generated from its name); list it once.
+                Dictionary<string, string> aliases = GameSlugAliases.BuildAliasMap(all, live.Select(x => x.Slug).ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+                return all
+                    .Where(x => !aliases.ContainsKey(x.Slug))
                     .GroupBy(x => x.Slug, StringComparer.OrdinalIgnoreCase)
                     .Select(g => g.First())
                     .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)

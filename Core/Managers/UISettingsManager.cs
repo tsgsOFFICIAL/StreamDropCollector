@@ -1089,10 +1089,37 @@ namespace Core.Managers
                 if (addedGame)
                     SaveKnownGames();
 
-                List<(Platform platform, string slug, string displayName)> options = _knownGameOptions.Values
-                    .OrderBy(x => x.platform)
-                    .ThenBy(x => x.Item3, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                HashSet<string> liveSlugs = campaigns
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                    .Select(c => $"{c.Platform}:{c.Slug.Trim().ToLowerInvariant()}")
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                // One game can be known under several slugs; show it once and fold selections made on the others into it.
+                List<(Platform platform, string slug, string displayName)> options = [];
+                foreach (Platform platform in new[] { Platform.Twitch, Platform.Kick })
+                {
+                    List<(Platform platform, string slug, string displayName)> known = [.. _knownGameOptions.Values.Where(x => x.platform == platform)];
+                    Dictionary<string, string> aliases = GameSlugAliases.BuildAliasMap(
+                        known.Select(x => (x.slug, x.displayName)),
+                        known.Where(x => liveSlugs.Contains($"{platform}:{x.slug}")).Select(x => x.slug).ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+                    options.AddRange(known.Where(x => !aliases.ContainsKey(x.slug)));
+
+                    List<string> whitelist = platform == Platform.Twitch ? _twitchGameWhitelistSlugs : _kickGameWhitelistSlugs;
+                    List<string> folded = NormalizeWhitelist(whitelist.Select(s => aliases.TryGetValue(s, out string? canonical) ? canonical : s));
+                    if (!folded.SequenceEqual(whitelist, StringComparer.OrdinalIgnoreCase))
+                    {
+                        if (platform == Platform.Twitch)
+                            _twitchGameWhitelistSlugs = folded;
+                        else
+                            _kickGameWhitelistSlugs = folded;
+
+                        Task.Run(SaveSettings);
+                        GameWhitelistChanged?.Invoke(platform);
+                    }
+                }
+
+                options = [.. options.OrderBy(x => x.platform).ThenBy(x => x.displayName, StringComparer.OrdinalIgnoreCase)];
 
                 RebuildOptionsCollection(
                     TwitchGameFilterOptions,
