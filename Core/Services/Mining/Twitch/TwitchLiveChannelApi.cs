@@ -2,6 +2,7 @@ using Core.Enums;
 using Core.Helpers;
 using Core.Interfaces;
 using Core.Logging;
+using Core.Mining;
 using Core.Models;
 
 namespace Core.Services.Mining.Twitch
@@ -52,7 +53,7 @@ namespace Core.Services.Mining.Twitch
             bool allowDirectoryDiscovery = true,
             CancellationToken ct = default)
         {
-            if (!campaign.IsGeneralDrop)
+            if (!campaign.AcceptsAnyChannel)
                 return EligibleStreamerParser.ParseChannelLogins(campaign);
 
             if (_generalDropCache.TryGetFresh(campaign.Id, out IReadOnlyList<string> cached))
@@ -61,14 +62,55 @@ namespace Core.Services.Mining.Twitch
             if (!allowDirectoryDiscovery)
                 return _generalDropCache.Get(campaign.Id);
 
-            IReadOnlyList<string> discovered = await _generalDropDirectory
-                .DiscoverLoginsAsync(campaign, GeneralDropDiscoveryCache.MaxLogins, ct)
-                .ConfigureAwait(false);
+            // A reward campaign has no directory page: its participating categories are looked up through Helix, which
+            // lists the most watched live channels across all of them in one request.
+            IReadOnlyList<string> discovered = campaign.IsRewardCampaign
+                ? await DiscoverRewardCampaignLoginsAsync(campaign, ct).ConfigureAwait(false)
+                : await _generalDropDirectory
+                    .DiscoverLoginsAsync(campaign, GeneralDropDiscoveryCache.MaxLogins, ct)
+                    .ConfigureAwait(false);
 
             if (discovered.Count > 0)
                 _generalDropCache.Set(campaign.Id, discovered);
 
             return discovered;
+        }
+
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _hintGameIds = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Resolves a reward campaign's prose category hint (such as "GTAVI") to a Twitch game id, once per campaign.
+        /// </summary>
+        private async Task<string?> ResolveHintGameIdAsync(DropsCampaign campaign, CancellationToken ct)
+        {
+            if (!campaign.IsRewardCampaign || string.IsNullOrWhiteSpace(campaign.CategoryHint))
+                return null;
+
+            if (_hintGameIds.TryGetValue(campaign.Id, out string? known))
+                return known;
+
+            (string Id, string Name)? category = await _helixService.ResolveCategoryAsync(campaign.CategoryHint, ct).ConfigureAwait(false);
+            if (category is not { } resolved)
+                return null;
+
+            AppLogger.Debug("TwitchMining", $"Reward campaign '{campaign.Name}': category hint '{campaign.CategoryHint}' resolved to '{resolved.Name}' ({resolved.Id}).");
+            _hintGameIds[campaign.Id] = resolved.Id;
+            return resolved.Id;
+        }
+
+        private async Task<IReadOnlyList<string>> DiscoverRewardCampaignLoginsAsync(DropsCampaign campaign, CancellationToken ct)
+        {
+            if (campaign.ParticipatingCategories is { Count: > 0 } categories)
+                return await _helixService.GetLiveLoginsByCategoryNamesAsync(categories, GeneralDropDiscoveryCache.MaxLogins, ct).ConfigureAwait(false);
+
+            List<string> gameIds = [];
+            if (!string.IsNullOrWhiteSpace(campaign.GameId))
+                gameIds.Add(campaign.GameId);
+
+            if (await ResolveHintGameIdAsync(campaign, ct).ConfigureAwait(false) is { } hintGameId)
+                gameIds.Add(hintGameId);
+
+            return await _helixService.GetLiveLoginsByGameIdsAsync(gameIds, GeneralDropDiscoveryCache.MaxLogins, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -82,7 +124,7 @@ namespace Core.Services.Mining.Twitch
             Func<bool>? shouldAbort = null)
         {
             List<DropsCampaign> generalDrops = campaigns
-                .Where(c => c.Platform == Platform.Twitch && c.IsGeneralDrop)
+                .Where(c => c.Platform == Platform.Twitch && c.AcceptsAnyChannel && (!c.IsRewardCampaign || c.HasProgressToMake()))
                 .ToList();
 
             if (generalDrops.Count == 0)
@@ -140,7 +182,7 @@ namespace Core.Services.Mining.Twitch
                 $"gameId={campaign.GameId ?? "(none)"} isGeneralDrop={campaign.IsGeneralDrop} " +
                 $"helixAuth={_helixService.IsAuthenticated} preferredLogin={preferredLogin ?? "(none)"}");
 
-            if (campaign.IsGeneralDrop)
+            if (campaign.AcceptsAnyChannel)
                 return await SelectBestGeneralDropLoginAsync(campaign, preferredLogin, ct).ConfigureAwait(false);
 
             return await SelectBestNamedCampaignLoginAsync(campaign, preferredLogin, ct).ConfigureAwait(false);
@@ -156,7 +198,7 @@ namespace Core.Services.Mining.Twitch
         public async Task<bool> IsChannelEligibleAsync(string channelLogin, DropsCampaign campaign, CancellationToken ct = default)
         {
             LiveChannelSnapshot? snapshot = await _helixService.GetChannelAsync(channelLogin, ct).ConfigureAwait(false);
-            bool eligible = TwitchChannelEligibility.IsEligible(snapshot, campaign);
+            bool eligible = TwitchChannelEligibility.IsEligible(snapshot, campaign, await ResolveHintGameIdAsync(campaign, ct).ConfigureAwait(false));
 
             AppLogger.Debug(
                 "TwitchMining",
@@ -171,7 +213,8 @@ namespace Core.Services.Mining.Twitch
             string? preferredLogin,
             CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(campaign.GameId))
+            // A reward campaign is matched by its participating categories rather than a single game, so it needs no game id.
+            if (!campaign.IsRewardCampaign && string.IsNullOrWhiteSpace(campaign.GameId))
             {
                 AppLogger.Warn("TwitchMining", $"SelectBestLiveLogin ABORT general '{campaign.Name}' - missing game id.");
                 return null;

@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Nodes;
+using Core.Helpers;
 using Core.Interfaces;
 using Core.Logging;
 using Core.Mining;
@@ -39,7 +40,8 @@ namespace Core.Services
 
                 KnownGames = CollectKnownGames(activeCampaigns["data"]);
 
-                // "Open reward campaigns" are a separate Twitch system; they are shown but never mined or claimed.
+                // "Open reward campaigns" are a separate Twitch system with their own progress inventory; they are mined by
+                // watching a channel in a participating category, and claimed manually on Twitch.
                 List<DropsCampaign> rewardCampaigns = await GetRewardCampaignsAsync(activeCampaigns, ct);
 
                 campaigns?.RemoveAll(campaign =>
@@ -498,6 +500,8 @@ namespace Core.Services
 
             JsonObject? game = campaign["game"]?.AsObject();
             string brand = campaign["brand"]?.GetValue<string>() ?? "";
+            string? summary = campaign["summary"]?.GetValue<string>();
+            IReadOnlyList<string> categories = RewardCampaignCategories.Parse(summary);
 
             return new DropsCampaign(
                 Id: id,
@@ -512,7 +516,9 @@ namespace Core.Services
                 Platform: Platform.Twitch,
                 ConnectUrls: [],
                 IsGeneralDrop: false,
-                IsRewardCampaign: true);
+                IsRewardCampaign: true,
+                ParticipatingCategories: categories,
+                CategoryHint: categories.Count == 0 ? RewardCampaignCategories.ParseHint(summary) : null);
         }
 
         /// <summary>

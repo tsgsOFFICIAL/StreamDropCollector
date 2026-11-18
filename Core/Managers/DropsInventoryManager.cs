@@ -103,6 +103,8 @@ namespace Core.Managers
         /// Applies this account's game filter, or the global filter when the account has no override.
         /// </summary>
         private bool IsCampaignAllowed(DropsCampaign campaign) =>
+            // Open reward campaigns are not games: a game filter says nothing about them (they have their own setting).
+            campaign.IsRewardCampaign ||
             (EffectiveMineAnything || !campaign.HasEmote) &&
             (Account.Overrides.GameWhitelistSlugs is { } slugs
                 ? UISettingsManager.IsAllowedByGameFilter(campaign, slugs, Account.Overrides.GameFilterBlacklistMode)
@@ -116,7 +118,7 @@ namespace Core.Managers
             lock (_campaignSnapshotSync)
             {
                 return _lastKnownCampaigns
-                    .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                    .Where(c => !c.IsRewardCampaign && !string.IsNullOrWhiteSpace(c.Slug))
                     .Select(c => (Slug: c.Slug.Trim().ToLowerInvariant(), Name: c.GameName))
                     .Concat(_extraKnownGames.Select(g => (g.Slug, g.Name)))
                     .GroupBy(x => x.Slug, StringComparer.OrdinalIgnoreCase)
@@ -172,15 +174,10 @@ namespace Core.Managers
         public bool UseHelixWatcher { get; set; }
 
         /// <summary>
-        /// Gets the collection of currently active drop campaigns displayed in the inventory UI.
+        /// Gets the collection of currently active drop campaigns displayed in the inventory UI, including Twitch open
+        /// reward campaigns (<see cref="DropsCampaign.IsRewardCampaign"/>), which the inventory shows in their own list.
         /// </summary>
         public ObservableCollection<DropsCampaign> ActiveCampaigns { get; } = new ObservableCollection<DropsCampaign>();
-
-        /// <summary>
-        /// Gets the Twitch "open reward campaigns" shown in the inventory. Kept apart from <see cref="ActiveCampaigns"/>
-        /// so the miner and the claim logic never see them.
-        /// </summary>
-        public ObservableCollection<DropsCampaign> RewardCampaigns { get; } = new ObservableCollection<DropsCampaign>();
 
         /// <summary>
         /// Gets the WebView host used for Twitch drops operations, or null if not yet initialized or the account is not logged in.
@@ -442,6 +439,7 @@ namespace Core.Managers
             UISettingsManager.Instance.KickLevelFarmingChanged += OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged += OnPrioritizeBadgesChanged;
             UISettingsManager.Instance.MineAnythingChanged += OnMineAnythingChanged;
+            UISettingsManager.Instance.MineRewardCampaignsChanged += OnMineRewardCampaignsChanged;
             UISettingsManager.Instance.HeadOnlyMiningChanged += OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated += OnTwitchHelixAuthenticated;
 
@@ -542,6 +540,18 @@ namespace Core.Managers
             {
                 AppLogger.Error("Miner", "Failed to apply mine anything change immediately.", ex);
             }
+        }
+        /// <summary>
+        /// Re-evaluates mining when the "mine open reward campaigns" toggle changes.
+        /// </summary>
+        private void OnMineRewardCampaignsChanged(bool enabled)
+        {
+            AppLogger.Info("Miner", $"Mining open reward campaigns {(enabled ? "enabled" : "disabled")}. Triggering re-evaluation.");
+
+            if (_isPaused || (TwitchWebView == null && KickWebView == null))
+                return;
+
+            _ = StartMiningStreams(true);
         }
         /// <summary>
         /// Re-evaluates mining when the near-zero bandwidth (HEAD-only) toggle changes.
@@ -710,7 +720,7 @@ namespace Core.Managers
                     ? snapshot
                     : [.. ActiveCampaigns];
 
-                UISettingsManager.Instance.UpdateAvailableGameFilterOptions(sourceCampaigns, _extraKnownGames);
+                UISettingsManager.Instance.UpdateAvailableGameFilterOptions([.. sourceCampaigns.Where(c => !c.IsRewardCampaign)], _extraKnownGames);
 
                 // Materialize before iterating to avoid concurrent modification
                 List<DropsCampaign> filteredCampaigns = ActiveCampaignFilter.FilterForDisplay(sourceCampaigns, IsCampaignAllowed);
@@ -1087,7 +1097,7 @@ namespace Core.Managers
             if (campaign.Platform != Platform.Twitch)
                 return Array.Empty<string>();
 
-            if (!campaign.IsGeneralDrop)
+            if (!campaign.AcceptsAnyChannel)
                 return EligibleStreamerParser.ParseChannelLogins(campaign);
 
             if (_twitchLiveChannelApi is TwitchLiveChannelApi concrete)
@@ -1141,8 +1151,9 @@ namespace Core.Managers
         {
             _twitchGqlService = twitchGqlService;
             RefreshMiningServices();
-            List<DropsCampaign> allCampaigns = campaigns.Where(c => !c.IsRewardCampaign).ToList();
-            List<DropsCampaign> rewardCampaigns = ActiveCampaignFilter.ApplyActiveWindow(campaigns.Where(c => c.IsRewardCampaign));
+            // Open reward campaigns travel with the drops campaigns: they are mined and tracked through the same lists, and
+            // the inventory page tells them apart by IsRewardCampaign.
+            List<DropsCampaign> allCampaigns = campaigns.ToList();
 
             lock (_campaignSnapshotSync)
             {
@@ -1152,17 +1163,13 @@ namespace Core.Managers
 
             Application.Current.Dispatcher.Invoke(() =>
             {
-                UISettingsManager.Instance.UpdateAvailableGameFilterOptions(allCampaigns, _extraKnownGames);
+                UISettingsManager.Instance.UpdateAvailableGameFilterOptions([.. allCampaigns.Where(c => !c.IsRewardCampaign)], _extraKnownGames);
 
                 List<DropsCampaign> activeCampaignsList = ActiveCampaignFilter.FilterForDisplay(allCampaigns, IsCampaignAllowed);
 
                 ActiveCampaigns.Clear();
                 foreach (DropsCampaign? c in activeCampaignsList)
                     ActiveCampaigns.Add(c);
-
-                RewardCampaigns.Clear();
-                foreach (DropsCampaign rewardCampaign in rewardCampaigns)
-                    RewardCampaigns.Add(rewardCampaign);
 
                 _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
             });
@@ -1266,6 +1273,7 @@ namespace Core.Managers
             UISettingsManager.Instance.KickLevelFarmingChanged -= OnKickLevelFarmingChanged;
             UISettingsManager.Instance.PrioritizeBadgesChanged -= OnPrioritizeBadgesChanged;
             UISettingsManager.Instance.MineAnythingChanged -= OnMineAnythingChanged;
+            UISettingsManager.Instance.MineRewardCampaignsChanged -= OnMineRewardCampaignsChanged;
             UISettingsManager.Instance.HeadOnlyMiningChanged -= OnHeadOnlyMiningChanged;
             _twitchHelixService.Authenticated -= OnTwitchHelixAuthenticated;
             _twitchHelixService.SnapshotsChanged -= OnTwitchHelixSnapshotsChanged;
@@ -1768,7 +1776,7 @@ namespace Core.Managers
                 IReadOnlyDictionary<string, IReadOnlyList<DropsReward>> kickProgress = new Dictionary<string, IReadOnlyList<DropsReward>>();
 
                 if (twitchCampaign != null && _twitchGqlService != null)
-                    twitchServer = await ServerProgressFetcher.FetchTwitchRewardProgressAsync(_twitchGqlService, [twitchCampaign]);
+                    twitchServer = await ServerProgressFetcher.FetchTwitchProgressAsync(_twitchGqlService, [twitchCampaign]);
                 else if (twitchCampaign != null)
                     AppLogger.Debug("ProgressSync", "Twitch fetch SKIP - no Twitch GQL service available.");
 

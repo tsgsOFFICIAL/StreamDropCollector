@@ -40,13 +40,23 @@ namespace Core.Mining
             Action<string>? onTwitchCampaignUntracked = null,
             Action<string, IReadOnlyList<DropsReward>>? applyTwitchServerProgress = null)
         {
-            List<DropsReward> readyToClaimRewards = [.. campaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
+            // Open reward campaigns have no claim request the app can send, so they take their own verify-and-notify path.
+            List<DropsCampaign> dropCampaigns = [.. campaigns.Where(c => !c.IsRewardCampaign)];
+            await NotifyReadyRewardCampaignsAsync(
+                [.. campaigns.Where(c => c.IsRewardCampaign)],
+                twitchGqlService,
+                markRewardClaimed,
+                account,
+                cancellationToken,
+                applyTwitchServerProgress);
+
+            List<DropsReward> readyToClaimRewards = [.. dropCampaigns.SelectMany(c => c.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
 
             // Local minute counters run ahead of (or entirely without) Twitch's own tracking, so every Twitch drop
             // that looks ready is checked against the inventory before a claim is sent.
             // This runs with auto-claim off too, so a "ready to claim" notice is never sent for a drop that was not earned.
             TwitchServerProgress? twitchServer = null;
-            List<DropsCampaign> twitchReady = [.. campaigns.Where(c => c.Platform == Platform.Twitch && c.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
+            List<DropsCampaign> twitchReady = [.. dropCampaigns.Where(c => c.Platform == Platform.Twitch && c.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))];
 
             if (twitchGqlService != null && twitchReady.Count > 0)
             {
@@ -205,6 +215,79 @@ namespace Core.Mining
             }
 
             return nextCheckAt;
+        }
+
+        /// <summary>Reward ids (<c>campaignId#rewardId</c>) a "ready to claim" notice was already sent for.</summary>
+        private readonly HashSet<string> _notifiedRewardCampaignRewards = [];
+
+        /// <summary>
+        /// Checks the open reward campaigns whose rewards look finished against Twitch's own reward inventory, then tells
+        /// the user once per reward that it can be claimed on Twitch. No claim request is sent for these.
+        /// </summary>
+        private async Task NotifyReadyRewardCampaignsAsync(
+            IReadOnlyList<DropsCampaign> rewardCampaigns,
+            IGqlService? twitchGqlService,
+            Func<string, string, bool> markRewardClaimed,
+            AccountModel? account,
+            CancellationToken cancellationToken,
+            Action<string, IReadOnlyList<DropsReward>>? applyTwitchServerProgress)
+        {
+            List<DropsCampaign> ready = [.. rewardCampaigns.Where(c => c.Platform == Platform.Twitch && c.HasReadyToClaimRewards())];
+            if (ready.Count == 0 || twitchGqlService == null)
+                return;
+
+            TwitchServerProgress server = await ServerProgressFetcher.FetchTwitchRewardCampaignProgressAsync(twitchGqlService, ready, cancellationToken);
+
+            // An unanswered query proves nothing either way; the next cycle asks again.
+            if (!server.Succeeded)
+                return;
+
+            List<(DropsCampaign Campaign, DropsReward Reward)> toNotify = [];
+            foreach (DropsCampaign campaign in ready)
+            {
+                if (!server.Campaigns.TryGetValue(campaign.Id, out IReadOnlyList<DropsReward>? serverRewards))
+                {
+                    AppLogger.Debug("DropClaim", $"Twitch lists no reward progress for '{campaign.Name}' ({campaign.Id}); not announcing it as ready.");
+                    continue;
+                }
+
+                bool serverProgressApplied = false;
+                foreach (DropsReward reward in campaign.Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes >= r.RequiredMinutes))
+                {
+                    DropsReward? serverReward = serverRewards.FirstOrDefault(r => r.Id == reward.Id);
+
+                    if (serverReward is { IsClaimed: true })
+                    {
+                        AppLogger.Info("DropClaim", $"Twitch already reports reward '{reward.Name}' as claimed; marking it claimed.");
+                        markRewardClaimed(campaign.Id, reward.Id);
+                    }
+                    else if (serverReward != null && serverReward.ProgressMinutes < reward.RequiredMinutes)
+                    {
+                        // The local counter ran ahead of Twitch; adopt Twitch's minutes so the remainder gets mined.
+                        if (!serverProgressApplied)
+                        {
+                            serverProgressApplied = true;
+                            AppLogger.Info("DropClaim", $"Twitch has not finished crediting reward '{reward.Name}' yet; syncing progress and continuing to mine.");
+                            applyTwitchServerProgress?.Invoke(campaign.Id, serverRewards);
+                        }
+                    }
+                    else
+                    {
+                        toNotify.Add((campaign, reward));
+                    }
+                }
+            }
+
+            foreach ((DropsCampaign campaign, DropsReward reward) in toNotify)
+            {
+                if (!_notifiedRewardCampaignRewards.Add($"{campaign.Id}#{reward.Id}"))
+                    continue;
+
+                AppLogger.Info("DropClaim", $"Reward '{reward.Name}' of '{campaign.Name}' is ready; it has to be claimed on Twitch.");
+
+                if (UISettingsManager.Instance.NotifyOnReadyToClaim)
+                    NotificationManager.ShowNotification("Reward Ready to Claim", $"Claim this reward on Twitch: {reward.Name}", NotificationType.DropReadyToClaim, details: BuildDetails(account, campaign, reward, "Claim manually on Twitch"));
+            }
         }
 
         // How close Twitch must be to crediting a locally ready drop for the claim pass to wait for it, and for how long.

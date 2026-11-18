@@ -140,6 +140,106 @@ namespace Core.Mining
         }
 
         /// <summary>
+        /// Retrieves progress for any mix of Twitch drops campaigns and open reward campaigns, each from its own inventory query.
+        /// </summary>
+        /// <returns>Both answers merged; <see cref="TwitchServerProgress.Succeeded"/> only when every query that was needed answered.</returns>
+        public static async Task<TwitchServerProgress> FetchTwitchProgressAsync(
+            IGqlService gql,
+            IReadOnlyCollection<DropsCampaign> campaigns,
+            CancellationToken ct = default)
+        {
+            List<DropsCampaign> rewardCampaigns = [.. campaigns.Where(c => c.IsRewardCampaign)];
+            if (rewardCampaigns.Count == 0)
+                return await FetchTwitchRewardProgressAsync(gql, campaigns, ct);
+
+            TwitchServerProgress rewardProgress = await FetchTwitchRewardCampaignProgressAsync(gql, rewardCampaigns, ct);
+            if (rewardCampaigns.Count == campaigns.Count)
+                return rewardProgress;
+
+            TwitchServerProgress dropProgress = await FetchTwitchRewardProgressAsync(gql, [.. campaigns.Where(c => !c.IsRewardCampaign)], ct);
+            if (!rewardProgress.Succeeded || !dropProgress.Succeeded)
+                return TwitchServerProgress.Unavailable;
+
+            return new TwitchServerProgress(
+                true,
+                dropProgress.Campaigns.Concat(rewardProgress.Campaigns).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal),
+                dropProgress.DropInstanceIds);
+        }
+
+        /// <summary>
+        /// Retrieves progress for Twitch open reward campaigns from <c>ViewerRewardDropInventory</c>, without navigating the WebView.
+        /// </summary>
+        /// <param name="gql">Twitch GQL service with headers and the query hash already captured by a prior dashboard load.</param>
+        /// <param name="campaigns">Locally tracked reward campaigns to match against the viewer's in-progress ones.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// Server-reported rewards per campaign id. A campaign Twitch has not started tracking is absent from the map, and
+        /// <see cref="TwitchServerProgress.Succeeded"/> is only <see langword="true"/> when Twitch actually returned its list.
+        /// </returns>
+        public static async Task<TwitchServerProgress> FetchTwitchRewardCampaignProgressAsync(
+            IGqlService gql,
+            IReadOnlyCollection<DropsCampaign> campaigns,
+            CancellationToken ct = default)
+        {
+            if (campaigns.Count == 0)
+                return TwitchServerProgress.Unavailable;
+
+            try
+            {
+                JsonObject? response = await gql.QueryRewardCampaignProgressAsync(ct, allowHashRefresh: false);
+                if (response?["data"]?["currentUser"]?["inventory"]?["viewerRewardDropCampaignsInProgress"] is not JsonArray inProgress)
+                {
+                    AppLogger.Debug("ProgressSync", "Twitch reward campaign inventory unavailable; treating progress as unknown.");
+                    return TwitchServerProgress.Unavailable;
+                }
+
+                Dictionary<string, DropsCampaign> localById = campaigns.ToDictionary(c => c.Id, StringComparer.Ordinal);
+                Dictionary<string, IReadOnlyList<DropsReward>> result = new(StringComparer.Ordinal);
+
+                foreach (JsonObject serverCampaign in inProgress.OfType<JsonObject>())
+                {
+                    string? campaignId = serverCampaign["id"]?.GetValue<string>();
+                    if (string.IsNullOrEmpty(campaignId) || !localById.TryGetValue(campaignId, out DropsCampaign? local))
+                        continue;
+
+                    Dictionary<string, JsonObject> groups = (serverCampaign["rewardGroups"]?.AsArray() ?? [])
+                        .OfType<JsonObject>()
+                        .Where(g => g["id"] != null)
+                        .GroupBy(g => g["id"]!.GetValue<string>(), StringComparer.Ordinal)
+                        .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+                    List<DropsReward> rewards = new(local.Rewards.Count);
+                    foreach (DropsReward localReward in local.Rewards)
+                    {
+                        if (!groups.TryGetValue(localReward.Id, out JsonObject? group) || group["self"] is not JsonObject self)
+                        {
+                            rewards.Add(localReward);
+                            continue;
+                        }
+
+                        bool claimed = self["status"]?.GetValue<string>() == "CLAIMED";
+                        int watched = self["currentMinutesWatched"]?.GetValue<int>() ?? localReward.ProgressMinutes;
+
+                        rewards.Add(localReward with
+                        {
+                            ProgressMinutes = claimed ? localReward.RequiredMinutes : Math.Min(watched, localReward.RequiredMinutes),
+                            IsClaimed = claimed
+                        });
+                    }
+
+                    result[campaignId] = rewards.AsReadOnly();
+                }
+
+                return new TwitchServerProgress(true, result, new Dictionary<string, string?>());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("ProgressSync", $"Twitch reward campaign progress fetch failed: {ex.Message}");
+                return TwitchServerProgress.Unavailable;
+            }
+        }
+
+        /// <summary>
         /// Retrieves reward progress for the specified Kick campaigns via an authenticated in-page fetch.
         /// </summary>
         /// <param name="host">Kick WebView host currently on a kick.com origin (typically the mined stream page).</param>

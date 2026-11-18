@@ -25,12 +25,12 @@ namespace Core.Mining
                 return null;
 
             // A campaign with its own channel list only credits watch time on those channels, so a priority
-            // streamer outside that list must be skipped; general drops accept any eligible live channel.
-            IReadOnlyList<string> campaignLogins = campaign.IsGeneralDrop ? [] : EligibleStreamerParser.ParseChannelLogins(campaign);
+            // streamer outside that list must be skipped; general drops and reward campaigns accept any eligible live channel.
+            IReadOnlyList<string> campaignLogins = campaign.AcceptsAnyChannel ? [] : EligibleStreamerParser.ParseChannelLogins(campaign);
 
             foreach (string login in priority)
             {
-                if (!campaign.IsGeneralDrop && !campaignLogins.Contains(login, StringComparer.OrdinalIgnoreCase))
+                if (!campaign.AcceptsAnyChannel && !campaignLogins.Contains(login, StringComparer.OrdinalIgnoreCase))
                     continue;
 
                 if (await isEligibleAsync(login))

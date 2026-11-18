@@ -131,6 +131,12 @@
                                   Margin="0,0,0,4"/>
                         <TextBlock Text="Off by default: campaigns with an emote or raffle-entry reward are skipped, as those only work on the streaming site itself."
                                    TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="24,0,0,12"/>
+                        <CheckBox IsChecked="{Binding MineRewardCampaigns, Mode=TwoWay}"
+                                  Style="{StaticResource ModernCheckBoxStyle}"
+                                  Content="Mine Twitch open reward campaigns"
+                                  Margin="0,0,0,4"/>
+                        <TextBlock Text="Watches a live channel for the watch-time rewards Twitch lists as open reward campaigns. Claim them manually on Twitch once they are ready; they are mined after regular drops."
+                                   TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="24,0,0,12"/>
                         <CheckBox IsChecked="{Binding HeadOnlyMining, Mode=TwoWay}"
                                   Style="{StaticResource ModernCheckBoxStyle}"
                                   Content="Near-zero bandwidth mining: HEAD requests only, no video (experimental)"

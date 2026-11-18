@@ -29,6 +29,16 @@ namespace Core.Mining
             if (campaign.NeedsAccountLink)
                 return false;
 
+            // One choke point for every "is there anything to mine" gate: with the setting off, reward campaigns stay
+            // visible in the inventory but never count as work.
+            if (campaign.IsRewardCampaign && !UISettingsManager.Instance.MineRewardCampaigns)
+                return false;
+
+            // Without a game or a category list there is no telling where a reward campaign counts watch time.
+            if (campaign.IsRewardCampaign && string.IsNullOrWhiteSpace(campaign.GameId)
+                && campaign.ParticipatingCategories is not { Count: > 0 } && string.IsNullOrWhiteSpace(campaign.CategoryHint))
+                return false;
+
             // A drop that is complete but still unclaimed has nothing left to mine, even with auto-claim on: claiming is
             // handled separately, and mining it would only keep a stream running while a claim is pending or failing.
             return campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes);

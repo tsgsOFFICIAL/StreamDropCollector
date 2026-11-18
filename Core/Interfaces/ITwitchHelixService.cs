@@ -74,5 +74,27 @@ namespace Core.Interfaces
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The channel snapshot, or <see langword="null"/> when unknown or Helix is not authenticated.</returns>
         Task<LiveChannelSnapshot?> GetChannelAsync(string channelLogin, CancellationToken ct = default);
+
+        /// <summary>
+        /// Lists the most watched live channels across the named Twitch categories, most viewers first.
+        /// </summary>
+        /// <param name="categoryNames">Category (game) display names, such as "Just Chatting".</param>
+        /// <param name="limit">Maximum number of logins to return.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>Channel login slugs, or an empty list when Helix is not authenticated or no category resolves.</returns>
+        Task<IReadOnlyList<string>> GetLiveLoginsByCategoryNamesAsync(IReadOnlyCollection<string> categoryNames, int limit, CancellationToken ct = default);
+
+        /// <summary>
+        /// Resolves a loose category search term (such as "GTAVI") to the category Twitch's search ranks first.
+        /// </summary>
+        /// <param name="searchTerm">The term to search categories for.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The category's game id and name, or <see langword="null"/> when none is found or Helix is not authenticated.</returns>
+        Task<(string Id, string Name)?> ResolveCategoryAsync(string searchTerm, CancellationToken ct = default);
+
+        /// <summary>
+        /// Lists the most watched live channels across the given Twitch game ids, most viewers first.
+        /// </summary>
+        Task<IReadOnlyList<string>> GetLiveLoginsByGameIdsAsync(IReadOnlyCollection<string> gameIds, int limit, CancellationToken ct = default);
     }
 }

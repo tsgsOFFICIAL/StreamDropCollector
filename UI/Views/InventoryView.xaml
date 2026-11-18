@@ -87,7 +87,7 @@
                            FontWeight="Bold"
                            Foreground="{DynamicResource TextPrimaryBrush}"
                            Margin="0,10,0,4"/>
-                <TextBlock Text="Twitch's open reward campaigns. Watch time only counts on the channels and categories each campaign names, and these are not mined by the app."
+                <TextBlock Text="Twitch's open reward campaigns. Watch time only counts in the categories each campaign names. The app watches a live channel in one of them after your regular drops, and finished rewards are claimed manually on Twitch."
                            Foreground="{DynamicResource TextMutedBrush}"
                            TextWrapping="Wrap"
                            Margin="0,0,0,14"/>

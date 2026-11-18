@@ -59,6 +59,11 @@ namespace Core.Managers
         public event Action<bool>? MineAnythingChanged;
 
         /// <summary>
+        /// Occurs when <see cref="MineRewardCampaigns"/> changes after settings have finished loading.
+        /// </summary>
+        public event Action<bool>? MineRewardCampaignsChanged;
+
+        /// <summary>
         /// Occurs when <see cref="HeadOnlyMining"/> changes after settings have finished loading.
         /// </summary>
         public event Action<bool>? HeadOnlyMiningChanged;
@@ -107,6 +112,7 @@ namespace Core.Managers
         private bool _kickDailyClaim;
         private bool _prioritizeBadges;
         private bool _mineAnything;
+        private bool _mineRewardCampaigns = true;
         private bool _headOnlyMining;
         private bool _hideCompletedCampaigns = true;
         private InventorySortMode _inventorySortMode;
@@ -300,6 +306,18 @@ namespace Core.Managers
             {
                 if (SetField(ref _mineAnything, value) && !_isLoadingSettings)
                     MineAnythingChanged?.Invoke(value);
+            }
+        }
+        /// <summary>
+        /// Gets or sets a value indicating whether Twitch open reward campaigns are mined (watched) like drops campaigns.
+        /// </summary>
+        public bool MineRewardCampaigns
+        {
+            get => _mineRewardCampaigns;
+            set
+            {
+                if (SetField(ref _mineRewardCampaigns, value) && !_isLoadingSettings)
+                    MineRewardCampaignsChanged?.Invoke(value);
             }
         }
         /// <summary>
@@ -855,6 +873,7 @@ namespace Core.Managers
                     KickDailyClaim = settings.KickDailyClaim;
                     PrioritizeBadges = settings.PrioritizeBadges;
                     MineAnything = settings.MineAnything;
+                    MineRewardCampaigns = settings.MineRewardCampaigns;
                     HeadOnlyMining = settings.HeadOnlyMining;
                     HideCompletedCampaigns = settings.HideCompletedCampaigns;
                     InventorySortMode = settings.InventorySortMode;
@@ -923,6 +942,7 @@ namespace Core.Managers
                     KickDailyClaim = KickDailyClaim,
                     PrioritizeBadges = PrioritizeBadges,
                     MineAnything = MineAnything,
+                    MineRewardCampaigns = MineRewardCampaigns,
                     HeadOnlyMining = HeadOnlyMining,
                     HideCompletedCampaigns = HideCompletedCampaigns,
                     InventorySortMode = InventorySortMode,

@@ -81,27 +81,32 @@ namespace Core.Mining
 
             List<DropsCampaign> prioritizedCampaigns = mode switch
             {
-                // General drops are not ranked last here: the user asked for whatever ends first.
+                // General drops are not ranked last here: the user asked for whatever ends first. Open reward campaigns
+                // still are: they are an extra, and often run for weeks, so they would otherwise outrank real drops.
                 MiningPriorityMode.EndingSoonest => [.. campaigns
-                    .OrderBy(c => c.EndsAt)
+                    .OrderBy(c => c.IsRewardCampaign)
+                    .ThenBy(c => c.EndsAt)
                     .ThenBy(c => c.Rewards
                         .Where(r => !r.IsClaimed)
                         .Min(r => r.RequiredMinutes - r.ProgressMinutes))],
                 MiningPriorityMode.LeastTimeToNextReward => [.. campaigns
-                    .OrderBy(c => c.IsGeneralDrop)
+                    .OrderBy(c => c.IsRewardCampaign)
+                    .ThenBy(c => c.IsGeneralDrop)
                     .ThenBy(c => c.Rewards
                         .Where(r => !r.IsClaimed)
                         .Min(r => r.RequiredMinutes - r.ProgressMinutes))
                     .ThenByDescending(c => c.CompletionPercentage())],
                 MiningPriorityMode.HighestCompletion => [.. campaigns
-                    .OrderBy(c => c.IsGeneralDrop)
+                    .OrderBy(c => c.IsRewardCampaign)
+                    .ThenBy(c => c.IsGeneralDrop)
                     .ThenByDescending(c => c.CompletionPercentage())
                     .ThenBy(c => c.EndsAt)
                     .ThenBy(c => c.Rewards
                         .Where(r => !r.IsClaimed)
                         .Min(r => r.RequiredMinutes - r.ProgressMinutes))],
                 _ => [.. campaigns
-                    .OrderBy(c => c.IsGeneralDrop)
+                    .OrderBy(c => c.IsRewardCampaign)
+                    .ThenBy(c => c.IsGeneralDrop)
                     .ThenByDescending(c => c.CompletionPercentage())
                     .ThenBy(c => c.Rewards
                         .Where(r => !r.IsClaimed)

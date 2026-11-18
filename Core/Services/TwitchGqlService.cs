@@ -843,7 +843,7 @@ namespace Core.Services
         /// for reward campaigns. Never throws for Twitch-side failures; reward campaigns are optional extras and must not
         /// fail the drops load.
         /// </summary>
-        public async Task<JsonObject?> QueryRewardCampaignProgressAsync(CancellationToken ct = default)
+        public async Task<JsonObject?> QueryRewardCampaignProgressAsync(CancellationToken ct = default, bool allowHashRefresh = true)
         {
             const string operationName = "ViewerRewardDropInventory";
 
@@ -855,7 +855,21 @@ namespace Core.Services
                     return null;
                 }
 
-                string hash = await GetPersistedQueryHashAsync(operationName, ct, "https://www.twitch.tv/drops/inventory");
+                string hash;
+                if (allowHashRefresh)
+                {
+                    hash = await GetPersistedQueryHashAsync(operationName, ct, "https://www.twitch.tv/drops/inventory");
+                }
+                else if (!TryGetCachedHash(operationName, requireFresh: false, out string? cachedHash) || string.IsNullOrEmpty(cachedHash))
+                {
+                    // Capturing the hash navigates the WebView, which would pull the mined stream away.
+                    AppLogger.Debug("TwitchGql", "QueryRewardCampaignProgress skipped - hash not cached.");
+                    return null;
+                }
+                else
+                {
+                    hash = cachedHash;
+                }
 
                 JsonArray payload = new()
                 {

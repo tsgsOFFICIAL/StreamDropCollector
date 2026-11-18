@@ -73,13 +73,14 @@ namespace UI.Views
 
             // A private view per engine so the completed-campaign filter doesn't leak into the shared default view.
             _campaignView = session?.Engine is { } engine
-                ? new ListCollectionView(engine.ActiveCampaigns) { Filter = IsVisibleCampaign }
+                ? new ListCollectionView(engine.ActiveCampaigns) { Filter = item => IsVisibleCampaign(item) && item is DropsCampaign { IsRewardCampaign: false } }
                 : null;
             ApplySort(_campaignView);
             CampaignList.ItemsSource = _campaignView;
 
+            // Open reward campaigns share the engine's list (they are mined and tracked like drops) but show in their own section.
             _rewardCampaignView = session?.Engine is { } rewardEngine
-                ? new ListCollectionView(rewardEngine.RewardCampaigns) { Filter = IsVisibleCampaign }
+                ? new ListCollectionView(rewardEngine.ActiveCampaigns) { Filter = item => IsVisibleCampaign(item) && item is DropsCampaign { IsRewardCampaign: true } }
                 : null;
             ApplySort(_rewardCampaignView);
             RewardCampaignList.ItemsSource = _rewardCampaignView;

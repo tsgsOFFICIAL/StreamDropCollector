@@ -60,7 +60,10 @@ namespace Core.Interfaces
         /// Queries the viewer's in-progress reward campaigns (the "Open Reward Campaigns" Twitch lists separately from drops).
         /// Returns the <c>ViewerRewardDropInventory</c> response object, or <see langword="null"/> on failure.
         /// </summary>
-        Task<JsonObject?> QueryRewardCampaignProgressAsync(CancellationToken ct = default);
+        /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+        /// <param name="allowHashRefresh">When <see langword="false"/>, only an already cached persisted-query hash is used and
+        /// the call returns <see langword="null"/> without one, so the WebView is never navigated (needed while a stream is mined).</param>
+        Task<JsonObject?> QueryRewardCampaignProgressAsync(CancellationToken ct = default, bool allowHashRefresh = true);
         /// <summary>
         /// Re-asks only for the dashboard's <c>rewardCampaignsAvailableToUser</c>, which Twitch intermittently answers
         /// with a "service timeout" (null) while the rest of the dashboard is fine. Returns <see langword="null"/>

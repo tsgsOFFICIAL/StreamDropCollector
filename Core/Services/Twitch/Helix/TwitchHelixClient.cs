@@ -94,6 +94,76 @@ namespace Core.Services.Twitch.Helix
             return channels;
         }
 
+        /// <summary>
+        /// Resolves category (game) names to Twitch game ids. Names Twitch does not know are left out.
+        /// </summary>
+        public async Task<Dictionary<string, string>> GetGameIdsByNameAsync(
+            IReadOnlyList<string> names,
+            CancellationToken ct = default)
+        {
+            Dictionary<string, string> ids = new(StringComparer.OrdinalIgnoreCase);
+
+            for (int offset = 0; offset < names.Count; offset += MaxBatchSize)
+            {
+                string query = string.Join("&", names.Skip(offset).Take(MaxBatchSize).Select(n => $"name={Uri.EscapeDataString(n)}"));
+                using JsonDocument doc = await GetJsonAsync($"https://api.twitch.tv/helix/games?{query}", ct);
+
+                foreach (JsonElement game in doc.RootElement.GetProperty("data").EnumerateArray())
+                {
+                    string? name = game.GetProperty("name").GetString();
+                    string? id = game.GetProperty("id").GetString();
+                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(id))
+                        ids[name] = id;
+                }
+            }
+
+            return ids;
+        }
+
+        /// <summary>
+        /// Finds the category Twitch's own search ranks first for a search term (for example "GTAVI" finds "Grand Theft Auto VI").
+        /// </summary>
+        public async Task<(string Id, string Name)?> SearchTopCategoryAsync(string query, CancellationToken ct = default)
+        {
+            using JsonDocument doc = await GetJsonAsync($"https://api.twitch.tv/helix/search/categories?first=1&query={Uri.EscapeDataString(query)}", ct);
+
+            foreach (JsonElement game in doc.RootElement.GetProperty("data").EnumerateArray())
+            {
+                string? id = game.GetProperty("id").GetString();
+                string? name = game.GetProperty("name").GetString();
+                if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
+                    return (id, name);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Lists the most watched live streams across the given games, most viewers first, as login slugs.
+        /// </summary>
+        public async Task<List<string>> GetTopStreamLoginsByGameIdsAsync(
+            IReadOnlyList<string> gameIds,
+            int limit,
+            CancellationToken ct = default)
+        {
+            List<string> logins = [];
+            if (gameIds.Count == 0 || limit <= 0)
+                return logins;
+
+            // One request covers up to 100 games and returns up to 100 streams, already ordered by viewer count.
+            string query = string.Join("&", gameIds.Take(MaxBatchSize).Select(id => $"game_id={Uri.EscapeDataString(id)}"));
+            using JsonDocument doc = await GetJsonAsync($"https://api.twitch.tv/helix/streams?first={Math.Min(limit, MaxBatchSize)}&{query}", ct);
+
+            foreach (JsonElement stream in doc.RootElement.GetProperty("data").EnumerateArray())
+            {
+                string? login = stream.GetProperty("user_login").GetString();
+                if (!string.IsNullOrWhiteSpace(login))
+                    logins.Add(login);
+            }
+
+            return logins;
+        }
+
         public async Task<string?> GetUserIdByLoginAsync(string login, CancellationToken ct = default)
         {
             Dictionary<string, JsonElement> users = await GetUsersByLoginAsync([login], ct);

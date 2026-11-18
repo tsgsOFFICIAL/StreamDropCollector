@@ -100,8 +100,13 @@ namespace Core.Models
     /// <param name="IsCurrentCampaign">true if this campaign is currently being mined; otherwise, false. Defaults to false.</param>
     /// <param name="NeedsAccountLink">true if the platform reported that this campaign needs a linked game account and the
     /// signed-in account has none, so mining it can never be claimed; otherwise, false. Defaults to false.</param>
-    /// <param name="IsRewardCampaign">true if this is a Twitch "open reward campaign" (a separate system from drops that is shown
-    /// in the inventory but never mined or claimed by the app); otherwise, false. Defaults to false.</param>
+    /// <param name="IsRewardCampaign">true if this is a Twitch "open reward campaign" (a separate system from drops: it has no
+    /// channel list, is mined by watching a live channel in one of its participating categories, and is claimed manually on
+    /// Twitch); otherwise, false. Defaults to false.</param>
+    /// <param name="ParticipatingCategories">The Twitch category names a reward campaign counts watch time in, read from the
+    /// campaign's summary; <see langword="null"/> or empty when none are named. Only used for reward campaigns.</param>
+    /// <param name="CategoryHint">A search term for the category of a reward campaign whose summary names it only in prose
+    /// (for example "GTAVI"); resolved to a real category through Twitch search. Only used when no category list is given.</param>
     public record DropsCampaign(
         string Id,
         string Name,
@@ -117,13 +122,21 @@ namespace Core.Models
         bool IsGeneralDrop,
         bool IsCurrentCampaign = false,
         bool NeedsAccountLink = false,
-        bool IsRewardCampaign = false)
+        bool IsRewardCampaign = false,
+        IReadOnlyList<string>? ParticipatingCategories = null,
+        string? CategoryHint = null)
     {
         /// <summary>
         /// Gets a value indicating whether the campaign's game can be added to or removed from the game filter,
         /// which needs a game slug and a campaign that is actually mined.
         /// </summary>
         public bool CanFilterByGame => !IsRewardCampaign && !string.IsNullOrWhiteSpace(Slug);
+
+        /// <summary>
+        /// Gets a value indicating whether the campaign has no channel list of its own, so any eligible live channel is watched:
+        /// general drops and open reward campaigns (whose eligibility is a set of categories instead).
+        /// </summary>
+        public bool AcceptsAnyChannel => IsGeneralDrop || IsRewardCampaign;
 
         /// <summary>
         /// Gets a value indicating whether every reward in the campaign has been claimed.

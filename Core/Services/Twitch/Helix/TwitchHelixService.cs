@@ -337,6 +337,113 @@ namespace Core.Services.Twitch.Helix
         }
 
         /// <summary>
+        /// Game ids by category name; they never change, so each name is only looked up once per session.
+        /// </summary>
+        private readonly Dictionary<string, string> _gameIdsByName = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <inheritdoc/>
+        public async Task<IReadOnlyList<string>> GetLiveLoginsByCategoryNamesAsync(
+            IReadOnlyCollection<string> categoryNames,
+            int limit,
+            CancellationToken ct = default)
+        {
+            if (!_isAuthenticated || _client is null)
+            {
+                AppLogger.Warn("TwitchHelix", "GetLiveLoginsByCategoryNamesAsync SKIPPED - not authenticated.");
+                return [];
+            }
+
+            try
+            {
+                List<string> names = [.. categoryNames.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()).Distinct(StringComparer.OrdinalIgnoreCase)];
+
+                List<string> unresolved;
+                lock (_gameIdsByName)
+                    unresolved = [.. names.Where(n => !_gameIdsByName.ContainsKey(n))];
+
+                if (unresolved.Count > 0)
+                {
+                    Dictionary<string, string> resolved = await _client.GetGameIdsByNameAsync(unresolved, ct).ConfigureAwait(false);
+                    lock (_gameIdsByName)
+                    {
+                        foreach ((string name, string id) in resolved)
+                            _gameIdsByName[name] = id;
+                    }
+
+                    List<string> unknown = [.. unresolved.Where(n => !resolved.ContainsKey(n))];
+                    if (unknown.Count > 0)
+                        AppLogger.Debug("TwitchHelix", $"GetLiveLoginsByCategoryNamesAsync: Twitch knows no category named [{string.Join(", ", unknown)}].");
+                }
+
+                List<string> gameIds;
+                lock (_gameIdsByName)
+                    gameIds = [.. names.Where(_gameIdsByName.ContainsKey).Select(n => _gameIdsByName[n]).Distinct()];
+
+                List<string> logins = await _client.GetTopStreamLoginsByGameIdsAsync(gameIds, limit, ct).ConfigureAwait(false);
+                AppLogger.Debug("TwitchHelix", $"GetLiveLoginsByCategoryNamesAsync categories={names.Count} resolved={gameIds.Count} liveLogins={logins.Count}");
+                return logins;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("TwitchHelix", $"GetLiveLoginsByCategoryNamesAsync failed: {ex.Message}");
+                return [];
+            }
+        }
+
+        private readonly Dictionary<string, (string Id, string Name)?> _categorySearchCache = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <inheritdoc/>
+        public async Task<(string Id, string Name)?> ResolveCategoryAsync(string searchTerm, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm) || !_isAuthenticated || _client is null)
+                return null;
+
+            string term = searchTerm.Trim();
+            lock (_categorySearchCache)
+            {
+                if (_categorySearchCache.TryGetValue(term, out (string Id, string Name)? cached))
+                    return cached;
+            }
+
+            try
+            {
+                (string Id, string Name)? found = await _client.SearchTopCategoryAsync(term, ct).ConfigureAwait(false);
+                AppLogger.Debug("TwitchHelix", $"ResolveCategoryAsync '{term}' -> {(found is { } f ? $"'{f.Name}' ({f.Id})" : "no category")}");
+
+                // A miss is not remembered, so a transient failure or a not-yet-listed category is retried.
+                if (found is not null)
+                {
+                    lock (_categorySearchCache)
+                        _categorySearchCache[term] = found;
+                }
+
+                return found;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("TwitchHelix", $"ResolveCategoryAsync '{term}' failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task<IReadOnlyList<string>> GetLiveLoginsByGameIdsAsync(IReadOnlyCollection<string> gameIds, int limit, CancellationToken ct = default)
+        {
+            if (!_isAuthenticated || _client is null || gameIds.Count == 0)
+                return [];
+
+            try
+            {
+                return await _client.GetTopStreamLoginsByGameIdsAsync([.. gameIds], limit, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn("TwitchHelix", $"GetLiveLoginsByGameIdsAsync failed: {ex.Message}");
+                return [];
+            }
+        }
+
+        /// <summary>
         /// Stops the EventSub WebSocket, releases HTTP resources, and disposes synchronization primitives.
         /// </summary>
         /// <returns>A task that represents the asynchronous dispose operation.</returns>

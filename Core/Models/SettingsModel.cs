@@ -121,6 +121,10 @@ namespace Core.Models
         /// </summary>
         public bool MineAnything { get; set; }
         /// <summary>
+        /// Gets or sets a value indicating whether Twitch open reward campaigns are mined (watched) like drops campaigns.
+        /// </summary>
+        public bool MineRewardCampaigns { get; set; } = true;
+        /// <summary>
         /// Gets or sets a value indicating whether the inventory page hides campaigns whose rewards have all been claimed.
         /// </summary>
         public bool HideCompletedCampaigns { get; set; } = true;
