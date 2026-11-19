@@ -437,6 +437,15 @@ namespace Core.Services
                 .Where(g => g["id"] != null)
                 .ToDictionary(g => g["id"]!.GetValue<string>(), g => g);
 
+            string? summary = campaign["summary"]?.GetValue<string>();
+
+            // Groups that need subs, turbo subs or events can never be earned by watching.
+            bool hasUnwatchableGroup = (campaign["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>().Any(g =>
+                g["unlockRequirements"] is JsonObject r
+                && ((r["subsGoal"]?.GetValue<int>() ?? 0) > 0
+                    || (r["turboSubsGoal"]?.GetValue<int>() ?? 0) > 0
+                    || (r["eventTriggerGoal"]?.GetValue<int>() ?? 0) > 0));
+
             List<DropsReward> rewards = [];
             foreach (JsonObject group in (campaign["rewardGroups"]?.AsArray() ?? []).OfType<JsonObject>())
             {
@@ -457,6 +466,15 @@ namespace Core.Services
 
                 JsonObject? reward = group["rewards"]?.AsArray().OfType<JsonObject>().FirstOrDefault();
                 string rewardName = reward?["name"]?.GetValue<string>() ?? name;
+
+                // A capstone reward (the Golden Iguana) is unlocked by earning every other reward. When some of those need
+                // subs, it can never be reached by watching, whatever minutes Twitch lists for it.
+                if (hasUnwatchableGroup && RewardCampaignCategories.IsUnlockedByOtherRewards(summary, rewardName))
+                {
+                    AppLogger.Debug("TwitchDrops", $"Reward campaign '{name}': '{rewardName}' is unlocked by other rewards, not by watching; not tracked.");
+                    continue;
+                }
+
                 int repeatTimes = repeat?["repeatableTimes"]?.GetValue<int>() ?? learnedRepeatTimes.GetValueOrDefault(groupId);
                 string repeatSuffix = repeatTimes > 1 ? $" (x{repeatTimes} days)" : "";
 
@@ -500,7 +518,6 @@ namespace Core.Services
 
             JsonObject? game = campaign["game"]?.AsObject();
             string brand = campaign["brand"]?.GetValue<string>() ?? "";
-            string? summary = campaign["summary"]?.GetValue<string>();
             IReadOnlyList<string> categories = RewardCampaignCategories.Parse(summary);
 
             return new DropsCampaign(

@@ -51,6 +51,23 @@ namespace Core.Helpers
             return hint.Length >= 2 ? hint : null;
         }
 
+        /// <summary>
+        /// Returns whether a summary sentence names the reward as something to unlock (for example "...you'll unlock the rare
+        /// Golden Iguana Badge"). The wording alone proves nothing; the caller must also have a structural reason.
+        /// </summary>
+        /// <param name="summary">The campaign summary, or <see langword="null"/>.</param>
+        /// <param name="rewardName">The reward's display name.</param>
+        public static bool IsUnlockedByOtherRewards(string? summary, string? rewardName)
+        {
+            if (string.IsNullOrWhiteSpace(summary) || string.IsNullOrWhiteSpace(rewardName))
+                return false;
+
+            return summary
+                .Split(['.', '!', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(sentence => sentence.Contains(rewardName.Trim(), StringComparison.OrdinalIgnoreCase)
+                    && sentence.Contains("unlock", StringComparison.OrdinalIgnoreCase));
+        }
+
         [GeneratedRegex(@"streamers\s+in\s+the\s+(?<name>[^.,;\r\n]{2,60}?)\s+category", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex InCategoryRegex();
 

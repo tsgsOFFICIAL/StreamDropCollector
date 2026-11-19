@@ -1,3 +1,4 @@
+using Core.Helpers;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -121,18 +122,22 @@ namespace Core.Services.Twitch.Helix
         }
 
         /// <summary>
-        /// Finds the category Twitch's own search ranks first for a search term (for example "GTAVI" finds "Grand Theft Auto VI").
+        /// Finds the category a loose hint (for example "GTAVI") refers to. Twitch's own ranking is not trusted: it puts
+        /// "Grand Theft Auto V" first for "GTAVI", so only a category whose name contains or abbreviates to the hint counts.
         /// </summary>
         public async Task<(string Id, string Name)?> SearchTopCategoryAsync(string query, CancellationToken ct = default)
         {
-            using JsonDocument doc = await GetJsonAsync($"https://api.twitch.tv/helix/search/categories?first=1&query={Uri.EscapeDataString(query)}", ct);
-
-            foreach (JsonElement game in doc.RootElement.GetProperty("data").EnumerateArray())
+            foreach (string term in CategoryHintMatcher.BuildSearchTerms(query))
             {
-                string? id = game.GetProperty("id").GetString();
-                string? name = game.GetProperty("name").GetString();
-                if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
-                    return (id, name);
+                using JsonDocument doc = await GetJsonAsync($"https://api.twitch.tv/helix/search/categories?first=20&query={Uri.EscapeDataString(term)}", ct);
+
+                foreach (JsonElement game in doc.RootElement.GetProperty("data").EnumerateArray())
+                {
+                    string? id = game.GetProperty("id").GetString();
+                    string? name = game.GetProperty("name").GetString();
+                    if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name) && CategoryHintMatcher.IsMatch(query, name))
+                        return (id, name);
+                }
             }
 
             return null;
