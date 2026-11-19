@@ -211,7 +211,9 @@ namespace Core.Mining
                     List<DropsReward> rewards = new(local.Rewards.Count);
                     foreach (DropsReward localReward in local.Rewards)
                     {
-                        if (!groups.TryGetValue(localReward.Id, out JsonObject? group) || group["self"] is not JsonObject self)
+                        // A chest's rewards are tracked as "groupId:itemId" (see ParseRewardCampaign); Twitch reports the group.
+                        string groupId = localReward.Id.Split(':')[0];
+                        if (!groups.TryGetValue(groupId, out JsonObject? group) || group["self"] is not JsonObject self)
                         {
                             rewards.Add(localReward);
                             continue;

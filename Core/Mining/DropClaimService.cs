@@ -232,6 +232,13 @@ namespace Core.Mining
             CancellationToken cancellationToken,
             Action<string, IReadOnlyList<DropsReward>>? applyTwitchServerProgress)
         {
+            // Daily-repeat rewards start over once Twitch's window resets; forget them so the next day's grant is announced too.
+            foreach (DropsCampaign campaign in rewardCampaigns)
+            {
+                foreach (DropsReward reward in campaign.Rewards.Where(r => r.ProgressMinutes < r.RequiredMinutes))
+                    _notifiedRewardCampaignRewards.Remove($"{campaign.Id}#{reward.Id}");
+            }
+
             List<DropsCampaign> ready = [.. rewardCampaigns.Where(c => c.Platform == Platform.Twitch && c.HasReadyToClaimRewards())];
             if (ready.Count == 0 || twitchGqlService == null)
                 return;
@@ -283,10 +290,11 @@ namespace Core.Mining
                 if (!_notifiedRewardCampaignRewards.Add($"{campaign.Id}#{reward.Id}"))
                     continue;
 
-                AppLogger.Info("DropClaim", $"Reward '{reward.Name}' of '{campaign.Name}' is ready; it has to be claimed on Twitch.");
+                // Twitch grants open reward campaign rewards itself the moment the watch time is credited; there is nothing to claim.
+                AppLogger.Info("DropClaim", $"Reward '{reward.Name}' of '{campaign.Name}' was earned; Twitch grants it automatically.");
 
-                if (UISettingsManager.Instance.NotifyOnReadyToClaim)
-                    NotificationManager.ShowNotification("Reward Ready to Claim", $"Claim this reward on Twitch: {reward.Name}", NotificationType.DropReadyToClaim, details: BuildDetails(account, campaign, reward, "Claim manually on Twitch"));
+                if (UISettingsManager.Instance.NotifyOnAutoClaimed)
+                    NotificationManager.ShowNotification("Reward Earned", $"Twitch granted this reward: {reward.Name}", NotificationType.DropClaimed, details: BuildDetails(account, campaign, reward, "Granted automatically by Twitch"));
             }
         }
 
