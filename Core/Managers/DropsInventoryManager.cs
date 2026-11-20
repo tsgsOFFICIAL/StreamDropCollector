@@ -364,6 +364,7 @@ namespace Core.Managers
         private static readonly TimeSpan KickDailyCheckInterval = TimeSpan.FromSeconds(55);
         private const int KickDailyMaxClaimAttempts = 3;
         private System.Timers.Timer? _recheckTimer;
+        private System.Timers.Timer? _rewardWindowTimer;
         private readonly SemaphoreSlim _progressVerifyLock = new(1, 1);
         private int _progressVerifyScheduled;
 
@@ -1181,6 +1182,7 @@ namespace Core.Managers
                 _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
             });
 
+            ScheduleRewardWindowWake();
             SchedulePreloadTwitchGeneralDropDirectories();
             SchedulePreloadKickGeneralDropDirectories();
             ScheduleKickStreamerMetadataRefresh();
@@ -1287,6 +1289,8 @@ namespace Core.Managers
 
             _recheckTimer?.Stop();
             _recheckTimer?.Dispose();
+            _rewardWindowTimer?.Stop();
+            _rewardWindowTimer?.Dispose();
             _streamHealthMonitor.Dispose();
             _liveProgressTimer.Dispose();
             _progressVerifyTimer.Dispose();
@@ -1540,6 +1544,51 @@ namespace Core.Managers
         /// <summary>
         /// Replaces the stream re-evaluation timer so <see cref="StartMiningStreams"/> runs again after <paramref name="delayMs"/>.
         /// </summary>
+        /// <summary>
+        /// Wakes the miner when the earliest waiting daily reward opens its next window, so a campaign that was set aside
+        /// until then is picked up again without waiting for the next scheduled re-evaluation.
+        /// </summary>
+        private void ScheduleRewardWindowWake()
+        {
+            DateTimeOffset? next = Application.Current.Dispatcher.Invoke(() => ActiveCampaigns
+                .SelectMany(c => c.Rewards)
+                .Where(r => r.IsWaiting)
+                .Select(r => r.AvailableAt)
+                .Min());
+
+            _rewardWindowTimer?.Stop();
+            _rewardWindowTimer?.Dispose();
+            _rewardWindowTimer = null;
+
+            if (next is not { } wakeAt)
+                return;
+
+            // A few seconds past the expiry, so Twitch has rolled its window over by the time the stream is picked again.
+            double delayMs = Math.Max(5000, (wakeAt - DateTimeOffset.Now).TotalMilliseconds + 5000);
+            List<string> waiting = Application.Current.Dispatcher.Invoke(() => ActiveCampaigns
+                .Where(c => c.Rewards.Any(r => r.IsWaiting))
+                .Select(c => $"{c.Name} ({c.Rewards.Count(r => r.IsWaiting)} waiting)")
+                .ToList());
+            AppLogger.Info("Miner", $"Reward window: daily rewards are waiting [{string.Join(", ", waiting)}]; mining them is held until {wakeAt.ToLocalTime():HH:mm:ss}.");
+
+            System.Timers.Timer timer = new(delayMs) { AutoReset = false };
+            timer.Elapsed += async (_, _) =>
+            {
+                AppLogger.Info("Miner", "Reward window opened; re-evaluating streams for the waiting daily rewards.");
+                try
+                {
+                    await StartMiningStreams(true);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppLogger.Error("Miner", "Re-evaluation after the reward window opened failed.", ex);
+                }
+            };
+
+            _rewardWindowTimer = timer;
+            timer.Start();
+        }
+
         private void ScheduleRecheck(double delayMs)
         {
             _recheckTimer?.Stop();
@@ -1987,6 +2036,8 @@ namespace Core.Managers
 
                 _campaignUpdater.UpdateSelectionFlags(ActiveCampaigns, _selection);
             });
+
+            ScheduleRewardWindowWake();
         }
 
         /// <summary>
@@ -2022,6 +2073,8 @@ namespace Core.Managers
 
             if (!applied)
                 return false;
+
+            ScheduleRewardWindowWake();
 
             PlatformProgressState progress = platform == Platform.Twitch ? _twitchProgress : _kickProgress;
             byte campPct = MiningProgressCalculator.CalculateLiveCampaignProgress(updatedCampaign);

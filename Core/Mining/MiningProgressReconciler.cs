@@ -56,7 +56,8 @@ namespace Core.Mining
 
                 int serverMinutes = Math.Min(serverReward.ProgressMinutes, localReward.RequiredMinutes);
                 bool serverClaimed = serverReward.IsClaimed;
-                bool rewardChanged = localReward.ProgressMinutes != serverMinutes || localReward.IsClaimed != serverClaimed;
+                bool rewardChanged = localReward.ProgressMinutes != serverMinutes || localReward.IsClaimed != serverClaimed
+                    || localReward.AvailableAt != serverReward.AvailableAt;
 
                 if (rewardChanged)
                 {
@@ -74,7 +75,8 @@ namespace Core.Mining
                 mergedRewards.Add(localReward with
                 {
                     ProgressMinutes = serverMinutes,
-                    IsClaimed = serverClaimed
+                    IsClaimed = serverClaimed,
+                    AvailableAt = serverReward.AvailableAt
                 });
             }
 

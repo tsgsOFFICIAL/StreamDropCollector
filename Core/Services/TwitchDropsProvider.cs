@@ -485,15 +485,22 @@ namespace Core.Services
                 // A chest is a pool of the actual rewards (e.g. six chain badges); list those instead of the chest.
                 if (learnedPools.TryGetValue(groupId, out List<PoolReward>? pool) && pool.Count > 0)
                 {
-                    foreach (PoolReward item in pool)
+                    int grantCount = self?["grantCount"]?.GetValue<int>() ?? 0;
+
+                    for (int index = 0; index < pool.Count; index++)
                     {
+                        PoolReward item = pool[index];
+                        (bool itemClaimed, int itemProgress, DateTimeOffset? availableAt) = RewardCampaignPoolGrants.Resolve(
+                            index, grantCount, watched, minutes, claimed, RewardCampaignPoolGrants.ReadWindowExpiry(self));
+
                         rewards.Add(new DropsReward(
                             Id: $"{groupId}:{item.Id}",
                             Name: item.Name + repeatSuffix,
                             ImageUrl: item.ImageUrl,
                             RequiredMinutes: minutes,
-                            ProgressMinutes: progressMinutes,
-                            IsClaimed: claimed,
+                            ProgressMinutes: itemProgress,
+                            IsClaimed: itemClaimed,
+                            AvailableAt: availableAt,
                             IsBadge: item.IsBadge,
                             IsEmote: item.IsEmote));
                     }

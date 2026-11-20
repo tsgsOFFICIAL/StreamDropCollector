@@ -130,6 +130,25 @@ namespace Core.Mining
                         result[campaignId] = rewards.AsReadOnly();
                 }
 
+                // Twitch grants some badge drops the moment the last minute is credited, and a finished campaign then drops
+                // out of "in progress". Its earned entries are the only trace, so a campaign missing from the list but
+                // present there is finished, not untracked.
+                foreach (DropsCampaign localCampaign in campaigns.Where(c => !result.ContainsKey(c.Id)))
+                {
+                    List<DropsReward> rewards = [.. localCampaign.Rewards.Select(reward =>
+                        EarnedRewardMatcher.IsClaimedByEarnedEntries(reward, localCampaign.Id, localCampaign.Rewards, earnedDropRewardEdges, false)
+                            ? reward with { ProgressMinutes = reward.RequiredMinutes, IsClaimed = true }
+                            : reward)];
+
+                    if (!rewards.Any(r => r.IsClaimed && !localCampaign.Rewards.First(l => l.Id == r.Id).IsClaimed))
+                        continue;
+
+                    AppLogger.Info("ProgressSync", $"Twitch campaign {localCampaign.Id} is not in progress but its rewards are in the earned list; treating them as granted.");
+                    result[localCampaign.Id] = rewards.AsReadOnly();
+                    foreach (DropsReward reward in rewards.Where(r => r.IsClaimed))
+                        dropInstanceIds[TwitchServerProgress.DropKey(localCampaign.Id, reward.Id)] = null;
+                }
+
                 return new TwitchServerProgress(true, result, dropInstanceIds);
             }
             catch (Exception ex)
@@ -208,6 +227,8 @@ namespace Core.Mining
                         .GroupBy(g => g["id"]!.GetValue<string>(), StringComparer.Ordinal)
                         .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
+                    LogRewardGroupStates(local, groups);
+
                     List<DropsReward> rewards = new(local.Rewards.Count);
                     foreach (DropsReward localReward in local.Rewards)
                     {
@@ -222,6 +243,19 @@ namespace Core.Mining
                         bool claimed = self["status"]?.GetValue<string>() == "CLAIMED";
                         int watched = self["currentMinutesWatched"]?.GetValue<int>() ?? localReward.ProgressMinutes;
 
+                        // A chest grants one of its pooled rewards per completed window.
+                        if (localReward.Id.Contains(':'))
+                        {
+                            int index = local.Rewards.Where(r => r.Id.StartsWith(groupId + ":", StringComparison.Ordinal))
+                                .ToList().FindIndex(r => r.Id == localReward.Id);
+                            (bool poolClaimed, int poolProgress, DateTimeOffset? poolAvailableAt) = RewardCampaignPoolGrants.Resolve(
+                                Math.Max(0, index), self["grantCount"]?.GetValue<int>() ?? 0, watched, localReward.RequiredMinutes, claimed,
+                                RewardCampaignPoolGrants.ReadWindowExpiry(self));
+
+                            rewards.Add(localReward with { ProgressMinutes = poolProgress, IsClaimed = poolClaimed, AvailableAt = poolAvailableAt });
+                            continue;
+                        }
+
                         rewards.Add(localReward with
                         {
                             ProgressMinutes = claimed ? localReward.RequiredMinutes : Math.Min(watched, localReward.RequiredMinutes),
@@ -232,12 +266,137 @@ namespace Core.Mining
                     result[campaignId] = rewards.AsReadOnly();
                 }
 
+                LogRewardCampaignPresence(campaigns, result.Keys.ToHashSet(StringComparer.Ordinal));
+
                 return new TwitchServerProgress(true, result, new Dictionary<string, string?>());
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 AppLogger.Warn("ProgressSync", $"Twitch reward campaign progress fetch failed: {ex.Message}");
                 return TwitchServerProgress.Unavailable;
+            }
+        }
+
+        private sealed record GroupSeen(int Minutes, int GrantCount, string? WindowExpiresAt, bool Completed);
+
+        private static readonly Dictionary<string, GroupSeen> SeenRewardGroups = new(StringComparer.Ordinal);
+        private static readonly HashSet<string> AbsentRewardCampaigns = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Names each event a reward group goes through, one Info line each, so the log reads as a story: first seen, minutes
+        /// reset, window completed, reward granted (and which badges that makes granted), window rolled over.
+        /// </summary>
+        private static void LogRewardGroupTransitions(DropsCampaign local, string groupId, JsonObject self, int required)
+        {
+            int minutes = self["currentMinutesWatched"]?.GetValue<int>() ?? 0;
+            int grantCount = self["grantCount"]?.GetValue<int>() ?? 0;
+            string? expires = self["currentWindow"]?["expiresAt"]?.GetValue<string>();
+            bool completed = required > 0 && minutes >= required;
+            string who = $"'{local.Name}' group={groupId}";
+
+            GroupSeen? before;
+            string key = $"{local.Id}#{groupId}";
+            lock (SeenRewardGroups)
+            {
+                SeenRewardGroups.TryGetValue(key, out before);
+                SeenRewardGroups[key] = new GroupSeen(minutes, grantCount, expires, completed);
+            }
+
+            if (before == null)
+            {
+                AppLogger.Info("RewardGroup", $"FIRST SEEN {who}: minutes={minutes}/{required} grantCount={grantCount} windowExpires={expires ?? "none"}");
+                return;
+            }
+
+            if (minutes < before.Minutes)
+                AppLogger.Info("RewardGroup", $"MINUTES RESET {who}: {before.Minutes} -> {minutes} (window {before.WindowExpiresAt ?? "none"} -> {expires ?? "none"})");
+
+            if (expires != before.WindowExpiresAt)
+                AppLogger.Info("RewardGroup", $"WINDOW CHANGED {who}: {before.WindowExpiresAt ?? "none"} -> {expires ?? "none"}");
+
+            if (completed && !before.Completed)
+                AppLogger.Info("RewardGroup", $"WINDOW COMPLETE {who}: {minutes}/{required} minutes, grantCount={grantCount}; waiting for Twitch to grant.");
+
+            if (grantCount > before.GrantCount)
+            {
+                // Twitch does not say which pooled reward it granted; the first grantCount ones in pool order are assumed.
+                string assumed = string.Join(", ", local.Rewards
+                    .Where(r => r.Id.StartsWith(groupId + ":", StringComparison.Ordinal))
+                    .Take(grantCount)
+                    .Select(r => r.Name));
+
+                AppLogger.Info("RewardGroup", $"GRANT DETECTED {who}: grantCount {before.GrantCount} -> {grantCount} at minutes={minutes}/{required}. " +
+                    $"Granted badges (assumed pool order): [{assumed}]. Check Twitch's notification for the real one.");
+            }
+            else if (grantCount < before.GrantCount)
+            {
+                AppLogger.Warn("RewardGroup", $"GRANT COUNT DROPPED {who}: {before.GrantCount} -> {grantCount}; unexpected.");
+            }
+        }
+
+        /// <summary>
+        /// Notes campaigns that vanish from, or return to, Twitch's in-progress reward list.
+        /// </summary>
+        private static void LogRewardCampaignPresence(IReadOnlyCollection<DropsCampaign> campaigns, ISet<string> presentIds)
+        {
+            foreach (DropsCampaign campaign in campaigns)
+            {
+                bool present = presentIds.Contains(campaign.Id);
+                bool wasAbsent;
+                lock (AbsentRewardCampaigns)
+                    wasAbsent = present ? AbsentRewardCampaigns.Remove(campaign.Id) : !AbsentRewardCampaigns.Add(campaign.Id);
+
+                if (present && wasAbsent)
+                    AppLogger.Info("RewardGroup", $"'{campaign.Name}' ({campaign.Id}) is back in Twitch's in-progress reward list.");
+                else if (!present && !wasAbsent)
+                    AppLogger.Info("RewardGroup", $"'{campaign.Name}' ({campaign.Id}) is not in Twitch's in-progress reward list (not started, or Twitch does not count the current stream).");
+            }
+        }
+
+        /// <summary>The last state logged per reward group, so only changes are written at Info level.</summary>
+        private static readonly Dictionary<string, string> LoggedRewardGroupStates = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Logs what Twitch reports for each of a reward campaign's groups: one Debug line per sync, and an Info line with the
+        /// raw <c>self</c> block whenever anything in it changes (status, minutes, grants, window, earned reward). This is how a
+        /// grant shows up, so the raw block is kept to catch any field that names the granted reward.
+        /// </summary>
+        private static void LogRewardGroupStates(DropsCampaign local, IReadOnlyDictionary<string, JsonObject> groups)
+        {
+            foreach ((string groupId, JsonObject group) in groups)
+            {
+                if (group["self"] is not JsonObject self)
+                {
+                    AppLogger.Debug("RewardGroup", $"'{local.Name}' group={groupId} has no self block.");
+                    continue;
+                }
+
+                int required = group["progressCriteria"]?["requirements"]?["minutesWatched"]?.GetValue<int>() ?? 0;
+                string summary =
+                    $"status={self["status"]} minutes={self["currentMinutesWatched"]}/{required} grantCount={self["grantCount"]} " +
+                    $"nextEligibleAt={self["nextEligibleAt"]?.ToJsonString() ?? "null"} " +
+                    $"window={self["currentWindow"]?["startedAt"]}..{self["currentWindow"]?["expiresAt"]} " +
+                    $"earnedReward={self["earnedReward"]?.ToJsonString() ?? "null"}";
+
+                AppLogger.Debug("RewardGroup", $"'{local.Name}' group={groupId} {summary}");
+
+                // Minutes change every sync; everything else is a state change worth keeping.
+                JsonObject stable = (JsonObject)self.DeepClone();
+                stable.Remove("currentMinutesWatched");
+                string key = $"{local.Id}#{groupId}";
+                string state = stable.ToJsonString();
+
+                bool changed;
+                lock (LoggedRewardGroupStates)
+                {
+                    changed = !LoggedRewardGroupStates.TryGetValue(key, out string? previous) || previous != state;
+                    LoggedRewardGroupStates[key] = state;
+                }
+
+                if (changed)
+                    AppLogger.Info("RewardGroup", $"STATE CHANGE '{local.Name}' group={groupId}: {summary} raw={self.ToJsonString()}");
+
+                LogRewardGroupTransitions(local, groupId, self, required);
             }
         }
 

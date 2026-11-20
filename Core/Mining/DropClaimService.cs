@@ -267,6 +267,7 @@ namespace Core.Mining
                     {
                         AppLogger.Info("DropClaim", $"Twitch already reports reward '{reward.Name}' as claimed; marking it claimed.");
                         markRewardClaimed(campaign.Id, reward.Id);
+                        toNotify.Add((campaign, reward));
                     }
                     else if (serverReward != null && serverReward.ProgressMinutes < reward.RequiredMinutes)
                     {

@@ -114,6 +114,16 @@ namespace Core.Mining
                     lastMinedStreamers.Remember(platform, best.Slug, streamUrl);
                 AppLogger.Info("Miner", $"{platform}: watching {login} for '{best.Name}'.");
 
+                if (best.IsRewardCampaign)
+                {
+                    AppLogger.Info(
+                        "Miner",
+                        $"Open reward campaign '{best.Name}' mined; rewards: " +
+                        string.Join("; ", best.Rewards.Select(r =>
+                            $"{r.Name} {r.ProgressMinutes}/{r.RequiredMinutes}{(r.IsClaimed ? " granted" : string.Empty)}" +
+                            $"{(r.IsWaiting ? $" waiting until {r.AvailableAt:HH:mm}" : string.Empty)}")));
+                }
+
                 return new PlatformMiningResult(best, streamUrl, login, baseline, suggestedNextCheck);
             }
 

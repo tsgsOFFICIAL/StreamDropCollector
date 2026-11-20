@@ -41,7 +41,8 @@ namespace Core.Mining
 
             // A drop that is complete but still unclaimed has nothing left to mine, even with auto-claim on: claiming is
             // handled separately, and mining it would only keep a stream running while a claim is pending or failing.
-            return campaign.Rewards.Any(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes);
+            // A daily reward that already paid out for the current window earns nothing until the next one opens.
+            return campaign.Rewards.Any(r => !r.IsClaimed && !r.IsWaiting && r.ProgressMinutes < r.RequiredMinutes);
         }
 
         /// <summary>

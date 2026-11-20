@@ -15,6 +15,8 @@ namespace Core.Models
     /// <param name="IsCurrentReward">true if this reward is currently being progressed; otherwise, false. Defaults to false.</param>
     /// <param name="IsBadge">true if the reward is a chat badge rather than an in-game item or emote; otherwise, false. Defaults to false.</param>
     /// <param name="IsEmote">true if the reward is a chat emote or a raffle entry, which has no use outside the platform; otherwise, false. Defaults to false.</param>
+    /// <param name="AvailableAt">When set and in the future, watching earns nothing toward this reward until then (a daily
+    /// reward that has already paid out for the current window); <see langword="null"/> otherwise.</param>
     public record DropsReward(
         string Id,
         string Name,
@@ -25,8 +27,14 @@ namespace Core.Models
         string? DropInstanceId = null,
         bool IsCurrentReward = false,
         bool IsBadge = false,
-        bool IsEmote = false)
+        bool IsEmote = false,
+        DateTimeOffset? AvailableAt = null)
     {
+        /// <summary>
+        /// Gets a value indicating whether the reward has to wait for its next window before watching counts again.
+        /// </summary>
+        public bool IsWaiting => !IsClaimed && AvailableAt is { } at && at > DateTimeOffset.Now;
+
         /// <summary>
         /// Gets the minutes of watch time still needed to earn this reward (0 once claimed or complete).
         /// </summary>
@@ -35,7 +43,11 @@ namespace Core.Models
         /// <summary>
         /// Gets a short "time to complete" label, such as "2h 15m left", "Ready to claim" or "Done".
         /// </summary>
-        public string TimeToCompleteText => IsClaimed ? "Done" : DurationFormatter.FormatRemaining(RemainingMinutes);
+        public string TimeToCompleteText => IsClaimed
+            ? "Done"
+            : IsWaiting
+                ? DurationFormatter.FormatAvailableAt(AvailableAt!.Value)
+                : DurationFormatter.FormatRemaining(RemainingMinutes);
     }
 
     /// <summary>
@@ -76,6 +88,14 @@ namespace Core.Models
                 return $"{hours}h {mins:D2}m {secs:D2}s";
 
             return mins > 0 ? $"{mins}m {secs:D2}s" : $"{secs}s";
+        }
+
+        /// <summary>Formats when a waiting reward can be earned again, such as "Daily limit reached, next at 13:32".</summary>
+        public static string FormatAvailableAt(DateTimeOffset at)
+        {
+            DateTimeOffset local = at.ToLocalTime();
+            string when = local.Date == DateTimeOffset.Now.Date ? local.ToString("HH:mm") : local.ToString("ddd HH:mm");
+            return $"Daily limit reached, next at {when}";
         }
 
         /// <summary>Formats the remaining minutes as a "left" label, or "Ready to claim" when none remain.</summary>
@@ -170,7 +190,22 @@ namespace Core.Models
         /// </summary>
         public string TimeToCompleteText => AllRewardsClaimed
             ? "Completed"
-            : DurationFormatter.FormatRemaining(RemainingMinutes).Replace("left", "to complete");
+            : WaitingUntil is { } waitingUntil
+                ? DurationFormatter.FormatAvailableAt(waitingUntil)
+                : DurationFormatter.FormatRemaining(RemainingMinutes).Replace("left", "to complete");
+
+        /// <summary>
+        /// Gets when the campaign can earn again, or <see langword="null"/> when something can be earned now: set only while
+        /// every reward that still needs watch time is waiting for its next window.
+        /// </summary>
+        public DateTimeOffset? WaitingUntil
+        {
+            get
+            {
+                List<DropsReward> open = [.. Rewards.Where(r => !r.IsClaimed && r.ProgressMinutes < r.RequiredMinutes)];
+                return open.Count > 0 && open.All(r => r.IsWaiting) ? open.Min(r => r.AvailableAt) : null;
+            }
+        }
 
         /// <summary>
         /// Gets a short label for how long is left until the campaign ends, such as "2d 5h until it ends".
