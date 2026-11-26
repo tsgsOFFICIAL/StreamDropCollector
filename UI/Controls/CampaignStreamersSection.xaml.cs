@@ -87,6 +87,9 @@ namespace UI.Controls
         /// <summary>The live count, or "?" while the first live-status scan for this campaign is still running.</summary>
         public string LiveCountText => _liveStatusKnown ? LiveCount.ToString() : "?";
 
+        /// <summary>Whether the campaign has eligible streamers, the live scan has finished, and none of them are live.</summary>
+        public bool NoneLive => HasStreamers && _liveStatusKnown && _liveCount == 0;
+
         /// <summary>Whether the full streamer list panel is expanded.</summary>
         public bool IsExpanded
         {

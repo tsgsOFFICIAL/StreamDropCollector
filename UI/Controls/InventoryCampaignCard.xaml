@@ -79,7 +79,15 @@
                            ToolTip="Kick reports no linked game account for this campaign, so it isn't mined and rewards can't be claimed until you link one."
                            Visibility="{Binding NeedsAccountLink, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                <Button Content="▶  Mine this campaign instead"
+                <TextBlock x:Name="NoLiveStreamerText"
+                           Text="No eligible streamer is live right now, so this campaign can't be mined yet."
+                           Margin="0,10,0,0"
+                           Foreground="#FFB347"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed"/>
+
+                <Button x:Name="MineInsteadButton"
+                        Content="▶  Mine this campaign instead"
                         Margin="0,12,0,0"
                         Padding="12,6"
                         HorizontalAlignment="Left"
@@ -101,7 +109,7 @@
                     </Button.Style>
                 </Button>
 
-                <controls:CampaignStreamersSection DataContext="{Binding}"/>
+                <controls:CampaignStreamersSection x:Name="StreamersSection" DataContext="{Binding}"/>
             </StackPanel>
 
             <StackPanel Grid.Column="2" VerticalAlignment="Top" MaxWidth="320">

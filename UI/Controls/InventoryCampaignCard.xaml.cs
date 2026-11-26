@@ -15,6 +15,24 @@ namespace UI.Controls
         {
             InitializeComponent();
             DataContextChanged += (_, _) => RefreshGameFilterButtons();
+            StreamersSection.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(CampaignStreamersSection.LiveCountText) or nameof(CampaignStreamersSection.HasStreamers))
+                    RefreshNoLiveStreamerState();
+            };
+        }
+
+        /// <summary>
+        /// Explains why a campaign can't be mined (or switched to) when none of its eligible streamers are live.
+        /// </summary>
+        private void RefreshNoLiveStreamerState()
+        {
+            bool noneLive = StreamersSection.NoneLive;
+            NoLiveStreamerText.Visibility = noneLive ? Visibility.Visible : Visibility.Collapsed;
+            MineInsteadButton.Opacity = noneLive ? 0.6 : 1.0;
+            MineInsteadButton.ToolTip = noneLive
+                ? "None of this campaign's eligible streamers are live, so there is nothing to switch to yet."
+                : null;
         }
 
         /// <summary>
